@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Claude Code — personal overrides
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/cache/
+.claude/storage/
+.claude/worktrees/
+
+# Docs — local working space (never published)
+docs/planning/
+
+# Data / artifacts (large, regenerable)
+data/raw/
+data/processed/
+results/
+*.parquet
+*.duckdb
+*.sqlite
+
+# Notebooks scratch
+.ipynb_checkpoints/

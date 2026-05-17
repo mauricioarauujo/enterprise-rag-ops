@@ -1,0 +1,39 @@
+version: "1.0"
+last_updated: "2026-05-15"
+
+limits:
+  quick_reference: 100
+  concept: 150
+  pattern: 200
+
+templates:
+  - name: concept
+    path: _templates/concept.md.template
+  - name: pattern
+    path: _templates/pattern.md.template
+  - name: index
+    path: _templates/index.md.template
+  - name: quick-reference
+    path: _templates/quick-reference.md.template
+  - name: domain-manifest
+    path: _templates/domain-manifest.yaml.template
+  - name: task
+    path: _templates/task.md.template
+
+# Domains are added as content stabilizes. See .claude/STRUCTURE_GUIDE.md
+# § Self-Improvement Protocol for the trigger and bootstrap steps.
+#
+# Likely first domains for this project:
+#   - rag-retrieval     (Phase 1+: hybrid BM25+dense, chunking, expected_doc_ids)
+#   - rag-eval          (Phase 2+: per-fact judge, recall@k, abstention)
+#   - observability     (Phase 3+: OTel, Langfuse/Phoenix, failure taxonomy)
+#
+# Domain entry shape:
+# <slug>:
+#   path: <slug>/
+#   status: in_progress | complete
+#   description: "<one line>"
+#   last_updated: "YYYY-MM-DD"
+#   concepts: [<name>, ...]
+#   patterns: [<name>, ...]
+domains: {}

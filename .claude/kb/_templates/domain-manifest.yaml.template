@@ -1,0 +1,19 @@
+# Add this section to .claude/kb/_index.yaml under 'domains:'
+
+{{DOMAIN_KEY}}:
+  name: {{DOMAIN_DISPLAY_NAME}}
+  description: {{DOMAIN_DESCRIPTION}}
+  path: {{DOMAIN_KEY}}/
+  status: draft
+  mcp_validated: {{VALIDATION_DATE}}
+  agents: [{{AGENT_NAME}}]
+  entry_points:
+    index: index.md
+    quick_reference: quick-reference.md
+  concepts:
+    - name: {{CONCEPT_1}}
+      path: concepts/{{CONCEPT_1}}.md
+      confidence: 0.95
+  patterns:
+    - name: {{PATTERN_1}}
+      path: patterns/{{PATTERN_1}}.md

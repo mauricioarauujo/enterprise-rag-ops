@@ -1,0 +1,36 @@
+{
+  "_comment": "Staged hooks — not yet wired. Enable once Makefile targets (make format, make test) are exercised and the gate workflow is confirmed. To enable: copy the relevant block(s) below into the `hooks` object in .claude/settings.json.",
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-gate.sh"
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-track.sh"
+        }
+      ]
+    }
+  ],
+  "PostCompact": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-compact-log.sh"
+        }
+      ]
+    }
+  ]
+}
