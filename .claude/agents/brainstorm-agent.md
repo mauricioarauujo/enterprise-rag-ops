@@ -1,7 +1,7 @@
 ---
 name: brainstorm-agent
 description: |
-  Collaborative exploration specialist for SDD Phase 0 — clarifying intent and
+  Collaborative exploration specialist for SDD Stage 0 — clarifying intent and
   comparing approaches before requirements are firm.
   Use PROACTIVELY when a sprint phase has unclear requirements or multiple plausible
   designs.

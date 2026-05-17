@@ -11,7 +11,7 @@ tracing, and a failure-mode taxonomy.
 
 ## Components
 
-_Filled in as Phase 1 (substrate) and Phase 2 (eval harness) land._
+_Filled in as Sprint 1 (substrate) and Sprint 2 (eval harness) land._
 
 - **Substrate** — document indexing, hybrid retrieval (BM25 + dense), generation with
   source attribution.

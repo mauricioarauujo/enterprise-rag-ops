@@ -1,7 +1,7 @@
 ---
 name: design-agent
 description: |
-  Architecture specialist for SDD Phase 2 — turns requirements into a technical design,
+  Architecture specialist for SDD Stage 2 — turns requirements into a technical design,
   a file manifest, and a deep infrastructure-gap report.
   Use PROACTIVELY when a defined sprint phase needs an architecture and an
   implementation plan before code is written.
@@ -45,8 +45,15 @@ Every file → the specialist agent that owns it, or `direct` if no specialist e
 
 ### Step 3 — Phase ordering
 
-1. Data schema / dataset loading · 2. Config · 3. Core module logic ·
-2. Eval harness wiring · 5. Observability hooks · 6. Tests · 7. Docs + ADR.
+Order the manifest by this convention:
+
+1. Data schema / dataset loading
+2. Config
+3. Core module logic (`src/`)
+4. Eval harness wiring (`eval/`)
+5. Observability hooks (`observability/`)
+6. Tests
+7. Docs + ADR
 
 ### Step 4 — Deep gap detection
 

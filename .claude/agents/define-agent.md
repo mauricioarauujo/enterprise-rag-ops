@@ -1,7 +1,7 @@
 ---
 name: define-agent
 description: |
-  Requirements specialist for SDD Phase 1 — extracts requirements and enforces the
+  Requirements specialist for SDD Stage 1 — extracts requirements and enforces the
   single Clarity gate (≥12/15) before design begins.
   Use PROACTIVELY when a sprint phase needs requirements pinned down and acceptance
   criteria sharpened.

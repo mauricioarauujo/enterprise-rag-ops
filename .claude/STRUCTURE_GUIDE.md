@@ -41,9 +41,8 @@ and `CLAUDE.md` only points to them.
 
 ## Project units — Sprint / Phase
 
-The project is organized as **Sprints** (top-level units), each made of **Phases**
-(~3 per medium sprint, 4–5 for complex). SDD artifacts are keyed on
-`sprint-N/<phase-slug>`. Personal sprint tracking is private (see `CLAUDE.local.md`).
+Defined in `CLAUDE.md` § Project units (the SSoT). SDD artifacts are keyed on
+`sprint-N/<phase-slug>`.
 
 ---
 
@@ -54,26 +53,28 @@ human-readable registries. Update them when you add an artifact — cache-safe.
 
 ### Command Registry
 
-| Command        | Purpose                                            |
-| -------------- | -------------------------------------------------- |
-| `/new-kb`      | Create/extend a KB domain (kb-architect, 3-pillar) |
-| `/update-kb`   | Refresh a KB domain against the 3 pillars          |
-| `/new-agent`   | Scaffold a specialist agent                        |
-| `/new-command` | Scaffold a slash command                           |
-| `/brainstorm`  | SDD Phase 0 — explore approaches                   |
-| `/define`      | SDD Phase 1 — requirements + Clarity gate (≥12/15) |
-| `/design`      | SDD Phase 2 — architecture + file manifest         |
-| `/implement`   | Execute implementation per the design              |
-| `/review`      | Validate a branch — checks + code review + KB loop |
+| Command         | Purpose                                                |
+| --------------- | ------------------------------------------------------ |
+| `/new-kb`       | Create/extend a KB domain (kb-architect, 3-pillar)     |
+| `/update-kb`    | Refresh a KB domain against the 3 pillars              |
+| `/new-agent`    | Scaffold a specialist agent                            |
+| `/new-command`  | Scaffold a slash command                               |
+| `/sprint-start` | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan |
+| `/brainstorm`   | SDD Stage 0 — explore approaches                       |
+| `/define`       | SDD Stage 1 — requirements + Clarity gate (≥12/15)     |
+| `/design`       | SDD Stage 2 — architecture + file manifest             |
+| `/implement`    | Execute implementation per the design                  |
+| `/review`       | Validate a branch — checks + code review + KB loop     |
+| `/sprint-close` | Close a sprint — knowledge loop + archive              |
 
 ### Agent Registry
 
 | Agent              | Category     | Model  | Role                                      |
 | ------------------ | ------------ | ------ | ----------------------------------------- |
 | `kb-architect`     | meta         | sonnet | KB creation/audit, 3-pillar build         |
-| `brainstorm-agent` | workflow     | sonnet | SDD Phase 0 — exploration, MoSCoW         |
-| `define-agent`     | workflow     | opus   | SDD Phase 1 — requirements, Clarity gate  |
-| `design-agent`     | workflow     | opus   | SDD Phase 2 — architecture, file manifest |
+| `brainstorm-agent` | workflow     | sonnet | SDD Stage 0 — exploration, MoSCoW         |
+| `define-agent`     | workflow     | opus   | SDD Stage 1 — requirements, Clarity gate  |
+| `design-agent`     | workflow     | opus   | SDD Stage 2 — architecture, file manifest |
 | `code-reviewer`    | code-quality | sonnet | Branch-diff review for `/review`          |
 
 **Model routing:** when spawning an agent via the Agent tool, ALWAYS pass `model`
@@ -93,56 +94,33 @@ Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 
 ## SDD — Spec-Driven Development
 
-Optional pre-implementation pipeline for complex phases. Full docs: `.claude/sdd/README.md`.
+A sprint runs `/sprint-start` → the per-phase SDD pipeline → `/sprint-close`:
 
-```
-/brainstorm sprint-N/<slug>  →  BRAINSTORM.md   (approaches, MoSCoW, research/KB scan)
-      ↓
-/define     sprint-N/<slug>  →  DEFINE.md       (requirements + Clarity ≥12/15)
-      ↓
-/design     sprint-N/<slug>  →  DESIGN.md       (architecture + file manifest + gaps)
-      ↓
-/implement  sprint-N/<slug>  →  production code
-      ↓
-/review     sprint-N/<slug>  →  REVIEW.md       (checks + review + KB feedback loop)
-```
+- **Sprint level** — `/sprint-start sprint-N` writes `SPRINT.md` (goal, phase
+  breakdown, sprint-wide KB/research scan). `/sprint-close sprint-N` runs the sprint
+  knowledge loop and archives the whole `sprint-N/` folder.
+- **Phase level** (each phase) — `/brainstorm → /define → /design → /implement →
+/review`, artifacts under `.claude/sdd/features/sprint-N/<phase-slug>/`.
 
-Artifacts live in `.claude/sdd/features/sprint-N/<phase-slug>/`; the folder moves to
-`.claude/sdd/archive/` on ship. **Use SDD** when a phase touches >2 modules, has
-competing designs, or unclear success criteria. **Skip** for single-module changes and
-config tweaks — go straight to `/implement`.
+Three distinct units: **Sprint** (top), **Phase** (sub-unit, `sprint-N/phase-M`), and
+**SDD Stage** (a step of the per-phase pipeline). The pipeline diagram and the
+use-vs-skip criteria are the SSoT of `.claude/sdd/README.md`; the Clarity gate rubric
+is owned by `define-agent.md`. See `sdd/README.md` before reaching for SDD.
 
 ---
 
 ## Knowledge Base
 
-### The 3-pillar build model
-
 Every KB domain holds, well-separated:
 
-- **`concepts/`** — theory, definitions, invariants, trade-offs (≤150 lines each).
-- **`patterns/`** — codebase-grounded recipes (≤200 lines each).
+- **`concepts/`** — theory, definitions, invariants, trade-offs.
+- **`patterns/`** — codebase-grounded recipes from our `src/`/`eval/`.
 
-Both are built and validated against **3 pillars**, when each applies:
-
-| Pillar            | Source                                      | Tool                                |
-| ----------------- | ------------------------------------------- | ----------------------------------- |
-| 1 — Codebase      | `src/`, `eval/`, `observability/`, `tests/` | Grep / Read                         |
-| 2 — MCP docs      | official docs + production patterns         | Context7 + Exa                      |
-| 3 — Deep Research | complex external synthesis                  | Gemini Deep Research (`_research/`) |
-
-The `kb-architect` agent cross-checks the pillars (**agreement analysis**) and tags
-each claim's confidence. Pillar 3 is reserved for genuinely complex topics — see
-`.claude/kb/_research/README.md`.
-
-### Budgets
-
-| File                 | Max |
-| -------------------- | --- |
-| `index.md`           | 50  |
-| `quick-reference.md` | 100 |
-| `concepts/*.md`      | 150 |
-| `patterns/*.md`      | 200 |
+Both are built and validated against **3 pillars** — codebase, MCP docs (Context7 +
+Exa), and Gemini Deep Research. The pillar table and the agreement-analysis matrix are
+the SSoT of `.claude/agents/kb-architect.md`; the numeric line budgets are the SSoT of
+`.claude/kb/_index.yaml` (`limits`). Pillar 3 (Deep Research) is reserved for genuinely
+complex topics — see `.claude/kb/_research/README.md`.
 
 ---
 

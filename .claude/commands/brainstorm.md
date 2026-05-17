@@ -1,11 +1,11 @@
 ---
-description: SDD Phase 0 — explore approaches for a sprint phase before requirements are firm.
+description: SDD Stage 0 — explore approaches for a sprint phase before requirements are firm.
 ---
 
 # /brainstorm {sprint-N/phase-slug}
 
 Collaborative exploration for work with unclear requirements or multiple plausible
-designs (SDD Phase 0). See `.claude/sdd/README.md`.
+designs (SDD Stage 0). See `.claude/sdd/README.md`.
 
 ## When to use
 

@@ -1,10 +1,10 @@
 ---
-description: SDD Phase 2 — produce the architecture and file manifest.
+description: SDD Stage 2 — produce the architecture and file manifest.
 ---
 
 # /design {sprint-N/phase-slug}
 
-Create the technical architecture and file manifest (SDD Phase 2).
+Create the technical architecture and file manifest (SDD Stage 2).
 See `.claude/sdd/README.md`.
 
 ## Arguments
@@ -25,29 +25,11 @@ See `.claude/sdd/README.md`.
 
 3. **Write output** → `.claude/sdd/features/{slug}/DESIGN.md`.
 
-4. **Gap detection (deep)** — three layers, reported in `DESIGN.md`:
-   - **Domain existence** — does every technology area have a KB domain in `_index.yaml`?
-   - **Concept coverage** — does the domain's `concepts`/`patterns` cover this work?
-   - **Agent alignment** — does each specialist's `kb_domains` include the needed domains?
-
-   ```markdown
-   ## Infrastructure Gaps
-
-   | Gap Type           | Area     | Detail                     | Recommendation        |
-   | ------------------ | -------- | -------------------------- | --------------------- |
-   | Missing domain     | {tech}   | No KB exists               | `/new-kb {domain}`    |
-   | Missing concept    | {domain} | Exists but lacks {concept} | `/update-kb {domain}` |
-   | Missing specialist | {area}   | No agent owns these files  | `/new-agent {name}`   |
-   ```
+4. **Gap detection (deep)** — the agent runs the three-layer infrastructure-gap check
+   (domain existence, concept coverage, agent alignment) and reports it as an
+   Infrastructure Gaps table in `DESIGN.md`. Rubric + table format: `design-agent.md`.
 
 5. **Suggest next step** → `/implement {slug}`. If gaps were found, address them first.
 
-## Phase ordering convention (RAG-eval repo)
-
-1. Data schema / dataset loading
-2. Config / settings
-3. Core module logic (`src/` retrieval, generation)
-4. Eval harness wiring (`eval/`)
-5. Observability hooks (`observability/`)
-6. Tests
-7. Docs + ADR
+The phase-ordering convention and the `DESIGN.md` output format are owned by
+`.claude/agents/design-agent.md` — this command only delegates.

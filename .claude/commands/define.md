@@ -1,10 +1,10 @@
 ---
-description: SDD Phase 1 — extract requirements and pass the Clarity gate (≥12/15).
+description: SDD Stage 1 — extract requirements and pass the Clarity gate (≥12/15).
 ---
 
 # /define {sprint-N/phase-slug}
 
-Extract and validate requirements behind a single Clarity gate (SDD Phase 1).
+Extract and validate requirements behind a single Clarity gate (SDD Stage 1).
 See `.claude/sdd/README.md`.
 
 ## Arguments

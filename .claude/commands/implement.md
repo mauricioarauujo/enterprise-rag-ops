@@ -24,12 +24,12 @@ works from the phase track directly (backward-compatible — SDD is opt-in).
    - Report and proceed — do not block.
 
 3. **Execute**
-   - Follow the manifest's phase ordering (see `/design`).
+   - Follow the manifest's phase-order column in `DESIGN.md`.
    - Delegate file groups to specialist agents per the manifest — when spawning an
      agent, ALWAYS pass `model` explicitly (read the agent's frontmatter).
    - Every new module gets a matching `tests/test_<module>.py`.
    - Eval-path code is not tested against a mocked LLM API — use the cassette/replay
-     pattern (see the Phase 2 ADR when it lands).
+     pattern (see the Sprint 2 ADR when it lands).
 
 4. **Quality pass**
 

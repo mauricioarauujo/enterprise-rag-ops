@@ -29,7 +29,7 @@ Personal sprint tracking is private (see `CLAUDE.local.md`).
 | ------------------------------- | ----------------------------------------------- |
 | Spec / architecture             | `docs/architecture/`                            |
 | Dataset notes                   | `docs/dataset.md`                               |
-| Architecture decisions          | `docs/adr/` (first ADR in Sprint 1)             |
+| Architecture decisions          | `docs/adr/` (first ADR in Sprint 2)             |
 | Harness maintenance             | `.claude/STRUCTURE_GUIDE.md`                    |
 | Self-improvement protocol       | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement |
 | Command / agent / KB registries | `.claude/STRUCTURE_GUIDE.md` § Registries       |
@@ -90,7 +90,7 @@ KB domains are added on demand via the **3-pillar build** (codebase + MCP docs +
 Gemini Deep Research) — see `.claude/STRUCTURE_GUIDE.md` § Knowledge Base. Machine
 registry: `.claude/kb/_index.yaml`. Templates: `.claude/kb/_templates/`.
 
-**Line budgets:** concept ≤ 150, pattern ≤ 200, quick-reference ≤ 100.
+**Line budgets** are SSoT'd in `.claude/kb/_index.yaml` (`limits`).
 
 ---
 
