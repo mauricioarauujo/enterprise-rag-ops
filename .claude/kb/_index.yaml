@@ -17,23 +17,15 @@ templates:
     path: _templates/quick-reference.md.template
   - name: domain-manifest
     path: _templates/domain-manifest.yaml.template
-  - name: task
-    path: _templates/task.md.template
 
 # Domains are added as content stabilizes. See .claude/STRUCTURE_GUIDE.md
 # § Self-Improvement Protocol for the trigger and bootstrap steps.
 #
 # Likely first domains for this project:
-#   - rag-retrieval     (Phase 1+: hybrid BM25+dense, chunking, expected_doc_ids)
-#   - rag-eval          (Phase 2+: per-fact judge, recall@k, abstention)
-#   - observability     (Phase 3+: OTel, Langfuse/Phoenix, failure taxonomy)
+#   - rag-retrieval     (Sprint 1+: hybrid BM25+dense, chunking, expected_doc_ids)
+#   - rag-eval          (Sprint 2+: per-fact judge, recall@k, abstention)
+#   - observability     (Sprint 3+: OTel, Langfuse/Phoenix, failure taxonomy)
 #
-# Domain entry shape:
-# <slug>:
-#   path: <slug>/
-#   status: in_progress | complete
-#   description: "<one line>"
-#   last_updated: "YYYY-MM-DD"
-#   concepts: [<name>, ...]
-#   patterns: [<name>, ...]
+# Domain entry shape — the single SSoT is _templates/domain-manifest.yaml.template.
+# kb-architect copies that block in here when registering a domain.
 domains: {}

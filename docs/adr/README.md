@@ -10,4 +10,4 @@ Each ADR captures one significant decision: its context, the decision, and the c
 
 ## Index
 
-_No ADRs yet. The first — eval framework choice — lands in Phase 1._
+_No ADRs yet. The first — eval framework choice — lands in Sprint 2._

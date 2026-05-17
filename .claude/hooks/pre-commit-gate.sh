@@ -1,6 +1,6 @@
 #!/bin/bash
 # Blocks git commit unless make format was run recently (<30 min).
-# Wired via PreToolUse hook on Bash commands in settings.json.
+# Staged in hooks/STAGED.example.json — not yet wired in settings.json.
 # Works with post-bash-track.sh which creates the gate flag files.
 
 INPUT=$(cat)

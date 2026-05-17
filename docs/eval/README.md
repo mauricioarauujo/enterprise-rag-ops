@@ -2,7 +2,7 @@
 
 Design notes for the eval harness — the primary signal of this project.
 
-_Populated in Phase 2._ Planned coverage:
+_Populated in Sprint 2._ Planned coverage:
 
 - Per-fact LLM-as-judge scoring
 - Retrieval metrics: recall@k, abstention handling

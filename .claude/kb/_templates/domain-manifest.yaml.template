@@ -4,8 +4,8 @@
   name: {{DOMAIN_DISPLAY_NAME}}
   description: {{DOMAIN_DESCRIPTION}}
   path: {{DOMAIN_KEY}}/
-  status: draft
-  mcp_validated: {{VALIDATION_DATE}}
+  status: draft           # lifecycle: draft -> in_progress -> complete
+  last_updated: {{DATE}}  # YYYY-MM-DD; kb-architect bumps this on /update-kb
   agents: [{{AGENT_NAME}}]
   entry_points:
     index: index.md

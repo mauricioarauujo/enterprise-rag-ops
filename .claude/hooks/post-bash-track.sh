@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tracks successful quality gate execution.
-# Wired via PostToolUse hook on Bash commands in settings.json.
+# Staged in hooks/STAGED.example.json — not yet wired in settings.json.
 # Creates flag files that pre-commit-gate.sh checks before allowing commits.
 
 INPUT=$(cat)
