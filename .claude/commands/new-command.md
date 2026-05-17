@@ -19,7 +19,7 @@ Same multi-step workflow run ≥2 times.
 1. Confirm the trigger — the workflow has run ≥2 times.
 2. Create `.claude/commands/<name>.md` with this skeleton:
 
-   ````markdown
+   ```markdown
    ---
    description: One-line summary for the slash-command picker.
    ---
@@ -31,7 +31,7 @@ Same multi-step workflow run ≥2 times.
    ## Steps
 
    ## Output
-   ````
+   ```
 
 3. Write concrete, ordered steps. Reference STRUCTURE_GUIDE or KB instead of
    duplicating content.

@@ -14,18 +14,18 @@ Built in phases; the current phase and module map are in § Architecture below.
 
 ## Quick Navigation
 
-| What                      | Where                                            |
-| ------------------------- | ------------------------------------------------ |
-| Spec / architecture       | `docs/architecture/`                             |
-| Dataset notes             | `docs/dataset.md`                                |
-| Architecture decisions    | `docs/adr/` (first ADR in Phase 1)               |
-| Harness maintenance       | `.claude/STRUCTURE_GUIDE.md`                     |
-| Self-improvement protocol | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement  |
-| KB registry               | `.claude/kb/_index.yaml`                         |
-| Agent registry            | see § Agents below                               |
-| Commands                  | `.claude/commands/`                              |
-| Skills (tool reference)   | `.claude/skills/`                                |
-| SDD layer (specs)         | `.claude/sdd/README.md`                          |
+| What                      | Where                                           |
+| ------------------------- | ----------------------------------------------- |
+| Spec / architecture       | `docs/architecture/`                            |
+| Dataset notes             | `docs/dataset.md`                               |
+| Architecture decisions    | `docs/adr/` (first ADR in Phase 1)              |
+| Harness maintenance       | `.claude/STRUCTURE_GUIDE.md`                    |
+| Self-improvement protocol | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement |
+| KB registry               | `.claude/kb/_index.yaml`                        |
+| Agent registry            | see § Agents below                              |
+| Commands                  | `.claude/commands/`                             |
+| Skills (tool reference)   | `.claude/skills/`                               |
+| SDD layer (specs)         | `.claude/sdd/README.md`                         |
 
 ---
 
@@ -41,12 +41,12 @@ Built in phases; the current phase and module map are in § Architecture below.
 
 **Harness slash commands** — scaffold the orchestration layer per the Self-Improvement protocol:
 
-| Command        | Purpose                                  |
-| -------------- | ---------------------------------------- |
-| `/new-kb`      | Scaffold a KB domain or concept/pattern  |
-| `/update-kb`   | Refresh a KB domain against code + docs  |
-| `/new-agent`   | Scaffold a specialist agent              |
-| `/new-command` | Scaffold a slash command                 |
+| Command        | Purpose                                 |
+| -------------- | --------------------------------------- |
+| `/new-kb`      | Scaffold a KB domain or concept/pattern |
+| `/update-kb`   | Refresh a KB domain against code + docs |
+| `/new-agent`   | Scaffold a specialist agent             |
+| `/new-command` | Scaffold a slash command                |
 
 ---
 
@@ -123,4 +123,3 @@ Use `/new-kb`, `/update-kb`, `/new-agent`, `/new-command` — see `.claude/STRUC
 - Framework: pytest + pytest-cov (added in Phase 0).
 - Layout: tests mirror `src/` (`tests/test_<module>.py`).
 - Run: `make test` or `uv run pytest`.
-
