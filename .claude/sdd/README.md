@@ -1,25 +1,28 @@
 # SDD — Spec-Driven Development
 
-Optional pre-implementation layer for complex tasks. Produces structured specs before code.
+Optional pre-implementation layer for complex work. Produces structured specs before code.
 
-**Use when:** the task touches >2 modules, has multiple plausible designs, or you can't articulate the success criteria yet.
-**Skip when:** single-module change, bug fix, or config tweak — go straight to implementation.
+**Use when:** the phase touches >2 modules, has multiple plausible designs, or you can't articulate the success criteria yet.
+**Skip when:** single-module change, bug fix, or config tweak — go straight to `/implement`.
 
 ## Pipeline
 
 ```
-/brainstorm → BRAINSTORM_*.md   (approach comparison)
+/brainstorm sprint-N/<slug>  →  BRAINSTORM.md   (approaches, MoSCoW, research/KB scan)
     ↓
-/define     → DEFINE_*.md       (requirements + Clarity Score ≥12/15)
+/define     sprint-N/<slug>  →  DEFINE.md       (requirements + Clarity Score ≥12/15)
     ↓
-/design     → DESIGN_*.md       (architecture + file manifest)
+/design     sprint-N/<slug>  →  DESIGN.md       (architecture + file manifest + gaps)
     ↓
-/implement  → production code
+/implement  sprint-N/<slug>  →  production code
     ↓
-complete    → archive/
+/review     sprint-N/<slug>  →  REVIEW.md       (checks + code review + KB feedback loop)
+    ↓
+ship                         →  feature folder moves to archive/
 ```
 
-The corresponding slash commands (`/brainstorm`, `/define`, `/design`, `/implement`) are **not yet scaffolded** in this repo. Add them via the Self-Improvement protocol when the first complex task arrives (likely Phase 2 eval harness design).
+Each command delegates to a workflow agent: `brainstorm-agent` (sonnet), `define-agent`
+(opus), `design-agent` (opus), `code-reviewer` (sonnet for `/review`).
 
 ## Clarity Score Gate (Phase 1 → Phase 2)
 
@@ -33,15 +36,22 @@ The corresponding slash commands (`/brainstorm`, `/define`, `/design`, `/impleme
 | Scope       | Unbounded     | MoSCoW with explicit WON'T list  |
 | Constraints | Ignored       | All constraints named            |
 
+Below 12, `define-agent` asks clarifying questions and re-scores.
+
 ## Layout
+
+Artifacts are keyed on `sprint-N/<phase-slug>` (the project's unit hierarchy —
+see `STRUCTURE_GUIDE.md` § Project units).
 
 ```
 sdd/
 ├── README.md      ← This file
-├── features/      ← Active specs, one folder per feature
-│   └── <feature-slug>/
-│       ├── BRAINSTORM.md
-│       ├── DEFINE.md
-│       └── DESIGN.md
-└── archive/       ← Completed specs (move feature folder here after ship)
+├── features/      ← Active specs
+│   └── sprint-N/
+│       └── <phase-slug>/
+│           ├── BRAINSTORM.md
+│           ├── DEFINE.md
+│           ├── DESIGN.md
+│           └── REVIEW.md
+└── archive/       ← Shipped specs (move the sprint/phase folder here after ship)
 ```

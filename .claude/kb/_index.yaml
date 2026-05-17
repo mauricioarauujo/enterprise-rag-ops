@@ -24,9 +24,9 @@ templates:
 # § Self-Improvement Protocol for the trigger and bootstrap steps.
 #
 # Likely first domains for this project:
-#   - rag-retrieval     (Phase 1+: hybrid BM25+dense, chunking, expected_doc_ids)
-#   - rag-eval          (Phase 2+: per-fact judge, recall@k, abstention)
-#   - observability     (Phase 3+: OTel, Langfuse/Phoenix, failure taxonomy)
+#   - rag-retrieval     (Sprint 1+: hybrid BM25+dense, chunking, expected_doc_ids)
+#   - rag-eval          (Sprint 2+: per-fact judge, recall@k, abstention)
+#   - observability     (Sprint 3+: OTel, Langfuse/Phoenix, failure taxonomy)
 #
 # Domain entry shape:
 # <slug>:

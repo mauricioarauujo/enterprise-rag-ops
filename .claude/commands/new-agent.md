@@ -24,7 +24,8 @@ an isolated context window. Otherwise prefer a slash command.
    `kb_domains`, `model`.
 4. Fill the five sections: Identity, Mandatory Reads, Capabilities, Quality Gate,
    Response Format.
-5. Add a row to the Agents table in `CLAUDE.md` (batch CLAUDE.md edits).
+5. Add a row to the **Agent Registry** in `.claude/STRUCTURE_GUIDE.md` § Registries
+   (cache-safe — do **not** edit `CLAUDE.md`).
 
 ## Output
 

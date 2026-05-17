@@ -2,30 +2,39 @@
 
 Project instructions auto-loaded every turn. Single source of truth for how Claude Code operates in this repo.
 
+Registries (commands, agents, KB domains) live in `.claude/STRUCTURE_GUIDE.md` — it is
+not auto-loaded, so editing it is cache-safe. Keep `CLAUDE.md` edits rare and batched.
+
 ---
 
 ## Project Purpose
 
 Production-grade **RAG evaluation and observability** harness over the EnterpriseRAG-Bench dataset. The differentiator is not the RAG — it's the eval harness and observability layer around it.
 
-Built in phases; the current phase and module map are in § Architecture below.
+Built in sprints; the current sprint and module map are in § Architecture below.
+
+---
+
+## Project units — Sprint / Phase
+
+Work is organized as **Sprints** (top-level units), each made of **Phases** (~3 per
+medium sprint, 4–5 for complex). SDD artifacts are keyed on `sprint-N/<phase-slug>`.
+Personal sprint tracking is private (see `CLAUDE.local.md`).
 
 ---
 
 ## Quick Navigation
 
-| What                      | Where                                           |
-| ------------------------- | ----------------------------------------------- |
-| Spec / architecture       | `docs/architecture/`                            |
-| Dataset notes             | `docs/dataset.md`                               |
-| Architecture decisions    | `docs/adr/` (first ADR in Phase 1)              |
-| Harness maintenance       | `.claude/STRUCTURE_GUIDE.md`                    |
-| Self-improvement protocol | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement |
-| KB registry               | `.claude/kb/_index.yaml`                        |
-| Agent registry            | see § Agents below                              |
-| Commands                  | `.claude/commands/`                             |
-| Skills (tool reference)   | `.claude/skills/`                               |
-| SDD layer (specs)         | `.claude/sdd/README.md`                         |
+| What                            | Where                                           |
+| ------------------------------- | ----------------------------------------------- |
+| Spec / architecture             | `docs/architecture/`                            |
+| Dataset notes                   | `docs/dataset.md`                               |
+| Architecture decisions          | `docs/adr/` (first ADR in Sprint 1)             |
+| Harness maintenance             | `.claude/STRUCTURE_GUIDE.md`                    |
+| Self-improvement protocol       | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement |
+| Command / agent / KB registries | `.claude/STRUCTURE_GUIDE.md` § Registries       |
+| KB registry (machine-readable)  | `.claude/kb/_index.yaml`                        |
+| SDD layer (specs)               | `.claude/sdd/README.md`                         |
 
 ---
 
@@ -39,29 +48,23 @@ Built in phases; the current phase and module map are in § Architecture below.
 | Test              | `make test`   |
 | Full quality pass | `make verify` |
 
-**Harness slash commands** — scaffold the orchestration layer per the Self-Improvement protocol:
-
-| Command        | Purpose                                 |
-| -------------- | --------------------------------------- |
-| `/new-kb`      | Scaffold a KB domain or concept/pattern |
-| `/update-kb`   | Refresh a KB domain against code + docs |
-| `/new-agent`   | Scaffold a specialist agent             |
-| `/new-command` | Scaffold a slash command                |
+**Harness & SDD slash commands** (`/new-kb`, `/brainstorm`, `/define`, `/design`,
+`/implement`, `/review`, …) — full list in `.claude/STRUCTURE_GUIDE.md` § Registries.
 
 ---
 
 ## Architecture (current)
 
-Repo is in Phase 0 — only tooling and harness exist. No `src/` yet. The target architecture will land in Phase 1 (substrate) and Phase 2 (eval harness). When code arrives, update this section with a module map.
+Repo is in Sprint 0 — only tooling and harness exist. No `src/` yet. The target architecture will land in Sprint 1 (substrate) and Sprint 2 (eval harness). When code arrives, update this section with a module map.
 
 ```
 enterprise-rag-ops/
 ├── .claude/         # Orchestration: agents, KB, commands, skills, hooks, SDD
 ├── .github/         # CI workflows
 ├── docs/            # Public-facing: architecture, dataset notes, ADRs
-├── src/             # (Phase 1+) RAG, retrieval, generation modules
-├── eval/            # (Phase 2+) Eval harness, per-fact judge, multi-model runner
-├── observability/   # (Phase 3+) Tracing, failure taxonomy, dashboard
+├── src/             # (Sprint 1+) RAG, retrieval, generation modules
+├── eval/            # (Sprint 2+) Eval harness, per-fact judge, multi-model runner
+├── observability/   # (Sprint 3+) Tracing, failure taxonomy, dashboard
 ├── data/            # (gitignored) Raw + processed bench data
 ├── results/         # (gitignored) Eval reports
 ├── tests/           # Pytest
@@ -74,13 +77,18 @@ enterprise-rag-ops/
 
 ## Agents
 
-Empty registry — agents live flat in `.claude/agents/<name>.md` and are added as concrete needs surface (see Self-Improvement protocol below). Template: `.claude/agents/_specialist-template.md`. Scaffold with `/new-agent`. Likely first agents: `rag-eval`, `retrieval`, `observability` (Phase 1+).
+Workflow and specialist agents live flat in `.claude/agents/<name>.md`, added as
+concrete needs surface (see Self-Improvement protocol). Full registry:
+`.claude/STRUCTURE_GUIDE.md` § Agent Registry. Template: `_specialist-template.md`.
+Scaffold with `/new-agent`. When spawning an agent, always pass `model` explicitly.
 
 ---
 
 ## Knowledge Base
 
-Empty — KB domains are added when content stabilizes (typically after Phase 1 retrieval or Phase 2 eval design lands). Registry: `.claude/kb/_index.yaml`. Templates: `.claude/kb/_templates/`.
+KB domains are added on demand via the **3-pillar build** (codebase + MCP docs +
+Gemini Deep Research) — see `.claude/STRUCTURE_GUIDE.md` § Knowledge Base. Machine
+registry: `.claude/kb/_index.yaml`. Templates: `.claude/kb/_templates/`.
 
 **Line budgets:** concept ≤ 150, pattern ≤ 200, quick-reference ≤ 100.
 
@@ -112,14 +120,14 @@ Use `/new-kb`, `/update-kb`, `/new-agent`, `/new-command` — see `.claude/STRUC
 - **Language for code & docs:** English.
 - **Dates in docs:** YYYY-MM-DD.
 - **Commit format:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`).
-- **Branch naming:** `phase-<n>/<short-slug>` for phase work, `fix/<slug>` for one-offs.
-- **Tests:** pytest. New module → new test file. No mocking the LLM API in eval tests — use the cassette/replay pattern (TBD ADR in Phase 2).
-- **No edits to `CLAUDE.md` mid-session** — invalidates prompt cache. Batch CLAUDE.md changes.
+- **Branch naming:** `sprint-<n>/<short-slug>` for sprint work, `fix/<slug>` for one-offs.
+- **Tests:** pytest. New module → new test file. No mocking the LLM API in eval tests — use the cassette/replay pattern (TBD ADR in Sprint 2).
+- **No edits to `CLAUDE.md` mid-session** — invalidates prompt cache. Batch CLAUDE.md changes; prefer the `STRUCTURE_GUIDE.md` registries, which are cache-safe.
 
 ---
 
 ## Testing
 
-- Framework: pytest + pytest-cov (added in Phase 0).
+- Framework: pytest + pytest-cov (added in Sprint 0).
 - Layout: tests mirror `src/` (`tests/test_<module>.py`).
 - Run: `make test` or `uv run pytest`.

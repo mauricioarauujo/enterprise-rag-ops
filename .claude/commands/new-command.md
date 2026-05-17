@@ -35,7 +35,8 @@ Same multi-step workflow run ≥2 times.
 
 3. Write concrete, ordered steps. Reference STRUCTURE_GUIDE or KB instead of
    duplicating content.
-4. If cross-cutting, add it to the Commands section of `CLAUDE.md`.
+4. Add a row to the **Command Registry** in `.claude/STRUCTURE_GUIDE.md` § Registries
+   (cache-safe — do **not** edit `CLAUDE.md`).
 
 ## Output
 

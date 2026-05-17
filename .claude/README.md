@@ -11,7 +11,11 @@ This folder is the Claude Code orchestration system for `enterprise-rag-ops`.
 
 ## Status
 
-Bootstrapped in Phase 0 with **structure only**. Agents, KB domains, commands, and skills are added on demand, following the Self-Improvement Protocol in `CLAUDE.md`.
+Bootstrapped in Sprint 0. The workflow machinery is populated: the SDD pipeline
+(`/brainstorm` → `/define` → `/design` → `/implement` → `/review`), the workflow agents,
+the `kb-architect`, and the 3-pillar KB build. KB **domains** and additional specialist
+agents are still added on demand, following the Self-Improvement Protocol in `CLAUDE.md`.
+Registries: `STRUCTURE_GUIDE.md` § Registries.
 
 ## Files you can safely edit by hand
 

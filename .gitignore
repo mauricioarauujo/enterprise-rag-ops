@@ -41,6 +41,10 @@ CLAUDE.local.md
 .claude/storage/
 .claude/worktrees/
 
+# KB — raw Deep Research dumps (archive/ is tracked for provenance)
+.claude/kb/_research/inbox/
+!.claude/kb/_research/inbox/.gitkeep
+
 # Docs — local working space (never published)
 docs/planning/
 

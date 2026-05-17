@@ -1,40 +1,47 @@
 ---
-description: Scaffold a new KB domain (or a concept/pattern in an existing one) from the templates.
+description: Create or extend a KB domain via the kb-architect agent and the 3-pillar build.
 ---
 
 # /new-kb {domain}
 
-Create a knowledge-base domain, or add an artifact to one. See
-`.claude/STRUCTURE_GUIDE.md` § "When to add a KB concept or pattern" for the trigger.
+Create a knowledge-base domain (or add a concept/pattern to one) using the
+`kb-architect` agent and the 3-pillar build model. See `.claude/STRUCTURE_GUIDE.md`
+§ Knowledge Base for the trigger and the pillar model.
 
 ## When to use
 
-Same domain knowledge re-derived in ≥2 sessions. Do not pre-create domains "in case".
+Same domain knowledge re-derived in ≥2 sessions, **and** the area has stabilized
+enough to document. Do not pre-create domains "in case".
 
 ## Arguments
 
-`$ARGUMENTS` — first positional is the domain slug (kebab-case). Optional
-`--description "<one-liner>"`.
+`$ARGUMENTS`:
+
+- First positional → domain slug (kebab-case).
+- `--description "<one-liner>"` → purpose, used in `_index.yaml`.
+- `--deep-research` → engage pillar 3 (Gemini Deep Research) for a complex topic.
 
 ## Steps
 
 1. **Check the registry.** Read `.claude/kb/_index.yaml`. If the domain exists, ask
-   whether to add a concept/pattern to it or stop.
-2. **Scaffold the domain** (new domain only): `cp -r .claude/kb/_templates/* .claude/kb/<domain>/`,
-   then fill `index.md` from the template.
-3. **Add the artifact.** Pick the type and copy its template:
-   - `concepts/<name>.md` — atomic idea, ≤150 lines
-   - `patterns/<name>.md` — reusable code shape, ≤200 lines
-   - `quick-reference.md` — lookup table, ≤100 lines
-4. **Write content** grounded in this repo — grep `src/`, `eval/`, `tests/` for real
-   usage; validate library claims via Context7. Stranger test: every line teaches the
-   reader about the system.
-5. **Register.** Add or update the domain entry in `_index.yaml` (`status`,
-   `description`, `last_updated`, `concepts`, `patterns`).
-6. **Index.** Add a one-line entry in the domain's `index.md`.
-7. If a new domain was created, update the Knowledge Base table in `CLAUDE.md`
-   (batch with other CLAUDE.md edits).
+   whether to add a concept/pattern or stop.
+2. **Pick the build path:**
+   - **Simple** (default) — codebase + Context7/Exa are enough.
+   - **Deep research** (`--deep-research`, or when the topic is genuinely complex) —
+     run the flow in `.claude/kb/_research/README.md`: draft the Gemini prompt → review
+     the returned plan → wait for the file in `_research/inbox/` → build → archive.
+3. **Invoke the `kb-architect` agent** (pass `model: "sonnet"`). Brief it with: the
+   domain slug, the description, the build path, and which pillars apply. The agent
+   scaffolds from `_templates/`, runs the 3 pillars, curates `concepts/` + `patterns/`
+   within budgets, and records agreement-analysis confidence.
+4. **Verify registration.** Confirm the agent updated `_index.yaml` and added the row
+   to the KB registry in `.claude/STRUCTURE_GUIDE.md` (cache-safe — not `CLAUDE.md`).
+5. **CLAUDE.md.** Do **not** edit it. `CLAUDE.md` only points to the STRUCTURE_GUIDE
+   registry, so no edit is needed. If one genuinely is, stage it in
+   `docs/planning/claude-md-pending.md` and report it.
 
 ## Output
 
-Report: domain, files created, line-budget compliance.
+Report: domain, build path, pillars used, files created, budget compliance, any
+agreement-analysis conflicts. If `--deep-research`, confirm the source file was moved
+to `_research/archive/`.
