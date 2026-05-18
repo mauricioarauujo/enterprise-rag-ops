@@ -57,6 +57,12 @@ Score 5 dimensions 0–3 each:
 **Below 12:** ask the user clarifying questions via `AskUserQuestion`, then re-score.
 Do not pass a phase forward below 12.
 
+**If `AskUserQuestion` is unavailable** (e.g. this agent is running as a subagent):
+resolve any open questions to their BRAINSTORM/SPRINT-aligned defaults, flag each as an
+unconfirmed assumption under a "Resolved Open Questions" section in `DEFINE.md`, and
+surface them in the final report so the orchestrator confirms them before `/design`.
+Still score Clarity — do not silently skip the gate.
+
 ### Step 4 — Infrastructure readiness
 
 Map each dependency → KB domain → specialist agent (where one exists). Flag missing
