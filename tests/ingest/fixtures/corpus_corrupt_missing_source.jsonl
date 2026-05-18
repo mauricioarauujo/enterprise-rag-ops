@@ -1,0 +1,8 @@
+{"id": "dsid_001", "metadata": {"title": "Confluence runbook"}, "source_type": "confluence", "text": "Deploy and roll back the perf-canary service."}
+{"id": "dsid_002", "metadata": {"title": "Fireflies recap"}, "source_type": "fireflies", "text": "Meeting notes for the Q3 infra sync."}
+{"id": "dsid_003", "metadata": {"title": "GitHub PR"}, "source_type": "github", "text": "Add multipart upload support to the API."}
+{"id": "dsid_004", "metadata": {"title": "Gmail thread"}, "source_type": "gmail", "text": "Re: capacity planning for the next quarter."}
+{"id": "dsid_005", "metadata": {"title": "Drive doc"}, "source_type": "google_drive", "text": "Design doc for the inference router."}
+{"id": "dsid_006", "metadata": {"title": "HubSpot deal"}, "source_type": "hubspot", "text": "Enterprise account expansion notes."}
+{"id": "dsid_007", "metadata": {"title": "Jira ticket"}, "source_type": "jira", "text": "Investigate elevated p99 latency in prod."}
+{"id": "dsid_008", "metadata": {"title": "Linear issue"}, "source_type": "linear", "text": "Track the kernel selection regression."}
