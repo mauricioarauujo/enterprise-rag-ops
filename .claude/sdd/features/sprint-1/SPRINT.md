@@ -25,9 +25,11 @@ Planned breakdown, not a contract — each phase refines on `/brainstorm`.
 - **rag-retrieval — missing.** No KB domain exists for hybrid retrieval (BM25 + dense
   fusion, chunking strategy, `expected_doc_ids` scoring, vector-store choice). Phase 2
   re-derives this and it recurs in Sprint 2's recall@k metrics. Action: run `/new-kb
-rag-retrieval` before `/brainstorm sprint-1/phase-2-retrieval`. Deep research not
-  required — codebase + Context7 (rank_bm25, sentence-transformers, Qdrant/LanceDB)
-  cover it.
+rag-retrieval --deep-research` before `/brainstorm sprint-1/phase-2-retrieval`.
+  Deep Research is engaged: Context7 supplies library APIs only, not retrieval design
+  knowledge, and the 2026 retrieval landscape (learned-sparse, late-interaction, LLM
+  rerankers) moves fast enough that a synthesized survey is warranted — and ADR-002's
+  vector-store choice benefits from it.
 - **Data loading / HF datasets — sufficient.** Hugging Face `datasets` loading with a
   pinned revision is well-trodden; no KB needed for Phase 1. Capture dataset
   field-level notes in `docs/dataset.md` instead.

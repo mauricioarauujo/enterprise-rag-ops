@@ -86,9 +86,9 @@ model (Opus), which defeats cost control.
 Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 `.claude/kb/_index.yaml`. When a domain is created, add a row here:
 
-| Domain       | Status | Purpose | Primary agent |
-| ------------ | ------ | ------- | ------------- |
-| _(none yet)_ |        |         |               |
+| Domain          | Status | Purpose                                                           | Primary agent  |
+| --------------- | ------ | ----------------------------------------------------------------- | -------------- |
+| `rag-retrieval` | draft  | Hybrid BM25+dense retrieval, chunking, score fusion, eval metrics | `kb-architect` |
 
 ---
 

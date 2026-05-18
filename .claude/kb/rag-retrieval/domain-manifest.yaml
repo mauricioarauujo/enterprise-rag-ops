@@ -1,0 +1,44 @@
+rag-retrieval:
+  name: RAG Retrieval
+  description: >
+    Hybrid retrieval over the document corpus — chunking strategy, BM25 + dense
+    embedding, score fusion, metadata filtering, vector-store choice, and retrieval
+    evaluation (recall@k / precision@k / MRR / nDCG over expected_doc_ids).
+  path: rag-retrieval/
+  status: draft
+  last_updated: "2026-05-17"
+  agents: [kb-architect]
+  pillars_used: [codebase, mcp, deep-research]
+  research_source: _research/archive/rag-retrieval-2026-05-17.md
+  entry_points:
+    index: index.md
+    quick_reference: quick-reference.md
+  concepts:
+    - name: chunking-strategies
+      path: concepts/chunking-strategies.md
+      confidence: 0.90
+    - name: lexical-vs-semantic
+      path: concepts/lexical-vs-semantic.md
+      confidence: 0.90
+    - name: hybrid-score-fusion
+      path: concepts/hybrid-score-fusion.md
+      confidence: 0.92
+    - name: metadata-filtering
+      path: concepts/metadata-filtering.md
+      confidence: 0.90
+    - name: retrieval-eval-metrics
+      path: concepts/retrieval-eval-metrics.md
+      confidence: 0.95
+    - name: reranking
+      path: concepts/reranking.md
+      confidence: 0.92
+    - name: frontier-2026
+      path: concepts/frontier-2026.md
+      confidence: 0.70
+  patterns:
+    - name: hybrid-retrieve-fuse
+      path: patterns/hybrid-retrieve-fuse.md
+      confidence: 0.85
+    - name: expected-doc-ids-smoke
+      path: patterns/expected-doc-ids-smoke.md
+      confidence: 0.90

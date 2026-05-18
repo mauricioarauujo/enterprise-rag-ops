@@ -28,6 +28,20 @@ Used for **complex** topics where the codebase (pillar 1) and MCP docs/patterns
 7. Domain(s) registered in _index.yaml + the STRUCTURE_GUIDE KB registry.
 ```
 
+## Drafting the prompt (step 1)
+
+Every Gemini Deep Research prompt **must end with an explicit output directive**:
+
+> Render every numeric value, parameter, threshold, and formula as plain Markdown
+> text (or a Markdown table) — never as an inline image, equation object, or
+> rendered graphic. Use plain ASCII for math (e.g. `k = 60`, `L = mu - 3*sigma`).
+
+Gemini renders some numerics and formulae as inline images in its UI. Those images
+are **silently dropped** when the report is exported to Markdown — they arrive as
+broken `![][image]` refs, so the KB loses exactly the concrete values it needs.
+The output directive prevents this at the source; do not rely on also exporting a
+PDF to recover them after the fact.
+
 ## Naming
 
 - Inbox file: `<domain>-<YYYY-MM-DD>.md` (e.g. `rag-eval-harness-2026-05-20.md`).
