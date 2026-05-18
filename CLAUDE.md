@@ -126,6 +126,36 @@ Use `/new-kb`, `/update-kb`, `/new-agent`, `/new-command` — see `.claude/STRUC
 
 ---
 
+## Engineering Behavior
+
+How to implement work in this repo. Guiding principle: **minimal scope, clean
+structure** — build the smallest thing that meets the phase's acceptance criteria,
+but build it well enough that it never becomes tech-debt. Scalable and maintainable
+from day 0.
+
+- **Think before coding.** Start from the SDD artifacts for the phase
+  (`BRAINSTORM`/`DEFINE`/`DESIGN` under `.claude/sdd/features/{slug}/`) and the
+  relevant KB domain. If requirements are ambiguous, surface options and trade-offs —
+  never silently pick one.
+- **Minimal scope.** Build only what the acceptance criteria require — no speculative
+  features, no premature implementations. The substrate stays deliberately
+  conventional (see Project Purpose).
+- **Clean structure.** Structure what you _do_ build to last: name the **seams** —
+  interfaces/ports where a future swap is likely — so that swap is a localized
+  change, not a rewrite. A seam is justified by a _named, likely_ future change (an
+  ADR that anticipates it), not by "in case." Design the seam; do not pre-build the
+  implementation behind it. "Scalable from day 0" means the _shape_ is right, not
+  that the production tool is wired in early.
+- **Surgical edits.** Limit changes to files the task needs. Every new module gets a
+  mirrored test file. Clean up only artifacts your own change introduced — not
+  unrelated legacy.
+- **Goal-driven validation.** Success criteria come before code (the `DEFINE.md`
+  acceptance criteria). Validate smallest-first, then widen: targeted
+  `uv run pytest -k`, then `make verify`. Work is done only when code _and_
+  validation support the stated outcome.
+
+---
+
 ## Testing
 
 - Framework: pytest + pytest-cov (added in Sprint 0).
