@@ -8,7 +8,13 @@ authors = [
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "datasets>=3.0,<5.0",
+    "pydantic>=2.6,<3.0",
+]
+
+[project.scripts]
+rag-ingest = "enterprise_rag_ops.ingest.cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
@@ -16,6 +22,9 @@ Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/enterprise_rag_ops"]
 
 [dependency-groups]
 dev = [
@@ -61,6 +70,7 @@ addopts = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: end-to-end tests touching real services",
+    "corpus: validates the ingested data/processed/corpus.jsonl (run via make check-data)",
 ]
 
 [tool.coverage.run]
