@@ -20,21 +20,23 @@ reproducibility matter here, not sophistication.
 
 Planned breakdown, not a contract — each phase refines on `/brainstorm`.
 
-## Sprint-Wide KB & Research
+## Sprint-Wide Knowledge Plan
 
-- **rag-retrieval — missing.** No KB domain exists for hybrid retrieval (BM25 + dense
-  fusion, chunking strategy, `expected_doc_ids` scoring, vector-store choice). Phase 2
-  re-derives this and it recurs in Sprint 2's recall@k metrics. Action: run `/new-kb
-rag-retrieval --deep-research` before `/brainstorm sprint-1/phase-2-retrieval`.
-  Deep Research is engaged: Context7 supplies library APIs only, not retrieval design
-  knowledge, and the 2026 retrieval landscape (learned-sparse, late-interaction, LLM
-  rerankers) moves fast enough that a synthesized survey is warranted — and ADR-002's
-  vector-store choice benefits from it.
-- **Data loading / HF datasets — sufficient.** Hugging Face `datasets` loading with a
-  pinned revision is well-trodden; no KB needed for Phase 1. Capture dataset
-  field-level notes in `docs/dataset.md` instead.
-- **rag-eval, observability — out of sprint scope.** Deferred to Sprint 2 / Sprint 3
-  respectively; do not build now.
+Research lands _before_ a phase's brainstorm/ADR; KB work lands _after_ its ADR.
+
+| Knowledge area          | Kind          | Action                                  | Timing                                                                   |
+| ----------------------- | ------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| Retrieval design        | research      | `/new-kb rag-retrieval --deep-research` | Done — Deep Research consumed; `rag-retrieval` KB built (survey shape)   |
+| Retrieval stack         | KB (refocus)  | `/update-kb rag-retrieval`              | **After ADR-002** — collapse the comparison matrices to the chosen stack |
+| Data loading / HF       | tech-agnostic | none — notes in `docs/dataset.md`       | Phase 1 (done)                                                           |
+| rag-eval, observability | —             | out of sprint scope                     | Deferred to Sprint 2 / Sprint 3                                          |
+
+**Note on sequencing.** The `rag-retrieval` KB was built before Phase 2's decisions
+(SPRINT.md flagged it as a Phase 2 prerequisite), so it is currently a neutral
+_survey_ of the design space — the right input for ADR-002, but broader than a KB's
+steady state. Once ADR-002 records the vector store / fusion / chunking choices,
+`/update-kb rag-retrieval` refocuses it: comparison matrices collapse to "chosen: X —
+see ADR-002", the chosen-path patterns and tech-agnostic fundamentals stay.
 
 ## Success Criteria
 

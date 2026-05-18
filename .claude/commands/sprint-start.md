@@ -33,8 +33,19 @@ so each phase can later refine the "how".
    `/brainstorm`.
 
 4. **Sprint-wide research & KB scan** (the sprint half of decision O4) — across all
-   phases, classify each KB domain the sprint will touch: missing / thin / sufficient.
-   Flag which need `/new-kb`, `/update-kb`, or `--deep-research`, and when in the sprint.
+   phases, classify each knowledge area the sprint will touch, and separate two kinds
+   of pre-work, because they sit on opposite sides of a decision:
+   - **Research — _before_ a phase's `/brainstorm` and ADR.** For an architecture the
+     sprint has not yet decided, the pre-work is _research_ (Context7/Exa, or
+     `--deep-research`) that feeds the brainstorm and the ADR. Do **not** pre-build a
+     survey-shaped KB of an undecided design space.
+   - **KB — _after_ the ADR lands.** A KB documents the _chosen_ approach: `/new-kb`
+     for a new domain, or `/update-kb` to refocus one once the decision is recorded.
+   - **Tech-agnostic knowledge** (metrics, invariants, protocols that no decision
+     changes) can be KB'd whenever it stabilizes, independent of any ADR.
+
+   Flag each item with its kind, the action (`/new-kb` / `/update-kb` /
+   `--deep-research`), and its timing relative to the phase's brainstorm/ADR.
 
 5. **Write output** → `.claude/sdd/features/sprint-N/SPRINT.md`.
 
@@ -62,9 +73,16 @@ so each phase can later refine the "how".
 | ----- | ------ | ----------- |
 | 1     | …      | `phase-1-…` |
 
-## Sprint-Wide KB & Research
+## Sprint-Wide Knowledge Plan
 
-{Per domain: missing/thin/sufficient → action + timing. Or "None — coverage holds."}
+Two kinds of pre-work, keyed to each phase's decision point — research lands
+_before_ a phase's brainstorm/ADR, KB work lands _after_ its ADR:
+
+| Knowledge area | Kind (research / KB / tech-agnostic) | Action | Timing |
+| -------------- | ------------------------------------ | ------ | ------ |
+
+{One row per area. Research rows are due before the phase brainstorm/ADR; KB rows
+after the ADR. Or "None — coverage holds."}
 
 ## Success Criteria
 
