@@ -23,12 +23,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Lint (ruff)
-        run: |
-          uv run ruff format --check src tests
-          uv run ruff check src tests
+      # CI calls the Make targets so the gate is defined once, in the Makefile —
+      # `make verify` locally and CI cannot drift apart. `make test` excludes the
+      # `corpus` marker (it validates the gitignored corpus, run via `make
+      # check-data`).
+      - name: Lint
+        run: make lint
 
-      - name: Test (pytest)
-        # The `corpus` marker validates data/processed/corpus.jsonl, which is
-        # gitignored and absent in CI — it runs locally via `make check-data`.
-        run: uv run pytest -m "not corpus" --cov --cov-report=term
+      - name: Test
+        run: make test-cov
