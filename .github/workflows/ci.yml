@@ -29,4 +29,6 @@ jobs:
           uv run ruff check src tests
 
       - name: Test (pytest)
-        run: uv run pytest --cov --cov-report=term
+        # The `corpus` marker validates data/processed/corpus.jsonl, which is
+        # gitignored and absent in CI — it runs locally via `make check-data`.
+        run: uv run pytest -m "not corpus" --cov --cov-report=term
