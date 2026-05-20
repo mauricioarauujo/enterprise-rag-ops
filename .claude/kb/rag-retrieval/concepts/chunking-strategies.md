@@ -22,9 +22,14 @@ Phase 1 deliberately deferred all chunking; the choice is an ADR-002 input.
 | Semantic        | Medium-High | Medium               | High       | Poor fit for code/chat                 |
 | Parent-child    | Very High   | Excellent            | Medium     | Heterogeneous enterprise sources       |
 
-**Recommended default**: parent-child. The 9-source corpus (Slack chat, Jira tickets,
-Confluence docs, Gmail threads, code) is maximally heterogeneous — parent-child
-preserves generator context without sacrificing vector match precision.
+**Phase 2 decision (ADR-002)**: uniform fixed-size (256-char window / 32-char overlap),
+no per-source branching. `RecursiveCharacterTextSplitter` via `langchain-text-splitters`.
+Rationale: smallest thing that satisfies the smoke gate; uniform chunking keeps recall
+comparisons across sources meaningful. Escalation trigger: if the smoke gate yields
+`Recall@10 == 0` on any question, escalate to parent-child before Phase 3.
+
+**Parent-child remains the research recommendation** for heterogeneous enterprise
+corpora — the strategy comparison table above still applies for Sprint 2+ evaluation.
 
 ## Source-Specific Guidance
 
@@ -58,9 +63,12 @@ preserves generator context without sacrificing vector match precision.
 
 ## Codebase Grounding
 
-- `src/enterprise_rag_ops/ingest/schema.py` — `Document(id, source_type, text, metadata)` is the chunk input contract.
-- `data/processed/corpus.jsonl` — the Phase 2 index source; 9 × `DOCS_PER_SOURCE` documents.
-- `docs/dataset.md` — source type counts and field mapping (title in `metadata`).
+- `src/enterprise_rag_ops/retrieval/chunker.py` — `chunk_document(doc)` via
+  `RecursiveCharacterTextSplitter`; `chunk_id = f"{doc.id}::{offset}"`.
+- `src/enterprise_rag_ops/retrieval/config.py` — `CHUNK_SIZE=256`, `CHUNK_OVERLAP=32`.
+- `src/enterprise_rag_ops/ingest/schema.py` — `Document(id, source_type, text, metadata)` is the chunk input.
+- `data/processed/corpus.jsonl` — Phase 2 index source; 9 × `DOCS_PER_SOURCE` documents.
+- `docs/adr/0002-retrieval-architecture.md` — ADR recording the fixed-size decision and escalation trigger.
 
 ## Related
 

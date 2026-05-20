@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-05-17"
+last_updated: "2026-05-20"
 
 limits:
   quick_reference: 100
@@ -37,7 +37,7 @@ domains:
       evaluation (recall@k / precision@k / MRR / nDCG over expected_doc_ids).
     path: rag-retrieval/
     status: draft
-    last_updated: "2026-05-17"
+    last_updated: "2026-05-20"
     agents: [kb-architect]
     pillars_used: [codebase, mcp, deep-research]
     research_source: _research/archive/rag-retrieval-2026-05-17.md
@@ -47,7 +47,7 @@ domains:
     concepts:
       - name: chunking-strategies
         path: concepts/chunking-strategies.md
-        confidence: 0.70
+        confidence: 0.85
       - name: lexical-vs-semantic
         path: concepts/lexical-vs-semantic.md
         confidence: 0.90
@@ -69,7 +69,7 @@ domains:
     patterns:
       - name: hybrid-retrieve-fuse
         path: patterns/hybrid-retrieve-fuse.md
-        confidence: 0.85
+        confidence: 0.95
       - name: expected-doc-ids-smoke
         path: patterns/expected-doc-ids-smoke.md
-        confidence: 0.90
+        confidence: 0.95
