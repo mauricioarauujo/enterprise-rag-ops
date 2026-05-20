@@ -11,10 +11,15 @@ requires-python = ">=3.11"
 dependencies = [
     "datasets>=3.0,<5.0",
     "pydantic>=2.6,<3.0",
+    "bm25s>=0.2,<1.0",
+    "sentence-transformers>=3.0,<6.0",
+    "lancedb>=0.15,<1.0",
+    "langchain-text-splitters>=0.3,<1.0",
 ]
 
 [project.scripts]
 rag-ingest = "enterprise_rag_ops.ingest.cli:main"
+rag-index = "enterprise_rag_ops.retrieval.cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
@@ -71,6 +76,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: end-to-end tests touching real services",
     "corpus: validates the ingested data/processed/corpus.jsonl (run via make check-data)",
+    "smoke: real-model retrieval Recall@k smoke (run via make retrieval-smoke; excluded from make verify)",
 ]
 
 [tool.coverage.run]
