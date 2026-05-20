@@ -1,8 +1,9 @@
 # Expected Doc IDs Smoke Test
 
 > **Purpose**: Phase 2 exit gate — assert Recall@k > 0 using `expected_doc_ids`
-> from the dataset `questions` config, with correct chunk-to-doc deduplication.
-> **MCP Validated**: 2026-05-17
+> from the dataset `questions` config, via `HybridRetriever` loaded from persisted
+> artifacts. Run with `make retrieval-smoke` (local-only, not part of `make verify`).
+> **Codebase Grounded**: 2026-05-20 (Sprint 1 Phase 2 merged)
 
 ## When to Use
 
@@ -15,116 +16,115 @@
 ```python
 """test_retrieval_smoke.py — Phase 2 exit gate.
 
-Assumes:
-- data/processed/corpus.jsonl exists (from make download-data)
-- A fixed question subset with expected_doc_ids is available
-- hybrid_retrieve() from hybrid_retriever.py
+Marked `smoke`; excluded from `make verify`. Run with `make retrieval-smoke`.
+
+Prerequisites:
+- `make build-index` has run (creates BM25 + LanceDB artifacts).
+- `data/processed/corpus.jsonl` exists (from `make download-data`).
 """
-import json
-from pathlib import Path
+from __future__ import annotations
+
 import pytest
-from enterprise_rag_ops.ingest.schema import Document
-from retrieval.hybrid_retriever import Chunk, build_bm25_index, hybrid_retrieve
-from sentence_transformers import SentenceTransformer
+from enterprise_rag_ops.retrieval import config, pipeline
 
+pytestmark = pytest.mark.smoke
 
-CORPUS_PATH = Path("data/processed/corpus.jsonl")
-TOP_K = 10
-# Smoke questions: a small fixed subset with known expected_doc_ids.
-# In Sprint 2 this grows to the full 500-question eval set.
-SMOKE_QUESTIONS = [
+# Three questions selected via streaming the dataset `questions` config and
+# intersecting `expected_doc_ids` with the local 900-doc corpus subset (RQ-2).
+SMOKE_QUESTIONS: list[dict] = [
     {
-        "query": "What is the company PTO policy?",
-        "expected_doc_ids": ["doc_001", "doc_002"],
+        "question_id": "qst_0104",
+        "source_type": "confluence",
+        "query": (
+            "What is the standard amount of time a new hire buddy is expected to spend per day "
+            "during the first two weeks when a long-term contractor is converted to a full-time employee?"
+        ),
+        "expected_doc_ids": ["dsid_005f7a937cad4b3cbb30d9d93199e22a"],
     },
-    # Add more questions from the dataset questions config here.
+    {
+        "question_id": "qst_0252",
+        "source_type": "confluence",
+        "query": (
+            "In our incident response process, what is the rule for when a quick time-boxed "
+            "after-action review is acceptable instead of writing the full formal analysis?"
+        ),
+        "expected_doc_ids": ["dsid_01eaeaf6045941beaeaf74e6170aceea"],
+    },
+    {
+        "question_id": "qst_0258",
+        "source_type": "jira",
+        "query": (
+            "In the us-east dedicated setup for a big retail tenant, what caused the multi-hour "
+            "staircase of gateway failures during peak traffic?"
+        ),
+        "expected_doc_ids": ["dsid_019864ee09fa428e919e9a0de11ca467"],
+    },
 ]
 
 
-def load_corpus_as_chunks(path: Path) -> list[Chunk]:
-    """Load corpus.jsonl -> Chunk list. chunk_id = doc_id (no sub-chunking yet)."""
-    chunks = []
-    with path.open() as f:
-        for line in f:
-            doc = Document.model_validate_json(line)
-            # Phase 2 may split each Document into multiple Chunks.
-            # Until chunk splitting is implemented, doc == chunk (1:1 mapping).
-            chunks.append(Chunk(chunk_id=doc.id, doc_id=doc.id, text=doc.text))
-    return chunks
-
-
-def recall_at_k(
-    retrieved_doc_ids: list[str],
-    expected: list[str],
-    k: int,
-) -> float:
-    """Standard Recall@k — deduplication must have already happened upstream."""
+def recall_at_k(retrieved_doc_ids: list[str], expected: list[str], k: int) -> float:
+    """Standard Recall@k. Caller must already have deduplicated to docs."""
     top_k = set(retrieved_doc_ids[:k])
     relevant = set(expected)
-    if not relevant:
-        return 1.0  # vacuously correct
-    return len(top_k & relevant) / len(relevant)
+    return len(top_k & relevant) / len(relevant) if relevant else 1.0
 
 
 @pytest.fixture(scope="module")
-def retriever_components():
-    """Build index once per module to keep smoke test fast."""
-    chunks = load_corpus_as_chunks(CORPUS_PATH)
-    bm25, _ = build_bm25_index(chunks)
-    model = SentenceTransformer("BAAI/bge-m3")
-    return chunks, bm25, model
-
-
-def test_recall_above_zero(retriever_components):
-    """Phase 2 exit gate: every smoke query must hit at least one expected doc."""
-    chunks, bm25, model = retriever_components
-    failures = []
-    for q in SMOKE_QUESTIONS:
-        results = hybrid_retrieve(
-            query=q["query"],
-            chunks=chunks,
-            bm25=bm25,
-            model=model,
-            top_k=TOP_K,
+def retriever():
+    """Load the persisted BGE-M3 retriever — slow path, requires build-index."""
+    if not config.LANCEDB_DIR.exists():
+        pytest.skip(
+            f"No index at {config.LANCEDB_DIR} — run `make build-index` first."
         )
-        retrieved_ids = [doc_id for doc_id, _ in results]
-        r_at_k = recall_at_k(retrieved_ids, q["expected_doc_ids"], TOP_K)
-        if r_at_k == 0.0:
-            failures.append(
-                f"query={q['query']!r} recall@{TOP_K}=0.0 "
-                f"expected={q['expected_doc_ids']} got={retrieved_ids[:5]}"
-            )
-    assert not failures, "Smoke gate failed:\n" + "\n".join(failures)
+    if not config.CORPUS_PATH.exists():
+        pytest.skip(f"No corpus at {config.CORPUS_PATH} — run `make download-data` first.")
+    return pipeline.load_retriever()   # opens BM25 + LanceDB; no re-encoding
 
 
-def test_deduplication_contract(retriever_components):
-    """Retriever must return unique doc IDs — no duplicate doc_id in top-k."""
-    chunks, bm25, model = retriever_components
-    query = SMOKE_QUESTIONS[0]["query"]
-    results = hybrid_retrieve(query=query, chunks=chunks, bm25=bm25, model=model)
-    doc_ids = [doc_id for doc_id, _ in results]
-    assert len(doc_ids) == len(set(doc_ids)), "Duplicate doc_ids in retriever output"
+@pytest.mark.parametrize("question", SMOKE_QUESTIONS, ids=lambda q: q["question_id"])
+def test_recall_at_10_above_zero(retriever, question):
+    """AC-12 (first half): every smoke query hits at least one expected doc."""
+    results = retriever.retrieve(question["query"], top_k=config.TOP_K)
+    retrieved_doc_ids = [doc_id for doc_id, _ in results]
+    r_at_k = recall_at_k(retrieved_doc_ids, question["expected_doc_ids"], config.TOP_K)
+    assert r_at_k > 0.0, (
+        f"{question['question_id']}: Recall@{config.TOP_K}=0.0; "
+        f"expected={question['expected_doc_ids']} got={retrieved_doc_ids[:5]}"
+    )
+
+
+def test_unique_doc_ids_per_result(retriever):
+    """AC-12 (second half): retriever output has no duplicate doc_id."""
+    for q in SMOKE_QUESTIONS:
+        results = retriever.retrieve(q["query"], top_k=config.TOP_K)
+        doc_ids = [doc_id for doc_id, _ in results]
+        assert len(doc_ids) == len(set(doc_ids)), (
+            f"{q['question_id']}: duplicate doc_ids in output"
+        )
 ```
 
 ## Configuration
 
 | Setting            | Default                  | Description                                       |
 | ------------------ | ------------------------ | ------------------------------------------------- |
-| `TOP_K`            | 10                       | Evaluation depth; matches recommended eval window |
-| Smoke question set | Fixed subset             | Expand to full 500 questions in Sprint 2          |
+| `TOP_K`            | 10 (`config.TOP_K`)      | Evaluation depth; matches recommended eval window |
+| Smoke question set | 3 fixed questions (RQ-2) | Expand to full 500 questions in Sprint 2          |
 | Dedup key          | `doc_id` = `Document.id` | Must match `expected_doc_ids` in the dataset      |
 
 ## Key Invariants
 
-- `retrieved_doc_ids` passed to `recall_at_k` must already be deduplicated — the
-  retriever owns deduplication, not the test.
-- The smoke test uses a fixed question subset; `expected_doc_ids` for the full eval
-  set lives in the dataset `questions` config (Sprint 2 scope).
-- `chunk_id == doc_id` in the 1:1 phase; after sub-chunking is added in Phase 2,
-  `Chunk.doc_id` is the foreign key back to `Document.id`.
+- `retriever.retrieve()` returns `(doc_id, score)` pairs already deduplicated — the
+  retriever owns deduplication (`deduplicate_to_docs`), not the test.
+- The smoke test uses `pipeline.load_retriever()` — opens the persisted BM25 and
+  LanceDB artifacts, no corpus re-encoding at query time (NFR-1).
+- `chunk_id = f"{doc_id}::{offset}"` is the deterministic anchor; `Chunk.doc_id` is
+  always the foreign key back to `Document.id`, even when a document produces many chunks.
+- The 3 questions were selected 2026-05-19 by streaming `questions@<DATASET_REVISION>`
+  and intersecting `expected_doc_ids` with the 900-doc corpus subset (RQ-2).
 
 ## See Also
 
 - [patterns/hybrid-retrieve-fuse.md](hybrid-retrieve-fuse.md)
 - [concepts/retrieval-eval-metrics.md](../concepts/retrieval-eval-metrics.md)
-- `src/enterprise_rag_ops/ingest/schema.py` — `Document.id` definition
+- `tests/retrieval/test_retrieval_smoke.py` — the canonical source
+- `docs/adr/0002-retrieval-architecture.md` — build-time invariants

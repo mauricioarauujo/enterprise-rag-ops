@@ -3,6 +3,7 @@
 > **Purpose**: Hybrid retrieval over the document corpus — chunking, BM25 + dense,
 > score fusion, metadata filtering, vector-store choice, and retrieval evaluation
 > (recall@k / precision@k / MRR / nDCG over `expected_doc_ids`).
+> **Phase 2 shipped** (Sprint 1, 2026-05-19). ADR: `docs/adr/0002-retrieval-architecture.md`.
 > **MCP Validated**: 2026-05-17
 
 ## Quick Navigation
@@ -34,8 +35,18 @@
 
 ---
 
+---
+
+## Architecture Decision
+
+- [docs/adr/0002-retrieval-architecture.md](../../../../docs/adr/0002-retrieval-architecture.md) — accepted; LanceDB + BGE-M3 + bm25s + RRF
+
+---
+
 ## Key Invariants
 
 - `Document.id` (= dataset `doc_id`) is the deduplication key for `expected_doc_ids` scoring.
 - Evaluate at document level after dedup — never raw chunk level.
-- RRF k=60 is the default smoothing constant; over-fetch 3–5× per retriever before fusing.
+- RRF k=60 is the default smoothing constant; over-fetch 3× per retriever before fusing.
+- Encode once at build time (`make build-index`); query time opens persisted artifacts (NFR-1).
+- One ordered `list[Chunk]` from `chunk_documents()` anchors BM25, `.npy`, and LanceDB rows.
