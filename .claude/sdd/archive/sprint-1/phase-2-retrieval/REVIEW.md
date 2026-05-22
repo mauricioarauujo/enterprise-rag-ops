@@ -1,6 +1,13 @@
 # Review: sprint-1/phase-2-retrieval — Hybrid Retrieval
 
-**Branch:** `main` (uncommitted) | **Date:** 2026-05-19 | **Verdict:** 🟡 ALMOST
+**Branch:** `main` (uncommitted) | **Date:** 2026-05-19 | **Verdict:** 🟡 ALMOST → ✅ resolved at merge
+
+> **Resolution (2026-05-22, sprint-1 close).** The two 🔴 blocking stranger-test items
+> below were both fixed before the PR #3 merge — verified at close: ADR-002:17 reworded
+> to "This is a substrate sprint — the retriever must work and be maintainable, not
+> exotic", and the BRAINSTORM "portfolio" framing replaced with system-level rationale.
+> The non-blocking polish (#1 deferred import, #2 `load_retriever` test) was also folded
+> in. The verdict line was never flipped at the time; Phase 2 shipped as **✅ READY**.
 
 ## Summary
 
