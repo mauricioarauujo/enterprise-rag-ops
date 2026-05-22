@@ -55,3 +55,38 @@ def test_lancedb_open_reuses_existing_table(tmp_path, synthetic_documents, stub_
     vectors = stub_embedder.encode([chunks[0].text])
     hits = reopened.dense_search(query_vector=vectors[0], k=1)
     assert hits
+
+
+def test_fetch_chunks_by_chunk_ids_returns_requested_chunks(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    """FR-5: store returns exactly the requested chunks, with text, no ordering policy."""
+    store, chunks, _vectors = _build_store(tmp_path, synthetic_documents, stub_embedder)
+    requested = [chunks[0].chunk_id, chunks[2].chunk_id]
+    fetched = store.fetch_chunks_by_chunk_ids(requested)
+    assert {c.chunk_id for c in fetched} == set(requested)
+    assert all(c.text for c in fetched)
+
+
+def test_fetch_chunks_by_chunk_ids_empty_input_returns_empty(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    store, _chunks, _vectors = _build_store(tmp_path, synthetic_documents, stub_embedder)
+    assert store.fetch_chunks_by_chunk_ids([]) == []
+
+
+def test_fetch_chunks_by_chunk_ids_unknown_chunk_returns_empty(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    """A chunk_id absent from the index (stale index) returns no rows — assembler skips it."""
+    store, _chunks, _vectors = _build_store(tmp_path, synthetic_documents, stub_embedder)
+    assert store.fetch_chunks_by_chunk_ids(["does_not_exist::0"]) == []
+
+
+def test_fetch_chunks_by_chunk_ids_escapes_single_quotes(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    """Defensive: a chunk_id containing a single quote must not break the SQL filter."""
+    store, _chunks, _vectors = _build_store(tmp_path, synthetic_documents, stub_embedder)
+    # No quote-containing chunk_ids in the fixture; just assert the call doesn't raise.
+    assert store.fetch_chunks_by_chunk_ids(["o'malley::0"]) == []

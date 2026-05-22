@@ -11,6 +11,7 @@ from enterprise_rag_ops.retrieval.bm25_index import BM25Index
 from enterprise_rag_ops.retrieval.chunker import chunk_documents
 from enterprise_rag_ops.retrieval.hybrid_retriever import (
     HybridRetriever,
+    deduplicate_to_best_chunk,
     deduplicate_to_docs,
     rrf_fuse,
 )
@@ -59,6 +60,42 @@ def test_deduplicate_to_docs_keeps_first_rank():
     chunk_to_doc = {"c1::0": "c1", "c1::1": "c1", "c2::0": "c2"}
     result = deduplicate_to_docs(fused, chunk_to_doc)
     assert result == [("c1", 0.9), ("c2", 0.7)]
+
+
+def test_deduplicate_to_best_chunk_keeps_winning_chunk_id():
+    """The winning (highest-ranked) chunk per doc is retained — not the lex-first."""
+    # c1::5 outranks c1::0, so it must represent doc c1 (the bug the smoke caught).
+    fused = [("c1::5", 0.9), ("c1::0", 0.8), ("c2::3", 0.7)]
+    chunk_to_doc = {"c1::5": "c1", "c1::0": "c1", "c2::3": "c2"}
+    result = deduplicate_to_best_chunk(fused, chunk_to_doc)
+    assert result == [("c1::5", "c1", 0.9), ("c2::3", "c2", 0.7)]
+
+
+def test_retrieve_chunks_returns_chunk_doc_score_unique_docs(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    """retrieve_chunks: (chunk_id, doc_id, score), one chunk per doc, in rank order."""
+    retriever = _build_retriever(
+        tmp_path, synthetic_documents, stub_embedder, abstention_threshold=-1.0
+    )
+    hits = retriever.retrieve_chunks("PTO policy company", top_k=5)
+    assert hits, "expected non-empty chunk hits"
+    assert all(len(h) == 3 for h in hits)
+    doc_ids = [doc_id for _chunk_id, doc_id, _score in hits]
+    assert len(doc_ids) == len(set(doc_ids)), "one chunk per doc"
+    # Each returned chunk_id belongs to its reported doc_id.
+    for chunk_id, doc_id, _score in hits:
+        assert chunk_id.startswith(doc_id)
+
+
+def test_retrieve_chunks_abstains_when_below_threshold(
+    tmp_path, synthetic_documents, stub_embedder
+):
+    """retrieve_chunks honors the same abstention gate as retrieve (FR-9)."""
+    retriever = _build_retriever(
+        tmp_path, synthetic_documents, stub_embedder, abstention_threshold=0.999
+    )
+    assert retriever.retrieve_chunks("unrelated to any document", top_k=5) == []
 
 
 def test_retrieve_returns_unique_doc_ids(tmp_path, synthetic_documents, stub_embedder):

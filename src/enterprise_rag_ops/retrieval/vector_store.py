@@ -116,3 +116,24 @@ class LanceDBStore:
             query = query.where(f"source_type = '{safe}'", prefilter=True)
         records = query.limit(k).to_list()
         return [(r["chunk_id"], 1.0 - float(r["_distance"])) for r in records]
+
+    def fetch_chunks_by_chunk_ids(self, chunk_ids: list[str]) -> list[Chunk]:
+        """LanceDB read filtered by `chunk_id IN (...)` (FR-5).
+
+        Returns the requested chunks — no ordering guarantee. The
+        `ContextAssembler` restores rank order from the ranked `chunk_id` list it
+        already holds. SQL-style filter mirrors `dense_search`'s `source_type`
+        pre-filter idiom; single-quote escaping is the same defensive pattern.
+        """
+        if self._table is None:
+            raise RuntimeError(
+                f"LanceDB table {self._table_name!r} not initialized — call add() first"
+            )
+        if not chunk_ids:
+            return []
+        quoted = ", ".join(f"'{c.replace(chr(39), chr(39) * 2)}'" for c in chunk_ids)
+        where_clause = f"chunk_id IN ({quoted})"
+        records = (
+            self._table.search().where(where_clause, prefilter=True).limit(len(chunk_ids)).to_list()
+        )
+        return [Chunk(chunk_id=r["chunk_id"], doc_id=r["doc_id"], text=r["text"]) for r in records]
