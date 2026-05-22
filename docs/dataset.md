@@ -81,6 +81,12 @@ builds a **deterministic stratified subset**:
 - The subset is written to `data/processed/corpus.jsonl` (gitignored), one
   JSON-serialized `Document` per line, with sorted keys for byte-stable output.
 
+**Skip-and-count policy.** Records that fail `Document` validation — the source corpus
+contains some with empty `content` — are dropped, tallied per source type, and logged
+at `WARNING`, rather than aborting the run. The output corpus therefore has no empty
+`text`. An unknown `source_type` is a different case: it raises (a missing adapter is a
+code gap, not a data-quality issue), it is not skipped.
+
 `make check-data` validates that file offline (no network): file present, all nine
 source types represented, no empty `text`, unique `id`s, per-source counts within
 range.

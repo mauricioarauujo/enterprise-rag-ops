@@ -29,7 +29,7 @@ Personal sprint tracking is private (see `CLAUDE.local.md`).
 | ------------------------------- | ----------------------------------------------- |
 | Spec / architecture             | `docs/architecture/`                            |
 | Dataset notes                   | `docs/dataset.md`                               |
-| Architecture decisions          | `docs/adr/` (first ADR in Sprint 2)             |
+| Architecture decisions          | `docs/adr/` (ADR-0001–0003 shipped in Sprint 1) |
 | Harness maintenance             | `.claude/STRUCTURE_GUIDE.md`                    |
 | Self-improvement protocol       | `.claude/STRUCTURE_GUIDE.md` § Self-Improvement |
 | Command / agent / KB registries | `.claude/STRUCTURE_GUIDE.md` § Registries       |
@@ -48,30 +48,43 @@ Personal sprint tracking is private (see `CLAUDE.local.md`).
 | Test              | `make test`   |
 | Full quality pass | `make verify` |
 
-**Harness & SDD slash commands** (`/new-kb`, `/brainstorm`, `/define`, `/design`,
-`/implement`, `/review`, …) — full list in `.claude/STRUCTURE_GUIDE.md` § Registries.
+**Harness & SDD slash commands** — a sprint is wrapped by `/sprint-start` … `/sprint-close`;
+each phase runs `/brainstorm` → `/define` → `/design` → `/implement` → `/review`. Plus
+`/new-kb`, `/update-kb`, `/new-agent`, `/new-command`. **Full list (the SSoT) is in
+`.claude/STRUCTURE_GUIDE.md` § Registries — consult it before recommending a command.**
 
 ---
 
 ## Architecture (current)
 
-Repo is in Sprint 0 — only tooling and harness exist. No `src/` yet. The target architecture will land in Sprint 1 (substrate) and Sprint 2 (eval harness). When code arrives, update this section with a module map.
+Sprint 1 (substrate) has shipped: an end-to-end RAG pipeline — deterministic ingest →
+hybrid retrieval → attributed generation. `eval/` (Sprint 2) and `observability/`
+(Sprint 3) are not built yet; the project's differentiator lives in those upcoming
+layers (see § Project Purpose).
 
 ```
 enterprise-rag-ops/
-├── .claude/         # Orchestration: agents, KB, commands, skills, hooks, SDD
-├── .github/         # CI workflows
-├── docs/            # Public-facing: architecture, dataset notes, ADRs
-├── src/             # (Sprint 1+) RAG, retrieval, generation modules
-├── eval/            # (Sprint 2+) Eval harness, per-fact judge, multi-model runner
-├── observability/   # (Sprint 3+) Tracing, failure taxonomy, dashboard
-├── data/            # (gitignored) Raw + processed bench data
-├── results/         # (gitignored) Eval reports
-├── tests/           # Pytest
+├── .claude/                       # Orchestration: agents, KB, commands, skills, hooks, SDD
+├── .github/                       # CI workflows (lint + test + smoke on PR)
+├── docs/                          # Public: architecture, dataset notes, ADRs (0001–0003)
+├── src/enterprise_rag_ops/
+│   ├── ingest/      # Phase 1: HF stream → stratified subset → Document → corpus.jsonl  (rag-ingest)
+│   ├── retrieval/   # Phase 2: chunker, bm25s, BGE-M3, LanceDB, RRF fusion, HybridRetriever  (rag-index)
+│   │                #          seams (Protocols): Embedder / VectorStore / Retriever  (interfaces.py)
+│   └── generation/  # Phase 3: AnswerWithSources, Generator seam, OpenAIGenerator, ContextAssembler  (rag-ask)
+├── eval/                          # (Sprint 2) per-fact judge, retrieval metrics, multi-model runner
+├── observability/                 # (Sprint 3) tracing, failure taxonomy, dashboard
+├── data/                          # (gitignored) raw + processed bench data
+├── results/                       # (gitignored) eval reports
+├── tests/                         # pytest, mirrors src/
 ├── Makefile
 ├── pyproject.toml
 └── README.md
 ```
+
+Entry points (console scripts in `pyproject.toml`): `rag-ingest` (build corpus),
+`rag-index` (build BM25 + embeddings + LanceDB), `rag-ask` (end-to-end query).
+Key make targets: `make build-index`, `make retrieval-smoke`, `make smoke`, `make verify`.
 
 ---
 
