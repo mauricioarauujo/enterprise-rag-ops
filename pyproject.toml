@@ -15,11 +15,13 @@ dependencies = [
     "sentence-transformers>=3.0,<6.0",
     "lancedb>=0.15,<1.0",
     "langchain-text-splitters>=0.3,<1.0",
+    "openai>=1.50,<2.0",
 ]
 
 [project.scripts]
 rag-ingest = "enterprise_rag_ops.ingest.cli:main"
 rag-index = "enterprise_rag_ops.retrieval.cli:main"
+rag-ask = "enterprise_rag_ops.generation.cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"

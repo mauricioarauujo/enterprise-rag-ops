@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test verify clean download-data check-data build-index rebuild-index retrieval-smoke
+.PHONY: help sync format lint test verify clean download-data check-data build-index rebuild-index retrieval-smoke smoke
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -24,6 +24,9 @@ rebuild-index:  ## Force a clean rebuild of all retrieval artifacts
 
 retrieval-smoke:  ## Run the BGE-M3 Recall@k smoke gate on the fixed question subset (local-only)
 	uv run pytest tests/retrieval/test_retrieval_smoke.py -m smoke
+
+smoke:  ## Run the end-to-end rag-ask smoke on 10 questions (requires OPENAI_API_KEY + built index)
+	uv run pytest tests/generation/test_generation_smoke.py -m smoke
 
 format:  ## Format code with ruff and Markdown with prettier
 	uv run ruff format src tests

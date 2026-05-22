@@ -64,10 +64,22 @@ class VectorStore(Protocol):
         """
         ...
 
+    def fetch_chunks_by_chunk_ids(self, chunk_ids: list[str]) -> list[Chunk]:
+        """Return the chunks for the requested `chunk_id`s (FR-4).
+
+        Mechanical read — no ordering guarantee at the store layer. The caller
+        (`generation.context.ContextAssembler`) restores rank order, since it
+        already holds the ranked `chunk_id` list from
+        `HybridRetriever.retrieve_chunks` (ADR-003).
+        """
+        ...
+
 
 @runtime_checkable
 class Retriever(Protocol):
-    """Query-time interface Phase 3 generation depends on."""
+    """Query-time interface. `retrieve` is the doc-level eval contract; Phase 3
+    generation depends on `retrieve_chunks` for the relevant passages to feed the
+    LLM."""
 
     def retrieve(
         self,
@@ -76,4 +88,17 @@ class Retriever(Protocol):
         source_type_filter: str | None = None,
     ) -> list[tuple[str, float]]:
         """Return up to `top_k` `(doc_id, fused_score)` pairs with no duplicate doc_id."""
+        ...
+
+    def retrieve_chunks(
+        self,
+        query: str,
+        top_k: int = 10,
+        source_type_filter: str | None = None,
+    ) -> list[tuple[str, str, float]]:
+        """Return up to `top_k` `(chunk_id, doc_id, fused_score)` — best chunk per doc.
+
+        The winning (highest-ranked) chunk per doc, in fused-rank order, for
+        generation. Returns `[]` on abstention (FR-9).
+        """
         ...

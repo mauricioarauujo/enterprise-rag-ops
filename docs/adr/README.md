@@ -14,3 +14,7 @@ Each ADR captures one significant decision: its context, the decision, and the c
 | ---- | ------------------------------------------------------------------------------------------- | -------- | ---------- |
 | 0001 | [Eval Framework Choice](0001-eval-framework.md)                                             | deferred | 2026-05-18 |
 | 0002 | [Retrieval Architecture — Hybrid BM25 + Dense over LanceDB](0002-retrieval-architecture.md) | accepted | 2026-05-18 |
+| 0003 | [Generation Layer — OpenAI Structured Outputs with Source Attribution](0003-generation.md)  | accepted | 2026-05-20 |
+
+Planned: ADR-0004 (observability tool, Sprint 3) and ADR-0005 (LLM provider/model
+matrix, Sprint 2/3) — both shifted by one when ADR-0003 took the generation slot.

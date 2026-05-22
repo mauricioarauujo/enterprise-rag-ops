@@ -51,6 +51,28 @@ def deduplicate_to_docs(
     return result
 
 
+def deduplicate_to_best_chunk(
+    fused_chunks: list[tuple[str, float]],
+    chunk_to_doc: Mapping[str, str],
+) -> list[tuple[str, str, float]]:
+    """Collapse a ranked chunk list to one `(chunk_id, doc_id, score)` per doc.
+
+    Like `deduplicate_to_docs`, but **keeps the winning chunk_id** — the
+    highest-ranked chunk that caused the doc to surface. Generation needs that
+    chunk's text (the relevant passage), not an arbitrary chunk of the doc:
+    sending the doc's first chunk (often a title) starves the LLM of the answer.
+    First occurrence per doc wins, preserving fused-rank order.
+    """
+    seen: set[str] = set()
+    result: list[tuple[str, str, float]] = []
+    for chunk_id, score in fused_chunks:
+        doc_id = chunk_to_doc[chunk_id]
+        if doc_id not in seen:
+            seen.add(doc_id)
+            result.append((chunk_id, doc_id, score))
+    return result
+
+
 class HybridRetriever:
     """`Retriever` implementation — BM25 + dense, RRF-fused, doc-deduplicated.
 
@@ -76,13 +98,17 @@ class HybridRetriever:
         self._reranker = reranker
         self._abstention_threshold = abstention_threshold
 
-    def retrieve(
+    def _fused_chunk_ranking(
         self,
         query: str,
-        top_k: int = config.TOP_K,
-        source_type_filter: str | None = None,
+        top_k: int,
+        source_type_filter: str | None,
     ) -> list[tuple[str, float]]:
-        """Run the full hybrid pipeline; return up to `top_k` `(doc_id, score)`.
+        """Shared pipeline: over-fetch → abstention gate → RRF fuse.
+
+        Returns the fused `(chunk_id, score)` ranking (best first), or `[]` when
+        the abstention gate fires. Both `retrieve` (doc-level) and
+        `retrieve_chunks` (chunk-level) derive their output from this.
 
         Order of operations:
           1. Over-fetch from BM25 + dense (each fetches `top_k * OVER_FETCH`).
@@ -91,8 +117,6 @@ class HybridRetriever:
           2. Abstention gate on the top-1 *dense cosine* (FR-9): if the gate
              fires (no dense hits OR best < threshold), return [].
           3. RRF-fuse (k=60).
-          4. Dedup chunks to docs (first occurrence wins).
-          5. Truncate to `top_k`.
         """
         over_fetch = top_k * config.OVER_FETCH
         query_vector = self._embedder.encode([query])[0]
@@ -119,6 +143,39 @@ class HybridRetriever:
             bm25_hits = [(chunk_id, rank + 1) for rank, (chunk_id, _) in enumerate(bm25_hits)]
 
         dense_ranked = [(chunk_id, rank + 1) for rank, (chunk_id, _) in enumerate(dense_hits)]
-        fused = rrf_fuse([bm25_hits, dense_ranked])
-        doc_ranked = deduplicate_to_docs(fused, self._chunk_to_doc)
-        return doc_ranked[:top_k]
+        return rrf_fuse([bm25_hits, dense_ranked])
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = config.TOP_K,
+        source_type_filter: str | None = None,
+    ) -> list[tuple[str, float]]:
+        """Run the full hybrid pipeline; return up to `top_k` `(doc_id, score)`.
+
+        Doc-level output for retrieval evaluation (recall@k over `expected_doc_ids`).
+        Fused chunks are deduplicated to docs (first occurrence wins), then
+        truncated to `top_k`.
+        """
+        fused = self._fused_chunk_ranking(query, top_k, source_type_filter)
+        if not fused:
+            return []
+        return deduplicate_to_docs(fused, self._chunk_to_doc)[:top_k]
+
+    def retrieve_chunks(
+        self,
+        query: str,
+        top_k: int = config.TOP_K,
+        source_type_filter: str | None = None,
+    ) -> list[tuple[str, str, float]]:
+        """Chunk-level output for generation; up to `top_k` `(chunk_id, doc_id, score)`.
+
+        Same fusion + abstention pipeline as `retrieve`, but deduplicated to the
+        **best chunk per doc** (winning chunk_id retained). Generation feeds these
+        chunks' text to the LLM, so the relevant passage — not the doc's title
+        chunk — reaches the model. Returns `[]` on abstention.
+        """
+        fused = self._fused_chunk_ranking(query, top_k, source_type_filter)
+        if not fused:
+            return []
+        return deduplicate_to_best_chunk(fused, self._chunk_to_doc)[:top_k]
