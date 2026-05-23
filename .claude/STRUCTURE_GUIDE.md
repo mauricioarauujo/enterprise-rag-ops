@@ -20,7 +20,7 @@ and `CLAUDE.md` only points to them.
 ├── agents/                ← Workflow + specialist agents (flat)
 │   └── _specialist-template.md
 ├── commands/              ← Slash commands
-├── skills/                ← Reference docs for tools (grow via protocol)
+├── skills/                ← Auto-triggered workflows/tool procedures (<name>/SKILL.md)
 ├── kb/                    ← Knowledge base
 │   ├── _index.yaml        ← Domain registry (machine SSoT)
 │   ├── _templates/        ← Scaffolding templates
@@ -53,19 +53,19 @@ human-readable registries. Update them when you add an artifact — cache-safe.
 
 ### Command Registry
 
-| Command         | Purpose                                                |
-| --------------- | ------------------------------------------------------ |
-| `/new-kb`       | Create/extend a KB domain (kb-architect, 3-pillar)     |
-| `/update-kb`    | Refresh a KB domain against the 3 pillars              |
-| `/new-agent`    | Scaffold a specialist agent                            |
-| `/new-command`  | Scaffold a slash command                               |
-| `/sprint-start` | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan |
-| `/brainstorm`   | SDD Stage 0 — explore approaches                       |
-| `/define`       | SDD Stage 1 — requirements + Clarity gate (≥12/15)     |
-| `/design`       | SDD Stage 2 — architecture + file manifest             |
-| `/implement`    | Execute implementation per the design                  |
-| `/review`       | Validate a branch — checks + code review + KB loop     |
-| `/sprint-close` | Close a sprint — knowledge loop + archive              |
+| Command         | Purpose                                                        |
+| --------------- | -------------------------------------------------------------- |
+| `/new-kb`       | Create/extend a KB domain (kb-architect, 3-pillar)             |
+| `/update-kb`    | Refresh a KB domain against the 3 pillars                      |
+| `/new-agent`    | Scaffold a specialist agent                                    |
+| `/new-command`  | Scaffold a slash command                                       |
+| `/sprint-start` | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan         |
+| `/brainstorm`   | SDD Stage 0 — explore approaches                               |
+| `/define`       | SDD Stage 1 — requirements + Clarity gate (≥12/15)             |
+| `/design`       | SDD Stage 2 — architecture + manifest + consistency self-check |
+| `/implement`    | Execute implementation per the design                          |
+| `/review`       | Validate a branch — checks + code review + KB loop             |
+| `/sprint-close` | Close a sprint — knowledge loop + archive                      |
 
 ### Agent Registry
 
@@ -89,6 +89,16 @@ Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 | Domain          | Status | Purpose                                                           | Primary agent  |
 | --------------- | ------ | ----------------------------------------------------------------- | -------------- |
 | `rag-retrieval` | draft  | Hybrid BM25+dense retrieval, chunking, score fusion, eval metrics | `kb-architect` |
+
+### Skill Registry
+
+Auto-triggered workflows/tool procedures. Format + when-to-add: § Self-Improvement →
+"When to add a skill". Each lives at `.claude/skills/<name>/SKILL.md`.
+
+| Skill      | Triggers on                                                               | Origin                        |
+| ---------- | ------------------------------------------------------------------------- | ----------------------------- |
+| `diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                   | Adapted from mattpocock (MIT) |
+| `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end | Adapted from mattpocock (MIT) |
 
 ---
 
@@ -157,9 +167,17 @@ work needs an isolated context window.
 
 ### When to add a skill
 
-**Trigger:** Claude needs a specific tool/CLI repeatedly and the usage isn't trivial.
-Create `.claude/skills/<tool>.md` (frontmatter `skill`, `description`, `trigger`,
-`priority`); document invocation, flags, gotchas, examples.
+**Trigger:** Claude needs a repeatable workflow or tool/CLI procedure that isn't
+trivial and benefits from auto-triggering (debugging loop, handoff, a CLI's flags).
+
+**Format (runtime-loaded — must match or Claude Code won't discover it):** a
+directory `.claude/skills/<name>/SKILL.md`. Frontmatter is `name` + `description`
+(both required; optional `tools`). The `description` is third-person and packed
+with trigger phrases — it is the only thing always in context, so it decides when
+the skill fires (e.g. `This skill should be used when the user says "…"`). Write
+the body in imperative form, keep it lean (~1,500–2,000 words); push long detail
+into `references/`, working code into `examples/`, utilities into `scripts/`.
+Add a row to the **Skill Registry** above. Do **not** edit `CLAUDE.md`.
 
 ### When to extend `settings.json` permissions
 
@@ -206,14 +224,14 @@ batch at end of session — never mid-session (cache invalidation).
 
 ## Where to put what — quick map
 
-| If you have…                      | Put it in…                                          |
-| --------------------------------- | --------------------------------------------------- |
-| A reusable code shape             | `.claude/kb/<domain>/patterns/<name>.md`            |
-| An atomic concept or contract     | `.claude/kb/<domain>/concepts/<name>.md`            |
-| A multi-step workflow             | `.claude/commands/<name>.md` + Command Registry     |
-| Repeated specialist framing       | `.claude/agents/<name>.md` + Agent Registry         |
-| A tool/CLI reference              | `.claude/skills/<tool>.md`                          |
-| A pre-commit / pre-bash check     | `.claude/hooks/<name>.sh` + wire in `settings.json` |
-| A pre-implementation spec         | `.claude/sdd/features/sprint-N/<phase-slug>/`       |
-| Raw Deep Research output          | `.claude/kb/_research/inbox/`                       |
-| A pointer to an external resource | Memory (`~/.claude/projects/.../memory/`)           |
+| If you have…                          | Put it in…                                          |
+| ------------------------------------- | --------------------------------------------------- |
+| A reusable code shape                 | `.claude/kb/<domain>/patterns/<name>.md`            |
+| An atomic concept or contract         | `.claude/kb/<domain>/concepts/<name>.md`            |
+| A multi-step workflow                 | `.claude/commands/<name>.md` + Command Registry     |
+| Repeated specialist framing           | `.claude/agents/<name>.md` + Agent Registry         |
+| A repeatable workflow / CLI procedure | `.claude/skills/<name>/SKILL.md` + Skill Registry   |
+| A pre-commit / pre-bash check         | `.claude/hooks/<name>.sh` + wire in `settings.json` |
+| A pre-implementation spec             | `.claude/sdd/features/sprint-N/<phase-slug>/`       |
+| Raw Deep Research output              | `.claude/kb/_research/inbox/`                       |
+| A pointer to an external resource     | Memory (`~/.claude/projects/.../memory/`)           |

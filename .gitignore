@@ -40,6 +40,7 @@ CLAUDE.local.md
 .claude/cache/
 .claude/storage/
 .claude/worktrees/
+.claude/.gates/
 
 # KB — raw Deep Research dumps (archive/ is tracked for provenance)
 .claude/kb/_research/inbox/

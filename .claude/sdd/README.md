@@ -28,6 +28,11 @@ The five per-phase commands delegate to a workflow agent: `brainstorm-agent` (so
 `define-agent` (opus), `design-agent` (opus), `code-reviewer` (sonnet for `/review`).
 `/sprint-start` and `/sprint-close` run inline — no agent.
 
+`/design` ends with an **automatic consistency self-check** (when the phase is
+non-trivial): the design-agent cross-checks DEFINE↔DESIGN against each other and the
+"constitution" (CLAUDE.md, ADRs, KB) and records findings in `DESIGN.md` §
+Consistency Check. No separate command — the rubric lives in `design-agent.md`.
+
 ## Clarity Score Gate (`/define` → `/design`)
 
 `/define` scores 5 dimensions — Problem, Users, Success, Scope, Constraints — 0–3 each;

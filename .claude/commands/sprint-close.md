@@ -47,6 +47,9 @@ After the last phase of a sprint has passed `/review`.
    - Update the private sprint track in the Carreira repo (path in `CLAUDE.local.md`).
    - Run the recommended `/new-kb` / `/update-kb` / ADR work before the next sprint.
 
+8. **Hand off** — invoke the **`handoff`** skill to capture the sprint outcome and the
+   entry point for the next sprint (the recommended KB/ADR work + the next sprint to open).
+
 ## Output
 
 Report: phases shipped vs planned, knowledge-capture actions, stale KB domains, ADRs to

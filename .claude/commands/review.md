@@ -67,6 +67,11 @@ Skip any sub-section with nothing to report.
 
 Save to `.claude/sdd/features/{slug}/REVIEW.md`.
 
+### 6. Hand off
+
+Invoke the **`handoff`** skill to capture session state and the next action (usually the
+next phase, or opening the PR). Skip only if clearly continuing in the same session.
+
 ## Output Format
 
 ```markdown

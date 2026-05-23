@@ -63,6 +63,26 @@ Three layers — report all in `DESIGN.md`:
 - **Concept coverage** — the domain's `concepts`/`patterns` cover what this needs?
 - **Agent alignment** — each specialist's `kb_domains` includes the needed domains?
 
+### Step 5 — Consistency self-check (when applicable)
+
+Run for non-trivial phases (>2 modules, or DEFINE/DESIGN went through several edits);
+for a single-module phase a one-line "no drift" note suffices. Cross-check
+DEFINE↔DESIGN and the "constitution" (CLAUDE.md § Engineering Behavior + § Conventions,
+ADRs, the mapped KB domain) in six passes:
+
+1. **Duplication** — overlapping requirements; flag the weaker phrasing.
+2. **Ambiguity** — vague descriptors ("fast", "scalable") with no measurable criterion;
+   unresolved `TODO`/`???`/`<placeholder>`.
+3. **Underspecification** — a requirement with no object/outcome; an acceptance
+   criterion with no measure; a manifest entry referencing an undefined component.
+4. **Constitution alignment** — speculative scope, a seam justified by "in case" rather
+   than a named change, a stranger-test leak, or a broken Convention. Auto-CRITICAL.
+5. **Coverage** — every DEFINE requirement maps to ≥1 manifest entry; flag gaps both ways.
+6. **Inconsistency** — terminology drift between DEFINE and DESIGN; conflicting directives.
+
+Severity-rate CRITICAL / HIGH / MEDIUM / LOW (constitution violations are CRITICAL).
+This is a self-review — record findings; do not silently rewrite `DEFINE.md`.
+
 ---
 
 ## Output Format
@@ -95,6 +115,14 @@ Write to `.claude/sdd/features/{slug}/DESIGN.md`:
 | Missing concept    | {domain} | …      | `/update-kb {domain}` |
 | Missing specialist | {area}   | …      | `/new-agent {name}`   |
 
+## Consistency Check
+
+{When applicable. Verdict: ✅ CONSISTENT | 🟡 MINOR DRIFT | 🔴 FIX BEFORE IMPLEMENT.
+Omit the table and state "skipped — single-module phase" for trivial phases.}
+
+| ID  | Severity | Pass | Location | Finding | Suggested fix |
+| --- | -------- | ---- | -------- | ------- | ------------- |
+
 ## Risks & Trade-offs
 
 {What could go wrong; design decisions worth an ADR.}
@@ -111,4 +139,5 @@ Write to `.claude/sdd/features/{slug}/DESIGN.md`:
 - [ ] Every requirement in `DEFINE.md` maps to at least one manifest entry.
 - [ ] Manifest follows the phase-ordering convention.
 - [ ] All three gap layers checked and reported.
+- [ ] Consistency self-check run (or explicitly skipped as trivial); no unresolved CRITICAL/HIGH drift.
 - [ ] Architectural decisions flagged for an ADR where warranted.

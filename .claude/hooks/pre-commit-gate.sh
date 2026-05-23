@@ -1,13 +1,14 @@
 #!/bin/bash
-# Blocks git commit unless make format was run recently (<30 min).
-# Staged in hooks/STAGED.example.json — not yet wired in settings.json.
-# Works with post-bash-track.sh which creates the gate flag files.
+# Blocks an actual `git commit` unless a format check ran recently (<30 min):
+# make format (auto-fix) or make verify / make lint (format check).
+# Wired: PreToolUse/Bash in settings.json. Pairs with post-bash-track.sh.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-# Only check git commit commands
-if ! echo "$COMMAND" | grep -q 'git commit'; then
+# Only gate an actual `git commit` invocation — not any command that merely mentions
+# the string (echo, comments, --grep, file paths). Anchor to a command boundary.
+if ! echo "$COMMAND" | grep -qE '(^|[;&|])[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'; then
   exit 0
 fi
 
@@ -29,6 +30,6 @@ check_gate() {
   fi
 }
 
-check_gate "$GATE_DIR/format-passed" "make format"
+check_gate "$GATE_DIR/format-passed" "make format / make verify / make lint"
 
 exit 0

@@ -29,7 +29,13 @@ See `.claude/sdd/README.md`.
    (domain existence, concept coverage, agent alignment) and reports it as an
    Infrastructure Gaps table in `DESIGN.md`. Rubric + table format: `design-agent.md`.
 
-5. **Suggest next step** → `/implement {slug}`. If gaps were found, address them first.
+5. **Consistency self-check (when applicable)** — for non-trivial phases the agent
+   cross-checks DEFINE↔DESIGN and the constitution (CLAUDE.md, ADRs, KB) in six passes
+   and records a Consistency Check section in `DESIGN.md`. Skipped for single-module
+   phases. Rubric: `design-agent.md` § Step 5.
+
+6. **Suggest next step** → `/implement {slug}`. If gaps or drift were found, address
+   them first.
 
 The phase-ordering convention and the `DESIGN.md` output format are owned by
 `.claude/agents/design-agent.md` — this command only delegates.
