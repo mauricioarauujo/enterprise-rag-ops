@@ -1,23 +1,145 @@
 interactions:
 - request:
-    body: null
+    body: "{\"messages\":[{\"role\":\"system\",\"content\":\"You are an enterprise
+      knowledge assistant. Answer the user's question using only the numbered context
+      provided. Cite the doc_id of every context entry you used in the `sources` field.
+      If the context does not contain enough information to answer, you MUST set `answer`
+      to exactly this string \u2014 \\\"I don't have enough information to answer
+      this question.\\\" \u2014 and return an empty `sources` list. Do not answer
+      from prior knowledge.\\n\\nRespond with a single JSON object matching this schema:\\n{\\n
+      \ \\\"additionalProperties\\\": false,\\n  \\\"description\\\": \\\"An LLM-produced
+      answer with cited document identifiers.\\\\n\\\\nFields:\\\\n    answer: Natural-language
+      answer string. Empty string is allowed by the\\\\n        schema but flagged
+      by the smoke gate (AC-13).\\\\n    sources: List of `doc_id` strings cited as
+      evidence. Order is the order\\\\n        the model emitted them; deduplication
+      is the model's responsibility.\\\\n\\\\nInvariants:\\\\n    - Both fields are
+      required (Pydantic raises `ValidationError` on\\\\n      missing or wrong type
+      \\\\u2014 AC-1).\\\\n    - The schema is closed (`extra=\\\\\\\"forbid\\\\\\\"`
+      \\\\u2192 `additionalProperties: false`\\\\n      in JSON Schema), so OpenAI
+      `strict: true` mode rejects any extra fields.\\\",\\n  \\\"properties\\\": {\\n
+      \   \\\"answer\\\": {\\n      \\\"description\\\": \\\"Natural-language answer
+      to the user question.\\\",\\n      \\\"title\\\": \\\"Answer\\\",\\n      \\\"type\\\":
+      \\\"string\\\"\\n    },\\n    \\\"sources\\\": {\\n      \\\"description\\\":
+      \\\"doc_id values cited as evidence for the answer.\\\",\\n      \\\"items\\\":
+      {\\n        \\\"type\\\": \\\"string\\\"\\n      },\\n      \\\"title\\\": \\\"Sources\\\",\\n
+      \     \\\"type\\\": \\\"array\\\"\\n    }\\n  },\\n  \\\"required\\\": [\\n
+      \   \\\"answer\\\",\\n    \\\"sources\\\"\\n  ],\\n  \\\"title\\\": \\\"AnswerWithSources\\\",\\n
+      \ \\\"type\\\": \\\"object\\\"\\n}\"},{\"role\":\"user\",\"content\":\"[1] dummy:
+      The redwood-shield policy MED value is set to 100 for failovers.\\n\\nWhat is
+      the capital of France?\"}],\"model\":\"gpt-5-nano-2025-08-07\",\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"AnswerWithSources\",\"schema\":{\"additionalProperties\":false,\"description\":\"An
+      LLM-produced answer with cited document identifiers.\\n\\nFields:\\n    answer:
+      Natural-language answer string. Empty string is allowed by the\\n        schema
+      but flagged by the smoke gate (AC-13).\\n    sources: List of `doc_id` strings
+      cited as evidence. Order is the order\\n        the model emitted them; deduplication
+      is the model's responsibility.\\n\\nInvariants:\\n    - Both fields are required
+      (Pydantic raises `ValidationError` on\\n      missing or wrong type \u2014 AC-1).\\n
+      \   - The schema is closed (`extra=\\\"forbid\\\"` \u2192 `additionalProperties:
+      false`\\n      in JSON Schema), so OpenAI `strict: true` mode rejects any extra
+      fields.\",\"properties\":{\"answer\":{\"description\":\"Natural-language answer
+      to the user question.\",\"title\":\"Answer\",\"type\":\"string\"},\"sources\":{\"description\":\"doc_id
+      values cited as evidence for the answer.\",\"items\":{\"type\":\"string\"},\"title\":\"Sources\",\"type\":\"array\"}},\"required\":[\"answer\",\"sources\"],\"title\":\"AnswerWithSources\",\"type\":\"object\"},\"strict\":true}}}"
     headers:
       accept:
-      - '*/*'
+      - application/json
       accept-encoding:
-      - gzip, deflate
+      - gzip, deflate, zstd
       connection:
       - keep-alive
+      content-length:
+      - '3091'
       content-type:
       - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.7
     method: POST
     uri: https://api.openai.com/v1/chat/completions
   response:
     body:
-      string: '{"id": "chatcmpl-vcr-mocked-id", "object": "chat.completion", "created": 1678901234, "model": "gpt-5-nano-2025-08-07", "choices": [{"index": 0, "message": {"role": "assistant", "content": "{\n  \"answer\": \"I don''t have enough information to answer this question.\",\n  \"sources\": []\n}"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}}'
+      string: !!binary |
+        H4sIAAAAAAAA/3VSwU7jMBC99yssX/bSoDRsCXCrQEggsXtdiVSR154mBsdO7TFLVfXf13ZakmqX
+        S6TMmzd+783sZ4RQKegtobxlyLteZfevdz/U3eoXPOzE8kn67Zt9Llc/d9uPYlXQeWSY36/A8cS6
+        4CbwAKXRA8wtMIQ4dVGWN1dX38viJgGdEaAirekxW2aaaZMVebHM8ussL4/k1kgOLnS9hF9C9ukb
+        ZWoBH6Gcz0+VDpxjDYTaqSkUrVGxQplz0iHTSOcjyI1G0En5vqJMuz9gK3pb0UcijP6GpGXvQEAb
+        37RE6o2xHYu+CBoydBNspSNbDy7WLyo6r6gz3gbJYdDL+jB9zsLGOxYda6/UBGBaG0yTk9H1ETl8
+        WttILV1bhyBdSDXIdWh6mtBD+K5TVP7MPe1t2APWaN4gjQ3BD/PouKARvVweg6QYpKgRWOSLE+9s
+        Yi0AmVRuEjfljLcgRu64G+aFNBNgNvH3r57/zR68S91MNBdfPzACnEMfzq/uLQjJz12PbRbiDX/V
+        9pl0kkwd2PdwlTVKsHEbAjbMq+G0qNs5hK4OK2vA9lam+4oLnx1mfwE774AiYQMAAA==
     headers:
-      content-type:
+      Access-Control-Expose-Headers:
+      - CF-Ray
+      CF-Cache-Status:
+      - DYNAMIC
+      CF-Ray:
+      - a01005882afce3c0-LIS
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
       - application/json
+      Date:
+      - Sun, 24 May 2026 23:18:52 GMT
+      Server:
+      - cloudflare
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-expose-headers:
+      - X-Request-ID
+      - CF-Ray
+      alt-svc:
+      - h3=":443"; ma=86400
+      openai-organization:
+      - user-lxgt7llvlqkgdzs9u7zzc4nh
+      openai-processing-ms:
+      - '3317'
+      openai-project:
+      - proj_6YRFyX4qvFd9xdpPfzfmxC9Y
+      openai-version:
+      - '2020-10-01'
+      set-cookie:
+      - __cf_bm=IzMs1wpIak.tU4YvCsiBGzmhaUhmXYs42zR4R.31NGY-1779664728.348612-1.0.1.1-WGWVz9vQiCIzZSo3gp2FaFjaDw2Aoja2A3UFKdZ1XaCpJEBcqQElP4E5s4ydlLGL923DffPT8Umcj3VqpX_GPrs92JfvNwdfRqtmDCDN7.Mh48AuMED4xg1qbhBNw6Ek;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun,
+        24 May 2026 23:48:52 GMT
+      x-openai-proxy-wasm:
+      - v0.1
+      x-ratelimit-limit-requests:
+      - '500'
+      x-ratelimit-limit-tokens:
+      - '200000'
+      x-ratelimit-remaining-requests:
+      - '499'
+      x-ratelimit-remaining-tokens:
+      - '199558'
+      x-ratelimit-reset-requests:
+      - 120ms
+      x-ratelimit-reset-tokens:
+      - 132ms
+      x-request-id:
+      - req_792de8455cce4c1ea850415f1f8f8e02
     status:
       code: 200
       message: OK

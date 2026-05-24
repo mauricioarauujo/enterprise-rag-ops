@@ -109,6 +109,8 @@ def test_evaluate_e2e_abstention_synthetic():
     assert metrics["recall"] == 0.5
 
 
+# `vcr` is a selection label only (`-m vcr`); vcrpy 6 ships no pytest plugin, so
+# the cassette is applied by the explicit `vcr_record.use_cassette(...)` below.
 @pytest.mark.vcr
 def test_e2e_abstention_paris_anchor(vcr_record, monkeypatch):
     """AC-10, AC-16, NFR-8: Paris anchor case replayed offline via VCR."""

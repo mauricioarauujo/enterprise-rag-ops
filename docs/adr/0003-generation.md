@@ -71,6 +71,17 @@ question.", sources=[])` **without an LLM call**. The short-circuit is a
    Python branch in `generation/cli.py` — not a prompt instruction — so the
    OpenAI cost on an off-topic query is exactly zero.
 
+> **Update (Sprint 2, Phase 5):** the sentinel is no longer gate-only. The
+> Phase-5 abstention work found that the retrieval gate rarely fires for
+> unanswerable questions (their best dense score sits above the 0.45 threshold),
+> so the **generator prompt now also instructs the model to emit the exact
+> `ABSTAIN_ANSWER` sentinel** (with empty `sources`) when the context is
+> insufficient. Abstention is thus a single canonical contract enforced at
+> **both** the gate and the generator, which is what makes end-to-end abstention
+> machine-checkable by exact match. The sentinel constant moved to
+> `generation/schema.py` (shared by `cli.py` and `prompt.py`, no import cycle).
+> See ADR-0006 (cassette/replay) and the Phase-5 review.
+
 The prompt has two parts (Decision 4-B). System prompt carries the role, the
 JSON output instruction, and the JSON schema. The user turn carries a
 numbered context block (`[1] doc_id: text\n[2] doc_id: text\n...`) followed
