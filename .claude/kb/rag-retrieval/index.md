@@ -39,7 +39,7 @@
 
 ## Architecture Decision
 
-- [docs/adr/0002-retrieval-architecture.md](../../../../docs/adr/0002-retrieval-architecture.md) — accepted; LanceDB + BGE-M3 + bm25s + RRF
+- [docs/adr/0002-retrieval-architecture.md](../../../docs/adr/0002-retrieval-architecture.md) — accepted; LanceDB + BGE-M3 + bm25s + RRF
 
 ---
 
