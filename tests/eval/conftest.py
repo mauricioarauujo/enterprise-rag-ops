@@ -86,3 +86,18 @@ def sample_chunks() -> list[Chunk]:
 @pytest.fixture
 def sample_facts() -> list[str]:
     return ["Paris is the capital of France.", "France is in Europe."]
+
+
+@pytest.fixture
+def vcr_record():
+    """Configure VCR with record mode based on environment variable or default to none."""
+    import os
+
+    import vcr
+
+    record_mode = os.environ.get("VCR_RECORD_MODE", "none")
+    return vcr.VCR(
+        cassette_library_dir="tests/eval/cassettes",
+        record_mode=record_mode,
+        filter_headers=["authorization"],
+    )
