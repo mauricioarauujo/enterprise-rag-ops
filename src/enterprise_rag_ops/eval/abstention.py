@@ -25,6 +25,7 @@ def compute_abstention_metrics(
     tp = 0
     fp = 0
     fn = 0
+    tn = 0
 
     # Filter to questions that actually have did_abstain entries.
     for q in questions:
@@ -39,6 +40,8 @@ def compute_abstention_metrics(
             fp += 1
         elif should_abstain and not did_abstain:
             fn += 1
+        else:
+            tn += 1
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else None
     recall = tp / (tp + fn) if (tp + fn) > 0 else None
@@ -46,6 +49,10 @@ def compute_abstention_metrics(
     return {
         "precision": precision,
         "recall": recall,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
     }
 
 
