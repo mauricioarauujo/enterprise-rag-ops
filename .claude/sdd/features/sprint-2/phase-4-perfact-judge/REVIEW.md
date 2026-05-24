@@ -8,7 +8,7 @@ A clean, well-scoped per-fact judge that faithfully mirrors the Sprint 1 generat
 layer's proven shape: a `Judge` Protocol seam, an `OpenAIJudge` (single strict
 structured-output call) and CI-safe `StubJudge`, pure-Python aggregation, and a typed
 `questions` loader. All 15 acceptance criteria are met (AC-12, the vcrpy cassette, is
-Should-tier and intentionally not landed). `make verify` is green and the offline-CI
+Should-tier and intentionally not landed). `make test` is green and the offline-CI
 invariant holds — `openai` is imported only in `openai_judge.py`. Five non-blocking
 improvements were found and **all five were fixed in the same session** (test count
 143 → 151); none ever blocked the PR.
@@ -134,7 +134,7 @@ every-property-required `strict` invariant. **Fix:** tighten to
 | 7   | Prompt: checklist + per-`doc_id` blocks               | ✅     | `test_openai_judge.py`                                          |
 | 8   | `StubJudge` all-present/supported, no key/net         | ✅     | `test_judge_contract.py`                                        |
 | 9   | `Question` loader: 5 fields, limit/ids, no cat filter | ✅     | `test_questions_loader.py`                                      |
-| 10  | Offline tests under `make verify`, no key             | ✅     | 143 passed, no network                                          |
+| 10  | Offline tests under `make test`, no key               | ✅     | 143 passed, no network                                          |
 | 11  | Anchor case: `unsupported` + faithfulness < 1.0       | ✅     | `test_judge_anchor.py` (two offline proofs)                     |
 | 12  | vcrpy cassette (Should-tier)                          | ⏭️     | Intentionally not landed — declined per ADR; absence is allowed |
 | 13  | Corpus-coverage caveat stated, no warning field       | ✅     | In DEFINE + test docstrings                                     |
@@ -171,7 +171,7 @@ swap behind the `Judge` seam, not a decision made here.
 ## Suggested Next Steps
 
 1. ~~Pre-PR polish~~ — **done.** All five `⚠️` items fixed in-session (see Issues);
-   `make verify` green at 151 passed.
+   `make test` green at 151 passed.
 2. **Commit & open the PR** — all work is currently uncommitted on the phase branch.
    Squash the eval tree + ADR + harness-command edits into a `feat:` commit.
 3. **`/new-kb rag-eval`** — seed the new domain from the four techniques above (the ADR

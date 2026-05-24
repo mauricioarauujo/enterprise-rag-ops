@@ -30,12 +30,15 @@ See `.claude/sdd/README.md`.
    Infrastructure Gaps table in `DESIGN.md`. Rubric + table format: `design-agent.md`.
 
 5. **Consistency self-check (when applicable)** — for non-trivial phases the agent
-   cross-checks DEFINE↔DESIGN and the constitution (CLAUDE.md, ADRs, KB) in six passes
+   cross-checks DEFINE↔DESIGN and the constitution (AGENTS.md, CLAUDE.md, ADRs, KB) in six passes
    and records a Consistency Check section in `DESIGN.md`. Skipped for single-module
    phases. Rubric: `design-agent.md` § Step 5.
 
 6. **Suggest next step** → `/implement {slug}`. If gaps or drift were found, address
-   them first.
+   them first. **Handoff:** the token-heavy implement stage normally runs in
+   Antigravity / Gemini — `DESIGN.md` is the cross-tool contract (see § Implement
+   Contract in `AGENTS.md`). Make the manifest prescriptive enough that the executor
+   needs no extra context.
 
 The phase-ordering convention and the `DESIGN.md` output format are owned by
 `.claude/agents/design-agent.md` — this command only delegates.

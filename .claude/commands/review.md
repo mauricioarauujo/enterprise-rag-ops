@@ -23,7 +23,7 @@ issues, give every issue a `file:line` and a fix.
 ### 2. Mechanical checks
 
 ```bash
-make verify   # format + lint + test
+make lint test   # lint + test (formatting is auto-applied by the pre-commit hook)
 ```
 
 Any failure is blocking. Record results for the report.

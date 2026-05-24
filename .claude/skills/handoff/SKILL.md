@@ -37,7 +37,7 @@ compact and work is unfinished. Also invoked automatically as the final step of
 - **In flight** — what is half-done, and the _exact_ next action to take.
 - **Decisions** — each choice with a one-line rationale, so it is not relitigated.
 - **Open questions** — anything blocked on the user.
-- **Validation state** — what passed (`make verify`, `uv run pytest -k …`) and what
+- **Validation state** — what passed (`make lint test`, `uv run pytest -k …`) and what
   is still pending.
 - **Pointers** — relevant SDD artifacts, changed files, the mapped KB domain.
 

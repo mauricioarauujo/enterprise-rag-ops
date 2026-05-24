@@ -18,7 +18,7 @@ the right seams, then move on.
 
 Constraints:
 
-- `make verify` stays offline and free — no API key, no model download in CI
+- `make test` stays offline and free — no API key, no model download in CI
   (carries the NFR-3 invariant from ADR-002).
 - The retriever contract from ADR-002 is the input contract; do not reshape it.
 - Sprint 2 will evaluate this layer; ADR-004 (observability, formerly ADR-003)
@@ -84,10 +84,10 @@ deterministic (byte-identical for identical inputs).
 - **One new runtime dependency** — `openai>=1.50,<2.0` in `pyproject.toml`.
   Adds the SDK to the offline test path's import surface, but the `openai`
   import lives only inside `generation/openai_generator.py`; nothing else in
-  the package imports it, so `make verify` exercises the full pipeline
+  the package imports it, so `make test` exercises the full pipeline
   through `StubGenerator` without touching the SDK at runtime.
 - **`make smoke` requires `OPENAI_API_KEY` + a built index** — local-only,
-  excluded from `make verify` via the existing `smoke` pytest marker (the
+  excluded from `make test` via the existing `smoke` pytest marker (the
   same marker `make retrieval-smoke` uses). Cost at default settings:
   10 questions × `gpt-5-nano-2025-08-07` (~$0.05/1M in, ~$0.40/1M out) with
   short context blocks ≈ well under $0.05 per smoke run.

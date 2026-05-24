@@ -67,7 +67,7 @@ Three layers — report all in `DESIGN.md`:
 
 Run for non-trivial phases (>2 modules, or DEFINE/DESIGN went through several edits);
 for a single-module phase a one-line "no drift" note suffices. Cross-check
-DEFINE↔DESIGN and the "constitution" (CLAUDE.md § Engineering Behavior + § Conventions,
+DEFINE↔DESIGN and the "constitution" (AGENTS.md § Engineering Behavior + § Conventions,
 ADRs, the mapped KB domain) in six passes:
 
 1. **Duplication** — overlapping requirements; flag the weaker phrasing.

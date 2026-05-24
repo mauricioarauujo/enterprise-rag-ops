@@ -26,7 +26,7 @@ class BGEEmbedder:
     """
 
     def __init__(self, model_name: str = config.EMBEDDING_MODEL) -> None:
-        # Imported lazily so `make verify` (with the stub) never imports torch.
+        # Imported lazily so `make test` (with the stub) never imports torch.
         from sentence_transformers import SentenceTransformer
 
         self._model = SentenceTransformer(model_name)

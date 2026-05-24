@@ -41,7 +41,7 @@
 
 **Evaluation depth**: k = 10 (`config.TOP_K`).
 **Abstention threshold**: cosine similarity < 0.45 → return [] (FR-9, `config.ABSTENTION_THRESHOLD`).
-**Smoke gate**: `make retrieval-smoke` (local-only; excluded from `make verify`).
+**Smoke gate**: `make retrieval-smoke` (local-only; excluded from `make test`).
 **Rerank skip**: top-1 normalized dense similarity > 0.90 → skip reranker (effective exact match).
 
 ## Component Defaults (Phase 2 Shipped)

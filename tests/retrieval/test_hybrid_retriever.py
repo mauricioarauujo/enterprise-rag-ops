@@ -1,7 +1,7 @@
 """Tests for `HybridRetriever` — covers FR-6 through FR-10 and the AC-7 to AC-10 row.
 
 Uses LanceDB in `tmp_path` and the `StubEmbedder` — no network, no model
-download, fast enough for `make verify`.
+download, fast enough for `make test`.
 """
 
 from __future__ import annotations

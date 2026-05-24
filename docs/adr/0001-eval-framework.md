@@ -24,7 +24,7 @@ EnterpriseRAG-Bench supplies, per question, atomic `answer_facts` and gold
   contradict it;
 - **doc-level (per-`doc_id`) faithfulness** — does each _cited_ doc's text actually
   support the claim it was cited for (the anchor case above);
-- an **offline-CI seam story** — `make verify` must stay network-free and key-free, the
+- an **offline-CI seam story** — `make test` must stay network-free and key-free, the
   invariant carried from ADR-0002/0003;
 - **cost discipline** — the eventual 500-question run must stay affordable.
 
@@ -80,9 +80,9 @@ faithfulness rather than scoring a merged context; first-class abstention handli
 
 ### What we accept
 
-- **No eval-framework dependency.** No RAGAs, no DeepEval — `make verify` adds no new
+- **No eval-framework dependency.** No RAGAs, no DeepEval — `make test` adds no new
   runtime dep. `openai` and `pydantic` are already present from Sprint 1.
-- **`OpenAIJudge` needs `OPENAI_API_KEY` for live runs.** CI and `make verify` use
+- **`OpenAIJudge` needs `OPENAI_API_KEY` for live runs.** CI and `make test` use
   `StubJudge` and need no key; the `openai` import lives only in `eval/openai_judge.py`,
   so the offline test path never touches the SDK at runtime (the ADR-0003 invariant,
   carried).

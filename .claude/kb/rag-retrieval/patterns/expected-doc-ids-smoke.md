@@ -2,7 +2,7 @@
 
 > **Purpose**: Phase 2 exit gate — assert Recall@k > 0 using `expected_doc_ids`
 > from the dataset `questions` config, via `HybridRetriever` loaded from persisted
-> artifacts. Run with `make retrieval-smoke` (local-only, not part of `make verify`).
+> artifacts. Run with `make retrieval-smoke` (local-only, not part of `make test`).
 > **Codebase Grounded**: 2026-05-20 (Sprint 1 Phase 2 merged)
 
 ## When to Use
@@ -16,7 +16,7 @@
 ```python
 """test_retrieval_smoke.py — Phase 2 exit gate.
 
-Marked `smoke`; excluded from `make verify`. Run with `make retrieval-smoke`.
+Marked `smoke`; excluded from `make test`. Run with `make retrieval-smoke`.
 
 Prerequisites:
 - `make build-index` has run (creates BM25 + LanceDB artifacts).

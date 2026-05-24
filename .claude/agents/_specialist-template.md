@@ -46,4 +46,4 @@ All code-touching agents must verify:
 - New module → matching `tests/test_<module>.py` exists
 - Eval-path code is not tested against a mocked LLM API — use the cassette/replay pattern
 - Public docs and code comments carry no personal/career context (stranger test)
-- `make verify` passes before delivering
+- `make lint test` passes before delivering

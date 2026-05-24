@@ -62,14 +62,14 @@ the Protocols in `src/enterprise_rag_ops/retrieval/interfaces.py`
 (`Embedder` / `VectorStore` / `Retriever`) and the `Generator` seam in
 `generation/`. Follow the repo convention: a new module gets a mirrored test file.
 For eval / LLM-API paths, use the cassette/replay pattern — never mock the API
-inline (see CLAUDE.md § Conventions).
+inline (see AGENTS.md § Conventions).
 
 ## Phase 6 — Verify and clean up
 
 - Re-run the Phase 1 loop and confirm the original scenario no longer reproduces.
 - Remove every probe: `grep -rn "DEBUG-diagnose" src/ eval/ tests/` must return
   nothing.
-- Widen validation: `make verify`.
+- Widen validation: `make lint test`.
 - If the bug was a re-derivation of domain knowledge, or it recurred, propose a
   KB pattern in `rag-retrieval` or an ADR — per CLAUDE.md § Self-Improvement
   Protocol (a bug class that slipped through twice is a missing-quality-gate

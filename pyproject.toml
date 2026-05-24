@@ -38,6 +38,7 @@ dev = [
     "ruff>=0.7.0",
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pre-commit>=4.6.0",
 ]
 
 [tool.ruff]
@@ -78,7 +79,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: end-to-end tests touching real services",
     "corpus: validates the ingested data/processed/corpus.jsonl (run via make check-data)",
-    "smoke: real-model retrieval Recall@k smoke (run via make retrieval-smoke; excluded from make verify)",
+    "smoke: real-model retrieval Recall@k smoke (run via make retrieval-smoke; excluded from make test)",
 ]
 
 [tool.coverage.run]

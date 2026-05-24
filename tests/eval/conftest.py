@@ -2,7 +2,7 @@
 
 Mirrors `tests/generation/conftest.py`: an offline fake OpenAI client (for
 `OpenAIJudge` call-shape / prompt assertions) plus hand-built sample inputs. No network,
-no API key, no model download — the whole eval test surface runs under `make verify`.
+no API key, no model download — the whole eval test surface runs under `make test`.
 """
 
 from __future__ import annotations

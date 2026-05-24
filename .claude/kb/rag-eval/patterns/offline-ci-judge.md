@@ -1,13 +1,13 @@
 # Offline-CI Judge Testing
 
-> **Purpose**: Keep `make verify` network-free and key-free while still testing the
+> **Purpose**: Keep `make test` network-free and key-free while still testing the
 > judge contract, prompt shape, and the anchor case — using `StubJudge` and an
 > injected `FakeOpenAIClient`.
 > **MCP Validated**: 2026-05-24
 
 ## When to Use
 
-- CI and `make verify` (no `OPENAI_API_KEY`, no network).
+- CI and `make test` (no `OPENAI_API_KEY`, no network).
 - Unit tests that assert call shape, prompt content, or schema wiring.
 - The anchor case (spurious citation) — provable without a live LLM call.
 
@@ -96,7 +96,7 @@ assert faithfulness < 1.0
 
 ## The Cassette/Replay Path (Should-Tier)
 
-A `vcrpy` cassette records a real `OpenAIJudge` call and replays it under `make verify`.
+A `vcrpy` cassette records a real `OpenAIJudge` call and replays it under `make test`.
 This is Should-tier (its absence does not fail CI): `StubJudge` + `FakeOpenAIClient`
 carry the contract offline.
 
@@ -106,7 +106,7 @@ call, so adding the dev dependency unused was declined per `CLAUDE.md`
 
 ```python
 # When landed: gate the live-record path behind a marker
-@pytest.mark.cassette  # excluded from make verify's default pytest run
+@pytest.mark.cassette  # excluded from make test's default pytest run
 def test_live_openai_judge_cassette(vcr):
     with vcr.use_cassette("tests/cassettes/judge_anchor.yaml"):
         verdict = OpenAIJudge().judge(...)

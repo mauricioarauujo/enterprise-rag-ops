@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test verify clean download-data check-data build-index rebuild-index retrieval-smoke smoke
+.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index retrieval-smoke smoke install-hooks
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -44,7 +44,8 @@ test:  ## Run tests with pytest (excludes live-corpus and real-model smoke — s
 test-cov:  ## Run tests with coverage report
 	uv run pytest -m "not corpus and not smoke" --cov --cov-report=term-missing
 
-verify: lint test  ## Full quality pipeline (lint + test)
+install-hooks:  ## Activate the pre-commit framework in this clone (run once per clone)
+	uv run pre-commit install
 
 clean:  ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov dist build *.egg-info

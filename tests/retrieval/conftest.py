@@ -2,7 +2,7 @@
 
 The synthetic corpus is intentionally tiny (six documents across three source
 types) — enough to exercise chunking, BM25 + dense fusion, source-type
-filtering, abstention, and doc-level dedup, while keeping `make verify` fast.
+filtering, abstention, and doc-level dedup, while keeping `make test` fast.
 """
 
 from __future__ import annotations
