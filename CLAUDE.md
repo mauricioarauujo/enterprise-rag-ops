@@ -71,9 +71,9 @@ enterprise-rag-ops/
 │   ├── ingest/      # Phase 1: HF stream → stratified subset → Document → corpus.jsonl  (rag-ingest)
 │   ├── retrieval/   # Phase 2: chunker, bm25s, BGE-M3, LanceDB, RRF fusion, HybridRetriever  (rag-index)
 │   │                #          seams (Protocols): Embedder / VectorStore / Retriever  (interfaces.py)
-│   └── generation/  # Phase 3: AnswerWithSources, Generator seam, OpenAIGenerator, ContextAssembler  (rag-ask)
-├── eval/                          # (Sprint 2) per-fact judge, retrieval metrics, multi-model runner
-├── observability/                 # (Sprint 3) tracing, failure taxonomy, dashboard
+│   ├── generation/  # Phase 3: AnswerWithSources, Generator seam, OpenAIGenerator, ContextAssembler  (rag-ask)
+│   ├── eval/        # (Sprint 2) per-fact judge, retrieval metrics, multi-model runner  (rag-eval)
+│   └── observability/  # (Sprint 3) tracing, failure taxonomy, dashboard
 ├── data/                          # (gitignored) raw + processed bench data
 ├── results/                       # (gitignored) eval reports
 ├── tests/                         # pytest, mirrors src/

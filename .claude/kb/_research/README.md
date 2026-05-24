@@ -13,12 +13,16 @@ Used for **complex** topics where the codebase (pillar 1) and MCP docs/patterns
 
 ## Flow
 
-```
+````
 1. /new-kb <domain> --deep-research
       Claude drafts a scoped Gemini Deep Research PROMPT.
 2. User runs the prompt in Gemini → Gemini returns a research PLAN.
-3. User pastes the plan back → Claude reviews it and returns feedback
-      (gaps, scope creep, missing angles, suggested edits).
+3. User pastes the plan back → Claude reviews it and returns feedback as
+      paste-ready corrections ADDRESSED TO GEMINI (imperative "add step X",
+      "in step N also cover…") — not internal verdict notes. Write the corrections
+      as plain Markdown (no ``` code fence, no leading indentation on wrapped lines):
+      fences and indentation paste into the Gemini chatbox as literal noise. Delimit
+      the block with `---` rules. The user pastes that block straight back into Gemini.
 4. User runs the approved research → drops the output file here:
       .claude/kb/_research/inbox/<domain>-<YYYY-MM-DD>.md
 5. kb-architect builds/updates the KB domain(s): the research feeds pillar 3,
@@ -26,7 +30,7 @@ Used for **complex** topics where the codebase (pillar 1) and MCP docs/patterns
       Output: concepts/ + patterns/, each tagged with agreement-analysis confidence.
 6. Claude moves the source file: inbox/ → archive/.
 7. Domain(s) registered in _index.yaml + the STRUCTURE_GUIDE KB registry.
-```
+````
 
 ## Drafting the prompt (step 1)
 
