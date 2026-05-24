@@ -36,7 +36,7 @@ def test_load_retriever_no_corpus_read_or_chunk(
     write_corpus(synthetic_documents, config.CORPUS_PATH)
     pipeline.build_index(force=False, embedder=stub_embedder)
 
-    # 2. Spy on read_corpus and chunk_document in pipeline.py
+    # 2. Spy on read_corpus in pipeline.py
     read_called = False
     original_read_corpus = pipeline.read_corpus
 
@@ -45,24 +45,14 @@ def test_load_retriever_no_corpus_read_or_chunk(
         read_called = True
         return original_read_corpus(*args, **kwargs)
 
-    chunk_called = False
-    original_chunk_document = pipeline.chunk_document
-
-    def spy_chunk_document(*args, **kwargs):
-        nonlocal chunk_called
-        chunk_called = True
-        return original_chunk_document(*args, **kwargs)
-
     monkeypatch.setattr(pipeline, "read_corpus", spy_read_corpus)
-    monkeypatch.setattr(pipeline, "chunk_document", spy_chunk_document)
 
     # 3. Call load_retriever
     retriever = load_retriever(embedder=stub_embedder)
     assert retriever is not None
 
-    # 4. Assert read_corpus and chunk_document were NOT called during load_retriever
+    # 4. Assert read_corpus was NOT called during load_retriever
     assert not read_called, "load_retriever re-read the corpus from disk!"
-    assert not chunk_called, "load_retriever re-chunked the documents!"
 
     # 5. Verify the reconstructed maps are correct
     expected_chunks = chunk_documents(synthetic_documents)

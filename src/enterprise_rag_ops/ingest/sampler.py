@@ -48,3 +48,42 @@ def stratified_sample(documents: Iterable[Document], docs_per_source: int) -> li
         _trim(bucket, docs_per_source)
         sample.extend(bucket)
     return sample
+
+
+def gold_aware_sample(
+    documents: Iterable[Document],
+    gold_doc_ids: set[str],
+    distractors_per_source: int,
+) -> list[Document]:
+    """Return all gold documents plus distractors_per_source non-gold documents per source.
+
+    The gold documents are sorted by document id. The distractors are grouped by
+    source type (sorted alphabetically) and sorted by document id within each source.
+    """
+    if distractors_per_source < 1:
+        raise ValueError(f"distractors_per_source must be >= 1, got {distractors_per_source}")
+
+    gold_docs: dict[str, Document] = {}
+    distractor_buckets: dict[str, list[Document]] = {}
+    cap = distractors_per_source * 2
+
+    for doc in documents:
+        if doc.id in gold_doc_ids:
+            gold_docs[doc.id] = doc
+        else:
+            bucket = distractor_buckets.setdefault(doc.source_type, [])
+            bucket.append(doc)
+            if len(bucket) >= cap:
+                _trim(bucket, distractors_per_source)
+
+    # Reassemble:
+    # 1. Gold documents sorted by id ascending
+    sample: list[Document] = [gold_docs[doc_id] for doc_id in sorted(gold_docs)]
+
+    # 2. Distractor documents sorted by source_type, then by id ascending
+    for source_type in sorted(distractor_buckets):
+        bucket = distractor_buckets[source_type]
+        _trim(bucket, distractors_per_source)
+        sample.extend(bucket)
+
+    return sample
