@@ -51,11 +51,13 @@ def run_sweep() -> None:
         fn = metrics["fn"]
         tn = metrics["tn"]
 
-        f1 = (2 * p * r) / (p + r) if p and r and (p + r) > 0 else 0.0
+        # F1 is N/A (None) when either side is undefined or both are zero (0/0);
+        # a genuine 0.0 (e.g. p=0.0, r=0.5) is a real value, not N/A.
+        f1 = (2 * p * r) / (p + r) if p is not None and r is not None and (p + r) > 0 else None
 
         p_str = f"{p:.4f}" if p is not None else "None"
         r_str = f"{r:.4f}" if r is not None else "None"
-        f1_str = f"{f1:.4f}" if f1 else "None"
+        f1_str = f"{f1:.4f}" if f1 is not None else "None"
 
         print(
             f"{t:<10.2f} | {p_str:<10} | {r_str:<10} | {f1_str:<10} | {f'{tp}/{fp}/{fn}/{tn}':<15}"

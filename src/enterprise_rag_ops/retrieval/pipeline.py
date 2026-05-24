@@ -114,9 +114,10 @@ def build_index(
 def load_retriever(embedder: Embedder | None = None) -> HybridRetriever:
     """Construct a `HybridRetriever` from the persisted artifacts (NFR-1).
 
-    No re-indexing or re-encoding — a fresh process opens BM25, LanceDB, and the
-    chunk-order sidecar, then serves queries. The corpus is read once to build
-    the chunk_id↔(doc_id, source_type) maps the retriever needs at query time.
+    No re-indexing, re-encoding, or corpus read — a fresh process opens BM25,
+    LanceDB, and the chunk-order sidecar, then serves queries. The
+    chunk_id↔(doc_id, source_type) maps are rebuilt from the sidecar's ordered
+    chunk IDs + the LanceDB `source_type` column (FR-9), never from `corpus.jsonl`.
     """
     bm25 = BM25Index.load(config.BM25_INDEX_DIR)
     store = LanceDBStore.open(config.LANCEDB_DIR)

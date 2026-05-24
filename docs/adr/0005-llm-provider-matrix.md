@@ -19,7 +19,7 @@ We need to formalize which LLM providers and models are used, their roles (gener
 We adopt the following LLM provider and model matrix:
 
 1. **OpenAI**: Primary production-grade baseline.
-   - **Generation**: `gpt-4o-mini` (referred to as `gpt-5-nano-2025-08-07` in default settings). Excellent structured output support (`strict: true`), low latency, and low cost.
+   - **Generation**: `gpt-5-nano-2025-08-07` — the production default (`DEFAULT_MODEL` in `generation/openai_generator.py`, overridable via `RAG_GEN_MODEL`). Chosen for strong structured-output support (`strict: true`), low latency, and low cost.
    - **Evaluation (Judge)**: `gpt-4o` or `gpt-4o-mini` for fast judge feedback.
 
 2. **Anthropic**: Primary multi-model generator.
