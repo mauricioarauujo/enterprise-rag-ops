@@ -29,6 +29,42 @@ templates:
 # Domain entry shape — the single SSoT is _templates/domain-manifest.yaml.template.
 # kb-architect copies that block in here when registering a domain.
 domains:
+  rag-eval:
+    name: RAG Eval
+    description: >
+      LLM-as-judge evaluation of RAG answers — per-fact recall/precision scoring
+      against gold answer_facts, doc-level (per-doc_id) citation faithfulness, the
+      None empty-denominator/abstention convention, structured-output judge prompting,
+      and judge determinism (strict schema + discrete verdict vocabulary).
+    path: rag-eval/
+    status: draft
+    last_updated: "2026-05-24"
+    agents: [kb-architect]
+    pillars_used: [codebase, mcp]
+    entry_points:
+      index: index.md
+      quick_reference: quick-reference.md
+    concepts:
+      - name: per-doc-faithfulness
+        path: concepts/per-doc-faithfulness.md
+        confidence: 0.95
+      - name: none-empty-denominator
+        path: concepts/none-empty-denominator.md
+        confidence: 0.95
+      - name: schema-as-ssot
+        path: concepts/schema-as-ssot.md
+        confidence: 0.90
+      - name: judge-determinism
+        path: concepts/judge-determinism.md
+        confidence: 0.85
+    patterns:
+      - name: per-fact-judge-call
+        path: patterns/per-fact-judge-call.md
+        confidence: 0.95
+      - name: offline-ci-judge
+        path: patterns/offline-ci-judge.md
+        confidence: 0.95
+
   rag-retrieval:
     name: RAG Retrieval
     description: >
