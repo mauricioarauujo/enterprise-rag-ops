@@ -24,6 +24,9 @@ works from the phase track directly (backward-compatible — SDD is opt-in).
    - Report and proceed — do not block.
 
 3. **Execute**
+   - **Confirm the phase branch** — you should be on `sprint-N/phase-slug` (created at
+     `/brainstorm`). If you're on the default branch (`main`), create it now, before
+     committing any code. (Defensive guard for when `/brainstorm` was skipped.)
    - Follow the manifest's phase-order column in `DESIGN.md`.
    - Delegate file groups to specialist agents per the manifest — when spawning an
      agent, ALWAYS pass `model` explicitly (read the agent's frontmatter).

@@ -12,7 +12,7 @@ Each ADR captures one significant decision: its context, the decision, and the c
 
 | ID   | Title                                                                                       | Status   | Date       |
 | ---- | ------------------------------------------------------------------------------------------- | -------- | ---------- |
-| 0001 | [Eval Framework Choice](0001-eval-framework.md)                                             | deferred | 2026-05-18 |
+| 0001 | [Eval Framework — Custom Thin Per-Fact Judge](0001-eval-framework.md)                       | accepted | 2026-05-23 |
 | 0002 | [Retrieval Architecture — Hybrid BM25 + Dense over LanceDB](0002-retrieval-architecture.md) | accepted | 2026-05-18 |
 | 0003 | [Generation Layer — OpenAI Structured Outputs with Source Attribution](0003-generation.md)  | accepted | 2026-05-20 |
 
