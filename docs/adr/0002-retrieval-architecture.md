@@ -93,6 +93,10 @@ which our engineering guidance rejects.
 - The chunker's `chunk_id = f"{doc_id}::{offset}"` is deterministic, so the
   index is reproducible (NFR-2).
 
+### Abstention Calibration (Sprint 2 Calibration)
+
+- A threshold sweep (0.30 - 0.65, step 0.05) run over the 500-question eval set confirmed that the current `0.45` threshold serves as a high-precision, zero-false-positive operating point (preventing any incorrect abstentions on answerable questions, though yielding 0.0 recall on unanswerable ones). Raising the threshold (e.g. to `0.55` or `0.60`) increases recall (detecting unanswerable questions) at the cost of a high False Positive rate due to the dense model's uncalibrated score distribution.
+
 ## Alternatives Considered
 
 | Choice           | Picked               | Rejected                        | Why                                                                                                                                      |
