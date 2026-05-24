@@ -20,7 +20,7 @@ from enterprise_rag_ops.ingest.schema import Document
 from enterprise_rag_ops.ingest.writer import read_corpus
 from enterprise_rag_ops.retrieval import config
 from enterprise_rag_ops.retrieval.bm25_index import BM25Index
-from enterprise_rag_ops.retrieval.chunker import chunk_document, chunk_documents
+from enterprise_rag_ops.retrieval.chunker import chunk_documents
 from enterprise_rag_ops.retrieval.embedder import BGEEmbedder
 from enterprise_rag_ops.retrieval.hybrid_retriever import HybridRetriever
 from enterprise_rag_ops.retrieval.interfaces import Embedder
@@ -122,15 +122,10 @@ def load_retriever(embedder: Embedder | None = None) -> HybridRetriever:
     store = LanceDBStore.open(config.LANCEDB_DIR)
     embedder = embedder or BGEEmbedder()
 
-    # Rebuild the chunk_id → (doc_id, source_type) maps from corpus.jsonl. This
-    # is O(corpus size) at startup — fine for ~3-5k chunks; can be persisted as
-    # a sidecar if it ever becomes a hotspot.
-    chunk_to_doc: dict[str, str] = {}
-    chunk_to_source_type: dict[str, str] = {}
-    for doc in read_corpus(config.CORPUS_PATH):
-        for chunk in chunk_document(doc):
-            chunk_to_doc[chunk.chunk_id] = doc.id
-            chunk_to_source_type[chunk.chunk_id] = doc.source_type
+    # Rebuild the maps from the persisted chunk order sidecar + LanceDB
+    chunk_order = json.loads(config.CHUNK_ORDER_PATH.read_text(encoding="utf-8"))
+    chunk_to_doc = {cid: cid.split("::", 1)[0] for cid in chunk_order}
+    chunk_to_source_type = store.get_all_chunk_source_types()
 
     return HybridRetriever(
         embedder=embedder,
