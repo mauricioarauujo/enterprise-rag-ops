@@ -104,6 +104,11 @@ Why `vcrpy` was deferred (ADR-0001): a cassette cannot be recorded without a liv
 call, so adding the dev dependency unused was declined per `CLAUDE.md`
 § Engineering Behavior. Wire it when the first live judge call is made.
 
+> **Update (Phase 5):** `vcrpy` and the cassette/replay path shipped (ADR-0006) for the
+> first live-LLM eval assertion. See [cassette-replay-eval.md](cassette-replay-eval.md) —
+> including the failure mode where a hand-fabricated cassette silently degrades to the
+> mock this pattern exists to avoid.
+
 ```python
 # When landed: gate the live-record path behind a marker
 @pytest.mark.cassette  # excluded from make test's default pytest run
