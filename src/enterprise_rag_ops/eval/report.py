@@ -43,6 +43,9 @@ def generate_report_data(jsonl_path: Path) -> dict:
     if not records:
         raise ValueError(f"No records found in {jsonl_path}")
 
+    # Retrieval cut-off the run used (persisted per record; constant across a run).
+    k = records[0].k
+
     # Load and filter questions matching the run
     question_ids = {r.question_id for r in records}
     questions = [q for q in load_questions() if q.question_id in question_ids]
@@ -88,10 +91,9 @@ def generate_report_data(jsonl_path: Path) -> dict:
         for model_name, recs in model_records.items():
             cat_recs = [r for r in recs if r.question_id in cat_q_ids]
 
-            # Retrieval aggregates
+            # Retrieval aggregates at the run's k cut-off
             ranked_results = {r.question_id: r.retrieval_ranked_ids for r in cat_recs}
-            # k-cutoff from config: default to 10
-            retrieval_aggs = aggregate_retrieval_metrics(cat_qs, ranked_results, k=10)
+            retrieval_aggs = aggregate_retrieval_metrics(cat_qs, ranked_results, k=k)
             cat_retrieval = retrieval_aggs.get(cat, {})
 
             # Judge aggregates
@@ -104,8 +106,8 @@ def generate_report_data(jsonl_path: Path) -> dict:
             )
 
             model_cat_metrics[model_name] = {
-                "recall_at_10": cat_retrieval.get("recall_at_10"),
-                "ndcg_at_10": cat_retrieval.get("ndcg_at_10"),
+                "retrieval_recall": cat_retrieval.get(f"recall_at_{k}"),
+                "retrieval_ndcg": cat_retrieval.get(f"ndcg_at_{k}"),
                 "fact_recall": fact_recall,
                 "fact_precision": fact_precision,
                 "faithfulness": faithfulness,
@@ -145,6 +147,7 @@ def generate_report_data(jsonl_path: Path) -> dict:
         )
 
     return {
+        "k": k,
         "summary": summary_data,
         "categories": category_data,
         "costs": cost_data,
@@ -164,15 +167,16 @@ def render_markdown(data: dict) -> str:
         )
 
     # 2. Category Table
-    md_cat = "| Category | Model | Retrieval Recall@10 | Retrieval nDCG@10 | Fact Recall | Fact Precision | Faithfulness |\n"
+    k = data["k"]
+    md_cat = f"| Category | Model | Retrieval Recall@{k} | Retrieval nDCG@{k} | Fact Recall | Fact Precision | Faithfulness |\n"
     md_cat += "| --- | --- | --- | --- | --- | --- | --- |\n"
     for cat_row in data["categories"]:
         first = True
         for model_name, metrics in cat_row["metrics"].items():
             cat_label = f"**{cat_row['category']}**" if first else ""
             md_cat += (
-                f"| {cat_label} | {model_name} | {_fmt(metrics['recall_at_10'], pct=True)} | "
-                f"{_fmt(metrics['ndcg_at_10'])} | {_fmt(metrics['fact_recall'], pct=True)} | "
+                f"| {cat_label} | {model_name} | {_fmt(metrics['retrieval_recall'], pct=True)} | "
+                f"{_fmt(metrics['retrieval_ndcg'])} | {_fmt(metrics['fact_recall'], pct=True)} | "
                 f"{_fmt(metrics['fact_precision'], pct=True)} | {_fmt(metrics['faithfulness'], pct=True)} |\n"
             )
             first = False
@@ -213,6 +217,7 @@ $category_table
 
 def render_html(data: dict) -> str:
     """Render report to a premium, styled HTML format (FR-7)."""
+    k = data["k"]
     # 1. Summary
     html_summary_rows = ""
     for row in data["summary"]:
@@ -241,8 +246,8 @@ def render_html(data: dict) -> str:
             <tr>
                 {cat_cell}
                 <td>{model_name}</td>
-                <td>{_fmt(metrics["recall_at_10"], pct=True)}</td>
-                <td>{_fmt(metrics["ndcg_at_10"])}</td>
+                <td>{_fmt(metrics["retrieval_recall"], pct=True)}</td>
+                <td>{_fmt(metrics["retrieval_ndcg"])}</td>
                 <td>{_fmt(metrics["fact_recall"], pct=True)}</td>
                 <td>{_fmt(metrics["fact_precision"], pct=True)}</td>
                 <td>{_fmt(metrics["faithfulness"], pct=True)}</td>
@@ -411,8 +416,8 @@ def render_html(data: dict) -> str:
                     <tr>
                         <th>Category</th>
                         <th>Model</th>
-                        <th>Retrieval Recall@10</th>
-                        <th>Retrieval nDCG@10</th>
+                        <th>Retrieval Recall@${cat_k}</th>
+                        <th>Retrieval nDCG@${cat_k}</th>
                         <th>Fact Recall</th>
                         <th>Fact Precision</th>
                         <th>Faithfulness</th>
@@ -429,6 +434,7 @@ def render_html(data: dict) -> str:
 """
     )
     return template.substitute(
+        cat_k=k,
         summary_rows=html_summary_rows,
         cost_rows=html_cost_rows,
         category_rows=html_cat_rows,

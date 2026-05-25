@@ -33,25 +33,26 @@ We adopt the following conventions and schemas for the persisted evaluation reco
 
 We persist one record per question per model execution in a JSONL file. The JSON schema for each line (the `EvalRecord` Pydantic model) is:
 
-| Field Name              | Type            | Description                                                             |
-| :---------------------- | :-------------- | :---------------------------------------------------------------------- |
-| `question_id`           | `str`           | The unique identifier of the question.                                  |
-| `category`              | `str`           | The question category (e.g., `basic`, `conditional`, `info_not_found`). |
-| `run_id`                | `str`           | The execution identifier (e.g., `baseline`).                            |
-| `gen_ai`                | `dict`          | Namespaced OpenTelemetry GenAI properties.                              |
-| `gen_ai.request.model`  | `str`           | Model identifier requested.                                             |
-| `gen_ai.system`         | `str`           | Model provider (e.g., `openai`, `anthropic`).                           |
-| `gen_ai.operation.name` | `str`           | Operation name (always `"chat"`).                                       |
-| `generation`            | `dict`          | Call statistics for the answer generation step (see `CallStats` below). |
-| `judge`                 | `dict`          | Call statistics for the judge step (see `CallStats` below).             |
-| `answer`                | `str`           | The raw text answer returned by the generator.                          |
-| `sources`               | `list[str]`     | The document/chunk IDs cited as sources in the answer.                  |
-| `fact_recall`           | `float \| None` | Aggregate fact recall metric (`None` if generator abstained).           |
-| `fact_precision`        | `float \| None` | Aggregate fact precision metric (`None` if generator abstained).        |
-| `faithfulness_ratio`    | `float \| None` | Aggregate faithfulness metric (`None` if generator cited no sources).   |
-| `retrieval_ranked_ids`  | `list[str]`     | The chunk IDs returned by the retriever for this query.                 |
-| `did_abstain_retrieval` | `bool`          | Whether the retriever abstained (no results above threshold).           |
-| `did_abstain_e2e`       | `bool`          | Whether the generator abstained (returned the abstain answer phrase).   |
+| Field Name              | Type            | Description                                                                                                                                                        |
+| :---------------------- | :-------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `question_id`           | `str`           | The unique identifier of the question.                                                                                                                             |
+| `category`              | `str`           | The question category (e.g., `basic`, `conditional`, `info_not_found`).                                                                                            |
+| `run_id`                | `str`           | The execution identifier (e.g., `baseline`).                                                                                                                       |
+| `k`                     | `int`           | Retrieval cut-off (top-k) the run used; the report reads it rather than assuming 10.                                                                               |
+| `gen_ai`                | `dict`          | Namespaced OpenTelemetry GenAI properties.                                                                                                                         |
+| `gen_ai.request.model`  | `str`           | Model identifier requested.                                                                                                                                        |
+| `gen_ai.system`         | `str`           | Model provider (e.g., `openai`, `anthropic`).                                                                                                                      |
+| `gen_ai.operation.name` | `str`           | Operation name (always `"chat"`).                                                                                                                                  |
+| `generation`            | `dict`          | Call statistics for the answer generation step (see `CallStats` below).                                                                                            |
+| `judge`                 | `dict`          | Call statistics for the judge step (see `CallStats` below).                                                                                                        |
+| `answer`                | `str`           | The raw text answer returned by the generator.                                                                                                                     |
+| `sources`               | `list[str]`     | The document/chunk IDs cited as sources in the answer.                                                                                                             |
+| `fact_recall`           | `float \| None` | Aggregate fact recall metric (`None` if generator abstained).                                                                                                      |
+| `fact_precision`        | `float \| None` | Aggregate fact precision metric (`None` if generator abstained).                                                                                                   |
+| `faithfulness_ratio`    | `float \| None` | Aggregate faithfulness metric (`None` if generator cited no sources).                                                                                              |
+| `retrieval_ranked_ids`  | `list[str]`     | Deduplicated **doc-level** IDs from the retriever ranking — the offline retrieval-metric input (chunk IDs are mapped to their parent doc and de-duped first-wins). |
+| `did_abstain_retrieval` | `bool`          | Whether the retriever abstained (no results above threshold).                                                                                                      |
+| `did_abstain_e2e`       | `bool`          | Whether the generator abstained (returned the abstain answer phrase).                                                                                              |
 
 #### `CallStats` Sub-schema:
 

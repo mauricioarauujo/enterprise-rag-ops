@@ -295,3 +295,47 @@ def test_runner_concurrency(monkeypatch, tmp_path, run_config):
         data = json.loads(line)
         question_ids.add(data["question_id"])
     assert len(question_ids) == 10
+
+
+def test_runner_concurrency_propagates_worker_exception(monkeypatch, tmp_path, run_config):
+    """A worker exception under --concurrency must propagate, not be silently swallowed.
+
+    Guards the `for _ in executor.map(...)` consumption: a discarded map result would
+    hide the crash and leave a short JSONL while the run reports success.
+    """
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    (tmp_path / "chunks.json").write_text("[]")
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+
+    from enterprise_rag_ops.retrieval import pipeline
+
+    monkeypatch.setattr(pipeline, "load_retriever", lambda: MockRetriever())
+
+    class CrashingGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            raise RuntimeError("Generator crashed in worker!")
+
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.eval.questions import Question
+
+    monkeypatch.setattr(
+        runner,
+        "load_questions",
+        lambda limit: [Question(f"q{i}", f"Q{i}", [f"F{i}"], ["doc_1"], "cat") for i in range(4)],
+    )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]
+
+    with pytest.raises(RuntimeError, match="Generator crashed in worker!"):
+        run_evaluation(
+            run_config,
+            generator_classes={"openai": CrashingGenerator},
+            judge_class=StubJudge,
+            concurrency=2,
+        )

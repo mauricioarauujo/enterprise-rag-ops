@@ -80,6 +80,7 @@ class EvalRecord(BaseModel):
     question_id: str
     category: str
     run_id: str
+    k: int = 10  # retrieval cut-off the run used; the report reads it (no hard-coded k)
     gen_ai: GenAiFields
     generation: CallStats
     judge: CallStats

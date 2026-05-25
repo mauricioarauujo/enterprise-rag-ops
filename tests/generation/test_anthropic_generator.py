@@ -81,19 +81,8 @@ def test_anthropic_generator_missing_api_key_raises_runtime_error(monkeypatch):
 
 
 # --- VCR cassette test (AC-5) ----------------------------------------------
-
-
-@pytest.fixture
-def vcr_record():
-    """Configure VCR with record mode pointing to the shared eval cassettes folder."""
-    import vcr
-
-    record_mode = os.environ.get("VCR_RECORD_MODE", "none")
-    return vcr.VCR(
-        cassette_library_dir="tests/eval/cassettes",
-        record_mode=record_mode,
-        filter_headers=["x-api-key", "authorization"],
-    )
+# `vcr_record` comes from the root `tests/conftest.py` — a single VCR config that
+# scrubs request credentials and identifying response headers (org-id, cookies).
 
 
 @pytest.mark.vcr

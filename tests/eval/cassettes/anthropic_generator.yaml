@@ -105,15 +105,8 @@ interactions:
       - chunked
       X-Robots-Tag:
       - none
-      anthropic-organization-id:
-      - 7c0a0e59-bdbc-4a98-85e9-1e54c66c69da
       cf-cache-status:
       - DYNAMIC
-      request-id:
-      - req_011CbPVvqSs1fC2rcbhfWcCE
-      set-cookie:
-      - _cfuvid=9Iyurm0Xsw1V4jmpGzGpsVBXlT.VpdfVK.I9czGFOCk-1779721800.351892-1.0.1.1-pxD83oSvdvy6eGWv415jL_1S3JyUKHzfgCgFCrg84rM;
-        HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:

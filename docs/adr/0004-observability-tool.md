@@ -26,13 +26,14 @@ be forward-compatible.
 Decision criteria (what "good" means for this project):
 
 - **Self-hostable** with no mandatory SaaS tenant; **OSS license** (MIT/Apache-2.0) fit for a
-  public MIT portfolio repo; **low lock-in** (data exportable, OpenTelemetry-native preferred).
+  public MIT repo; **low lock-in** (data exportable, OpenTelemetry-native preferred).
 - Ingests both **traces** (a retrieval → generation → judge span tree) and **offline eval
   scores** (per-fact recall/precision, citation faithfulness, retrieval recall@k, abstention).
 - Tracks **token cost + latency per call**; runnable locally by a reviewer via docker-compose.
 - **Framework-agnostic**: the substrate uses neither LangChain nor LlamaIndex (ADR-0002/0003
   built custom seams), so the tool must support plain-Python manual instrumentation.
-- **Budget-conscious** (solo portfolio project, ~5h/week).
+- **Budget-conscious**: self-hostable with minimal operational overhead; runnable from a
+  `git clone` with no managed-service spend.
 
 A focused Gemini Deep Research pass (2026-05-25, archived at
 `.claude/kb/_research/archive/observability-2026-05-25.md`) compared Langfuse, Arize Phoenix,

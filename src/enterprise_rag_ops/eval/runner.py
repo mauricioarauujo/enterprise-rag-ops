@@ -108,12 +108,10 @@ def run_evaluation(
             def process_one(q: Question, model=model, generator=generator, judge=judge) -> None:
                 nonlocal total_cost_usd, halt_run
 
-                if halt_run:
-                    return
-
-                # Check cost ceiling before processing (FR-13)
+                # Read shared halt/ceiling state under the lock that owns it — bare reads
+                # of `halt_run` / `total_cost_usd` would race under `--concurrency > 1`.
                 with cost_lock:
-                    if (
+                    if halt_run or (
                         config.cost_ceiling_usd is not None
                         and total_cost_usd > config.cost_ceiling_usd
                     ):
@@ -158,18 +156,26 @@ def run_evaluation(
 
                 call_cost = (gen_stats.cost_usd or 0.0) + (judge_stats.cost_usd or 0.0)
 
+                # Accumulate cost and decide write-eligibility under one lock so the
+                # ceiling check and `halt_run` flip stay consistent under concurrency.
                 with cost_lock:
+                    cost_before = total_cost_usd
                     total_cost_usd += call_cost
-                    if (
+                    crossed_now = (
                         config.cost_ceiling_usd is not None
+                        and cost_before <= config.cost_ceiling_usd
                         and total_cost_usd > config.cost_ceiling_usd
-                    ):
+                    )
+                    if crossed_now:
                         logger.warning(
                             "Cost ceiling of %.2f USD exceeded (current total: %.4f USD). Halting run.",
                             config.cost_ceiling_usd,
                             total_cost_usd,
                         )
                         halt_run = True
+                    # Write this record if we haven't halted, or if it is the one that
+                    # crossed the ceiling (so the boundary record is never lost).
+                    should_write = not halt_run or crossed_now
 
                 did_abstain_e2e = answer.answer == ABSTAIN_ANSWER and len(answer.sources) == 0
 
@@ -178,6 +184,7 @@ def run_evaluation(
                     question_id=q.question_id,
                     category=q.category,
                     run_id=config.run_id,
+                    k=config.k,
                     gen_ai=GenAiFields(
                         request=GenAiRequest(model=model.model_id),
                         system=model.system,
@@ -195,19 +202,19 @@ def run_evaluation(
                 )
 
                 # 6. Flush record to JSONL (crash-safe checkpoint, Decision 3-C / AC-2)
-                with write_lock:
-                    if not halt_run or (
-                        config.cost_ceiling_usd is not None
-                        and total_cost_usd - call_cost <= config.cost_ceiling_usd
-                    ):
-                        # Write the record (including the one that crossed the threshold)
+                if should_write:
+                    with write_lock:
                         f.write(record.model_dump_json() + "\n")
                         f.flush()
 
             # Execute run depending on concurrency settings (FR-14)
             if concurrency > 1:
                 with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                    executor.map(process_one, questions)
+                    # Consume the iterator so a worker exception propagates to the
+                    # caller instead of being silently swallowed (a discarded
+                    # `executor.map` result hides crashes and yields a short JSONL).
+                    for _ in executor.map(process_one, questions):
+                        pass
             else:
                 for q in questions:
                     process_one(q)
