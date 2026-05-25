@@ -56,6 +56,8 @@ docs/planning/
 data/raw/
 data/processed/
 results/
+!results/baseline.html
+!results/baseline.md
 *.parquet
 *.duckdb
 *.sqlite

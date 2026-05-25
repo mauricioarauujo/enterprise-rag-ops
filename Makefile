@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval install-hooks
+.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval eval-baseline install-hooks
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -34,6 +34,9 @@ retrieval-eval:  ## Run the retrieval-level threshold sweep over the evaluation 
 
 smoke:  ## Run the end-to-end rag-ask smoke on 10 questions (requires OPENAI_API_KEY + built index)
 	uv run pytest tests/generation/test_generation_smoke.py -m smoke
+
+eval-baseline:  ## Run the multi-model baseline evaluation sweep (requires API keys + gold index)
+	uv run rag-eval run --config configs/baseline.yaml
 
 format:  ## Format code with ruff and Markdown with prettier
 	uv run ruff format src tests

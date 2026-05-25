@@ -23,6 +23,7 @@ dependencies = [
 rag-ingest = "enterprise_rag_ops.ingest.cli:main"
 rag-index = "enterprise_rag_ops.retrieval.cli:main"
 rag-ask = "enterprise_rag_ops.generation.cli:main"
+rag-eval = "enterprise_rag_ops.eval.cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
