@@ -18,6 +18,9 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 class StubJudge:
     """Returns an all-`present` / all-`supported` `JudgeVerdict` deterministically."""
 
+    def __init__(self, model: str | None = None, **kwargs) -> None:
+        self._model = model or "stub"
+
     def judge(
         self,
         question: str,

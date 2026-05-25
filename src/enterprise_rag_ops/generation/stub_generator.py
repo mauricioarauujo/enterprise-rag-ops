@@ -15,6 +15,9 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 class StubGenerator:
     """Returns deterministic `AnswerWithSources(answer="stub", sources=[doc_ids])`."""
 
+    def __init__(self, model: str | None = None, **kwargs) -> None:
+        self._model = model or "stub"
+
     def generate(self, context_chunks: list[Chunk], question: str) -> AnswerWithSources:
         return AnswerWithSources(
             answer="stub",
