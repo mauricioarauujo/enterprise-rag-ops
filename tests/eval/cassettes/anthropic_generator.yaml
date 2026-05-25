@@ -1,0 +1,130 @@
+interactions:
+- request:
+    body: "{\"max_tokens\":4096,\"messages\":[{\"role\":\"user\",\"content\":\"[1]
+      test_doc: The default port for HTTP traffic is 80; for HTTPS it is 443.\\n\\nWhat
+      is the default port for HTTP traffic?\"}],\"model\":\"claude-3-5-haiku-20241022\",\"system\":\"You
+      are an enterprise knowledge assistant. Answer the user's question using only
+      the numbered context provided. Cite the doc_id of every context entry you used
+      in the `sources` field. If the context does not contain enough information to
+      answer, you MUST set `answer` to exactly this string \u2014 \\\"I don't have
+      enough information to answer this question.\\\" \u2014 and return an empty `sources`
+      list. Do not answer from prior knowledge.\\n\\nRespond with a single JSON object
+      matching this schema:\\n{\\n  \\\"additionalProperties\\\": false,\\n  \\\"description\\\":
+      \\\"An LLM-produced answer with cited document identifiers.\\\\n\\\\nFields:\\\\n
+      \   answer: Natural-language answer string. Empty string is allowed by the\\\\n
+      \       schema but flagged by the smoke gate (AC-13).\\\\n    sources: List
+      of `doc_id` strings cited as evidence. Order is the order\\\\n        the model
+      emitted them; deduplication is the model's responsibility.\\\\n\\\\nInvariants:\\\\n
+      \   - Both fields are required (Pydantic raises `ValidationError` on\\\\n      missing
+      or wrong type \\\\u2014 AC-1).\\\\n    - The schema is closed (`extra=\\\\\\\"forbid\\\\\\\"`
+      \\\\u2192 `additionalProperties: false`\\\\n      in JSON Schema), so OpenAI
+      `strict: true` mode rejects any extra fields.\\\",\\n  \\\"properties\\\": {\\n
+      \   \\\"answer\\\": {\\n      \\\"description\\\": \\\"Natural-language answer
+      to the user question.\\\",\\n      \\\"title\\\": \\\"Answer\\\",\\n      \\\"type\\\":
+      \\\"string\\\"\\n    },\\n    \\\"sources\\\": {\\n      \\\"description\\\":
+      \\\"doc_id values cited as evidence for the answer.\\\",\\n      \\\"items\\\":
+      {\\n        \\\"type\\\": \\\"string\\\"\\n      },\\n      \\\"title\\\": \\\"Sources\\\",\\n
+      \     \\\"type\\\": \\\"array\\\"\\n    }\\n  },\\n  \\\"required\\\": [\\n
+      \   \\\"answer\\\",\\n    \\\"sources\\\"\\n  ],\\n  \\\"title\\\": \\\"AnswerWithSources\\\",\\n
+      \ \\\"type\\\": \\\"object\\\"\\n}\",\"tool_choice\":{\"type\":\"tool\",\"name\":\"emit_answer\"},\"tools\":[{\"name\":\"emit_answer\",\"description\":\"Emit
+      the structured answer with sources.\",\"input_schema\":{\"additionalProperties\":false,\"description\":\"An
+      LLM-produced answer with cited document identifiers.\\n\\nFields:\\n    answer:
+      Natural-language answer string. Empty string is allowed by the\\n        schema
+      but flagged by the smoke gate (AC-13).\\n    sources: List of `doc_id` strings
+      cited as evidence. Order is the order\\n        the model emitted them; deduplication
+      is the model's responsibility.\\n\\nInvariants:\\n    - Both fields are required
+      (Pydantic raises `ValidationError` on\\n      missing or wrong type \u2014 AC-1).\\n
+      \   - The schema is closed (`extra=\\\"forbid\\\"` \u2192 `additionalProperties:
+      false`\\n      in JSON Schema), so OpenAI `strict: true` mode rejects any extra
+      fields.\",\"properties\":{\"answer\":{\"description\":\"Natural-language answer
+      to the user question.\",\"title\":\"Answer\",\"type\":\"string\"},\"sources\":{\"description\":\"doc_id
+      values cited as evidence for the answer.\",\"items\":{\"type\":\"string\"},\"title\":\"Sources\",\"type\":\"array\"}},\"required\":[\"answer\",\"sources\"],\"type\":\"object\"}}]}"
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '3127'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - Anthropic/Python 0.104.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 0.104.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.7
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: !!binary |
+        H4sIAIpmFGoC/22QXUvDMBSG/0rItZW062DMKy8UEQaiBUEZJbSnW7Y0qTknfmz0v9sTZeAwl8/7
+        wXtylKaVSyF73NQqn7286+JweC5Xn/e71eMt3cBqu5MXQtLXAMkHiHoDjIK3CWlEg6QdMex9C5Zp
+        Y3VsIZtl82yrzT5mhSrKXBUFuxrvCKbAUrweT9Xkva0jpu6fUUziNOv68N9jn9N9ykJvqNYOPyC
+        kuBsitx/lL5ss1RZEC52OlsTgA4nOB3FXVQ+Cgu460wiDYqGuTvxJGGJWlrNLLkUfQwPIoyUBUt3
+        6Rq7Hcc0a+aEOoNG781OShPAWwTW81UVrJxzTN/LENLYmvwfH5flcqUn3kf7ghRrHb9dz2MOtAQAA
+    headers:
+      CF-RAY:
+      - a01576e42f66691c-LIS
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Security-Policy:
+      - default-src 'none'; frame-ancestors 'none'
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 25 May 2026 15:10:00 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Robots-Tag:
+      - none
+      anthropic-organization-id:
+      - 7c0a0e59-bdbc-4a98-85e9-1e54c66c69da
+      cf-cache-status:
+      - DYNAMIC
+      request-id:
+      - req_011CbPVvqSs1fC2rcbhfWcCE
+      set-cookie:
+      - _cfuvid=9Iyurm0Xsw1V4jmpGzGpsVBXlT.VpdfVK.I9czGFOCk-1779721800.351892-1.0.1.1-pxD83oSvdvy6eGWv415jL_1S3JyUKHzfgCgFCrg84rM;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=api.anthropic.com
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      traceresponse:
+      - 00-571379246b8b3af14b7eec9eccceda55-3c35bcbbb66a92f0-01
+      vary:
+      - Accept-Encoding
+      x-envoy-upstream-service-time:
+      - '88'
+      x-should-retry:
+      - 'false'
+    status:
+      code: 200
+      message: OK
+version: 1
