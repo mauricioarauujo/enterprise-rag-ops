@@ -18,7 +18,7 @@ Each ADR captures one significant decision: its context, the decision, and the c
 | 0004 | [Observability & Cost Tracking — Langfuse Self-Hosted, OTEL-Native Records](0004-observability-tool.md) | proposed | 2026-05-25 |
 | 0005 | [LLM Provider Matrix — OpenAI / Anthropic / Ollama](0005-llm-provider-matrix.md)                        | accepted | 2026-05-24 |
 | 0006 | [Cassette Replay — VCR Replay for E2E Tests](0006-cassette-replay.md)                                   | accepted | 2026-05-24 |
+| 0007 | [Evaluation Record Schema and Cost-Accounting Model](0007-eval-record-schema.md)                        | accepted | 2026-05-25 |
 
 ADR-0004 is **proposed** (drafted in Sprint 2 / Phase 6 to constrain the eval-record schema;
-acceptance deferred to Sprint 3 / Phase 7 when the tool is wired). Planned: ADR-0007
-(eval-record schema + cost-accounting model, Sprint 2 / Phase 6).
+acceptance deferred to Sprint 3 / Phase 7 when the tool is wired). ADR-0007 (eval-record schema + cost-accounting model) is accepted.
