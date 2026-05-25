@@ -101,7 +101,7 @@ itself.
                         └──────────────────────────────────────────────────────────┘
 ```
 
-`make verify` exercises this whole shape through `StubJudge` + hand-built verdicts —
+`make test` exercises this whole shape through `StubJudge` + hand-built verdicts —
 no network, no `OPENAI_API_KEY` (NFR-1). The live `OpenAIJudge` path is reached only by
 a gated/cassette test (FR-12, Should-tier).
 
@@ -261,7 +261,7 @@ Both verdict models are closed (`extra="forbid"` → `additionalProperties: fals
 Ordered per the harness convention (data/dataset loader → config → core `src/` → tests →
 docs/ADR). Phase 4 has no separate `observability/` work. Each step is independently
 testable; `/implement` validates smallest-first (`uv run pytest tests/eval -k <step>`)
-then `make verify`. Within "core `src/`" the sub-order is **smallest-testable-first** per
+then `make test`. Within "core `src/`" the sub-order is **smallest-testable-first** per
 CLAUDE.md § Engineering Behavior — pure code (schema, aggregation) before the LLM call.
 
 1. **Dataset loader — `Question` + `load_questions`** (`eval/questions.py`). First because
@@ -304,7 +304,7 @@ CLAUDE.md § Engineering Behavior — pure code (schema, aggregation) before the
    `CitationVerdict.verdict == "unsupported"` and `faithfulness_ratio < 1.0`, offline via
    hand-built verdict and/or fake/cassette client, AC-11). The Should-tier vcrpy cassette
    (AC-12) is wired here if landed; its live-record path is marker-gated out of
-   `make verify`. The corpus-coverage caveat (AC-13) is stated as a docstring/comment in
+   `make test`. The corpus-coverage caveat (AC-13) is stated as a docstring/comment in
    `test_judge_contract.py` / `test_questions_loader.py` — no field, no code.
 7. **Docs + ADR** (`docs/adr/0001-eval-framework.md`, `docs/adr/README.md`, FR-11/AC-14).
    Written last so it records the as-built decision. Update the README index row.
@@ -385,7 +385,7 @@ private-planning references.
 | **`strict:true` + nested-list schema friction** — OpenAI `strict` mode requires every property `required` and `additionalProperties:false` on nested objects; a list of closed Pydantic models must serialize correctly. | Both verdict models already carry `extra="forbid"`; Pydantic v2 `model_json_schema()` emits `additionalProperties:false`. Same path `OpenAIGenerator` proved. If `$defs`/`$ref` handling needs flattening for `strict`, that is an `/implement` detail caught by the fake-client test before any live call. |
 | **Empty-denominator `None` propagation** — downstream Phase 6 averaging must treat `None` as N/A (exclude), not coerce to 0.                                                                                             | Phase 4 only _produces_ the `None` (decision 2); the design documents the contract in `JudgeVerdict`'s docstring and ADR-0001 consequences. Phase 6's averaging is out of scope here but the contract is recorded so it cannot be silently misread.                                                         |
 | **Raw `questions`-field name unknown** (C3) — guessing the question-text key risks a loader that yields empty `question`.                                                                                                | One-time streamed dataset inspection is the _first_ `/implement` action (step 1), mirroring the established Phase 2/3 pattern; the loader is written against the confirmed schema, not a guess.                                                                                                             |
-| **Offline-CI invariant** — a stray `from openai import OpenAI` outside `openai_judge.py` would let `make verify` pass on a dev box with the SDK cached but fail on a clean clone.                                        | The `openai` import lives **only** in `eval/openai_judge.py` (mirrors the generation invariant); `schema.py`/`aggregate.py`/`interfaces.py`/`prompt.py`/`stub_judge.py`/`questions.py` import no `openai`. `make verify` runs the eval tests minus the gated live/cassette marker.                          |
+| **Offline-CI invariant** — a stray `from openai import OpenAI` outside `openai_judge.py` would let `make test` pass on a dev box with the SDK cached but fail on a clean clone.                                          | The `openai` import lives **only** in `eval/openai_judge.py` (mirrors the generation invariant); `schema.py`/`aggregate.py`/`interfaces.py`/`prompt.py`/`stub_judge.py`/`questions.py` import no `openai`. `make test` runs the eval tests minus the gated live/cassette marker.                            |
 | **Cassette is Should-tier** — if vcrpy is not landed, AC-12 does not fail the phase, but the live `OpenAIJudge` path then has only fake-client coverage.                                                                 | Acceptable per AC-12 (Should-tier). `StubJudge` + the fake-client `test_openai_judge.py` carry the contract offline; the anchor case (FR-10) is provable via hand-built verdicts without any live call.                                                                                                     |
 
 **ADR-worthy decisions:** the eval-framework choice itself is ADR-0001 (written this

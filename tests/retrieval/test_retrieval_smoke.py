@@ -1,4 +1,4 @@
-"""Real-model `Recall@k` smoke gate — local-only, **not** part of `make verify`.
+"""Real-model `Recall@k` smoke gate — local-only, **not** part of `make test`.
 
 Selected during `/implement` (per RQ-2) by streaming the dataset `questions`
 config at the pinned SHA and keeping only questions whose `expected_doc_ids`

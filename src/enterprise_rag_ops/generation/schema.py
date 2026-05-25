@@ -11,6 +11,15 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Canonical abstention sentinel — the single string the system emits when it
+# cannot answer from the retrieved context. Lives here (not in `cli.py`) so both
+# abstention points can share it without an import cycle:
+#   - the `rag-ask` retrieval gate (`cli.py`, empty-retrieval short-circuit), and
+#   - the generator prompt (`prompt.py`), which instructs the model to emit it
+#     verbatim when the context is insufficient.
+# Sprint 2's eval imports it as SSoT (NFR-5) and exact-matches against it.
+ABSTAIN_ANSWER = "I don't have enough information to answer this question."
+
 
 class AnswerWithSources(BaseModel):
     """An LLM-produced answer with cited document identifiers.

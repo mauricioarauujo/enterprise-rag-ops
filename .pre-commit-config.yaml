@@ -1,0 +1,20 @@
+# Tool-agnostic commit gate (pre-commit framework). Runs `make format` on commit so
+# every commit is formatted, regardless of who commits (Claude Code, Antigravity /
+# Gemini, IDE, or the terminal). The Makefile stays the single definition of the checks.
+#
+# Behaviour: if `make format` changes any file, pre-commit aborts the commit and shows
+# what changed — re-stage (`git add -u`) and commit again. The full gate (lint + test)
+# runs in CI on every PR.
+#
+# ACTIVATION IS PER-CLONE: run `make install-hooks` (≈ `pre-commit install`) once in
+# each clone — your Mac, the Antigravity box, a collaborator. It does NOT auto-activate
+# on `git clone`, because `.git/hooks/` is not version-controlled.
+repos:
+  - repo: local
+    hooks:
+      - id: make-format
+        name: make format (ruff + prettier auto-fix)
+        entry: make format
+        language: system
+        pass_filenames: false
+        always_run: true

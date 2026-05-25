@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import json
 
-from enterprise_rag_ops.generation.schema import AnswerWithSources
+from enterprise_rag_ops.generation.schema import ABSTAIN_ANSWER, AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
 
 _ROLE = (
     "You are an enterprise knowledge assistant. Answer the user's question "
     "using only the numbered context provided. Cite the doc_id of every "
-    "context entry you used in the `sources` field. If the context is "
-    "insufficient, say so plainly in `answer` and return an empty `sources` list."
+    "context entry you used in the `sources` field. If the context does not "
+    "contain enough information to answer, you MUST set `answer` to exactly "
+    f'this string — "{ABSTAIN_ANSWER}" — and return an empty `sources` list. '
+    "Do not answer from prior knowledge."
 )
 
 

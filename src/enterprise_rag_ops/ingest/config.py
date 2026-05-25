@@ -45,6 +45,10 @@ SOURCE_TYPES: frozenset[str] = frozenset(
 # `make download-data DOCS_PER_SOURCE=<n>`.
 DEFAULT_DOCS_PER_SOURCE = 100
 
+# Default distractors per source type on the gold-aware sampling path
+DEFAULT_DISTRACTORS_PER_SOURCE = 50
+
+
 # --- Paths -----------------------------------------------------------------
 
 # Repo root: config.py lives at src/enterprise_rag_ops/ingest/config.py.

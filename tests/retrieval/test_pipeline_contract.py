@@ -1,4 +1,4 @@
-"""Pipeline-contract test — the offline wiring gate run by `make verify` (FR-11, AC-11).
+"""Pipeline-contract test — the offline wiring gate run by `make test` (FR-11, AC-11).
 
 Asserts the full chunk → BM25 + dense → RRF fusion → chunk→doc_id dedup → top-k
 wiring end-to-end, using only the `StubEmbedder` (no model download). Also

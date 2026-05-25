@@ -42,6 +42,9 @@ CLAUDE.local.md
 .claude/worktrees/
 .claude/.gates/
 
+# Antigravity / Gemini CLI — local tool state
+.antigravitycli/
+
 # KB — raw Deep Research dumps (archive/ is tracked for provenance)
 .claude/kb/_research/inbox/
 !.claude/kb/_research/inbox/.gitkeep

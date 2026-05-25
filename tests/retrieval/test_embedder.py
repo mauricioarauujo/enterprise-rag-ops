@@ -1,7 +1,7 @@
 """Tests for `StubEmbedder` — the CI seam (FR-11, RQ-5).
 
 `BGEEmbedder` is exercised by `make retrieval-smoke`, not here — instantiating
-it downloads 568 MB, which `make verify` must not do (NFR-3).
+it downloads 568 MB, which `make test` must not do (NFR-3).
 """
 
 from __future__ import annotations

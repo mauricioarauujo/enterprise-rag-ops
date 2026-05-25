@@ -104,7 +104,7 @@ re-confirmation is needed before `/design`.
   valid `JudgeVerdict`, all-`present`/all-`supported`, offline); (b) the aggregation
   logic over hand-built verdict lists including the empty-list edge cases (pure Python,
   no API); (c) the `Question` loader yields correctly typed `Question` objects with all
-  five fields populated. All run under `make verify` with no network and no
+  five fields populated. All run under `make test` with no network and no
   `OPENAI_API_KEY`.
 - **FR-10 (Anchor-case test)** — A unit test encodes the spurious-citation thesis case:
   a hand-built input where a cited `doc_id`'s text does **not** support the asserted
@@ -112,7 +112,7 @@ re-confirmation is needed before `/design`.
   yields that `CitationVerdict.verdict == "unsupported"`, dragging `faithfulness_ratio`
   below `1.0`. To stay offline, this is exercised either by feeding a hand-built
   `JudgeVerdict` through the aggregation path or by the gated/cassette `OpenAIJudge`
-  path (FR-12) — the live API is never hit under `make verify`.
+  path (FR-12) — the live API is never hit under `make test`.
 - **FR-11 (ADR-0001 written)** — `docs/adr/0001-eval-framework.md` is rewritten from its
   current `deferred` stub to an accepted ADR: a three-way **RAGAs / DeepEval / custom**
   comparison (per-fact recall/precision, doc-level faithfulness, CI/seam story, 500-q
@@ -122,9 +122,9 @@ re-confirmation is needed before `/design`.
 
 ### Non-functional
 
-- **NFR-1 (Offline CI / no API key)** — `make verify` runs the judge contract,
+- **NFR-1 (Offline CI / no API key)** — `make test` runs the judge contract,
   aggregation, loader, and anchor-case tests with `StubJudge` (and hand-built verdicts)
-  and performs **no network I/O**. No `OPENAI_API_KEY` is required for `make verify` to
+  and performs **no network I/O**. No `OPENAI_API_KEY` is required for `make test` to
   pass. Any live `OpenAIJudge` test is gated (marker-excluded) or cassette-replayed.
 - **NFR-2 (Determinism / reproducibility)** — `OpenAIJudge` carries reproducibility via
   `strict: true` structured output + the closed discrete verdict vocabulary (Q1), plus
@@ -145,8 +145,7 @@ re-confirmation is needed before `/design`.
   `pydantic` are already present (no new runtime deps). **No** eval-framework library
   (RAGAs, DeepEval), no second provider SDK, no LangChain/litellm is added.
 - **NFR-6 (Conventions)** — New code lives in the eval tree (exact location pinned in
-  `/design` per the Q5 mechanic) with mirrored test files. `make verify` (ruff format +
-  lint + pytest excluding gated markers) passes. English code/docs; YYYY-MM-DD dates.
+  `/design` per the Q5 mechanic) with mirrored test files. `make lint test` (lint + pytest excluding gated markers) passes. English code/docs; YYYY-MM-DD dates.
 - **NFR-7 (Graceful API-key error)** — If `OPENAI_API_KEY` is unset when `OpenAIJudge`
   is constructed for a live run, the failure is a clear human-readable message naming
   the missing env var, not an OpenAI SDK stack trace (mirrors `OpenAIGenerator`).
@@ -182,7 +181,7 @@ re-confirmation is needed before `/design`.
    from `JudgeVerdict`'s schema, honors `RAG_JUDGE_MODEL`, and re-validates the returned
    JSON through Pydantic (a malformed/extra-field response surfaces as a typed
    `ValidationError`). Verified with a fake/recorded client — no live call under
-   `make verify`.
+   `make test`.
 7. `OpenAIJudge`'s prompt includes `answer_facts` rendered as a checklist and each
    cited doc's text as a separately named block keyed by its `doc_id` (asserted by
    inspecting the constructed prompt/messages with a fake client; the per-`doc_id`
@@ -196,13 +195,13 @@ re-confirmation is needed before `/design`.
    `limit` / `question_ids` arg restricts the yielded set; the loader does **not** expose
    a category-filter parameter.
 10. The `StubJudge`-contract, aggregation, and loader-schema tests run under
-    `make verify` with no network access and no `OPENAI_API_KEY`, and pass.
+    `make test` with no network access and no `OPENAI_API_KEY`, and pass.
 11. The anchor-case test asserts that an input whose cited `doc_id` text does not support
     the claim yields that `CitationVerdict.verdict == "unsupported"` and a
     `faithfulness_ratio < 1.0`; the test is offline (hand-built verdict and/or
     cassette/fake client).
 12. The Should-tier vcrpy cassette fixture (if landed) lets the `OpenAIJudge` live test
-    replay from a recorded cassette under `make verify` with no live call; the live
+    replay from a recorded cassette under `make test` with no live call; the live
     record path is gated behind a marker excluded from the default run. (Should-tier —
     its absence does not fail the phase, but if present it must not hit the network in
     CI.)
@@ -217,7 +216,7 @@ re-confirmation is needed before `/design`.
     handling + cost, the LangChain/litellm rejection rationale, and the consequences.
 15. `pyproject.toml` adds at most one new dev dependency (`vcrpy`, version-bounded) and
     **no** new runtime dependency, eval-framework library, second provider SDK, or
-    LLM-wrapper library; `make verify` (ruff format + lint + pytest excluding gated
+    LLM-wrapper library; `make lint test` (lint + pytest excluding gated
     markers) passes with the new code under the eval tree and mirrored tests.
 
 ## Clarity Score

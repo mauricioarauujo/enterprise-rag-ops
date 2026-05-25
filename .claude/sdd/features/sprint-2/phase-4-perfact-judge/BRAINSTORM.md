@@ -81,7 +81,7 @@ different from the generator family (same-family bias carried forward from ADR-0
 explicit in SPRINT.md risks). ADR-0005 will swap the judge model — the swap is named,
 likely, and in-sprint (Phase 5). A `Judge` Protocol is therefore justified on exactly
 the same grounds as the `Generator` Protocol (ADR-0003 §1). The `StubJudge`
-(deterministic, offline) preserves `make verify` on the same pattern as `StubGenerator`
+(deterministic, offline) preserves `make test` on the same pattern as `StubGenerator`
 and `StubEmbedder`.
 
 ---
@@ -114,13 +114,13 @@ parallel execution, cost tracker, and report live in Phases 5–6.
 | Must     | `FactVerdict` Pydantic model: `fact: str`, `verdict: Literal["present", "absent", "contradicted"]`                                                                                                                                                                    |
 | Must     | `CitationVerdict` Pydantic model: `doc_id: str`, `verdict: Literal["supported", "unsupported"]`                                                                                                                                                                       |
 | Must     | `OpenAIJudge` implementing `Judge` — single structured-output call; injects `answer_facts` as a checklist and each cited doc's text as a named block; default model configurable via `RAG_JUDGE_MODEL` env var                                                        |
-| Must     | `StubJudge` — deterministic offline drop-in for `make verify` (mirrors `StubGenerator`); all facts "present", all citations "supported"                                                                                                                               |
+| Must     | `StubJudge` — deterministic offline drop-in for `make test` (mirrors `StubGenerator`); all facts "present", all citations "supported"                                                                                                                                 |
 | Must     | Thin `questions` loader in `eval/` — streams the `questions` config from the dataset at the pinned SHA (same `DATASET_REVISION` constant from ingest), yields typed `Question` objects with `question_id`, `question`, `answer_facts`, `expected_doc_ids`, `category` |
 | Must     | Unit tests: `StubJudge` contract, aggregation logic (pure Python — no API call), `Question` loader schema                                                                                                                                                             |
 | Must     | ADR-0001 written: three-way RAGAs / DeepEval / custom comparison, decision, consequences                                                                                                                                                                              |
-| Should   | vcrpy cassette fixture for `OpenAIJudge` — records one real call, replays in `make verify`; this is the Sprint 2 cassette pattern referenced in CLAUDE.md conventions                                                                                                 |
+| Should   | vcrpy cassette fixture for `OpenAIJudge` — records one real call, replays in `make test`; this is the Sprint 2 cassette pattern referenced in CLAUDE.md conventions                                                                                                   |
 | Should   | Keep the judge model configurable via `RAG_JUDGE_MODEL` and avoid hard-wiring same-family assumptions, so ADR-0005 can bind a cross-family judge with no Phase-4 refactor (the cross-family default + `ClaudeJudge` land in Phase 5 — see Q2 decision)                |
-| Should   | `make verify` stays offline and free after Phase 4 lands                                                                                                                                                                                                              |
+| Should   | `make test` stays offline and free after Phase 4 lands                                                                                                                                                                                                                |
 | Could    | `judge-one` CLI smoke target — runs the judge on a single hand-crafted question + answer pair; useful for prompt iteration without a full pipeline run                                                                                                                |
 | Could    | Per-category aggregation utility (group verdicts by `question.category`) — useful at Phase 6 report time; could be scaffolded now at low cost                                                                                                                         |
 | Won't    | Retrieval metrics (recall@k, precision@k, MRR over `expected_doc_ids`) — Phase 5                                                                                                                                                                                      |

@@ -1,6 +1,6 @@
 """`OpenAIJudge` call-shape + prompt tests (AC-6, AC-7).
 
-All offline via `FakeOpenAIClient` — no live call under `make verify`. Injecting the
+All offline via `FakeOpenAIClient` — no live call under `make test`. Injecting the
 client bypasses the `OPENAI_API_KEY` construction guard, so these run with no key.
 """
 

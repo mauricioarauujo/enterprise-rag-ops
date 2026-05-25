@@ -45,7 +45,7 @@ class OpenAIJudge:
                 raise RuntimeError(
                     "OPENAI_API_KEY is not set — required for OpenAIJudge. "
                     "Set it in your shell or .env before running a live judge. "
-                    "CI and `make verify` use StubJudge and need no key."
+                    "CI and `make test` use StubJudge and need no key."
                 )
             client = OpenAI()
         self._client = client

@@ -13,13 +13,15 @@ import sys
 
 from enterprise_rag_ops.generation.context import ContextAssembler
 from enterprise_rag_ops.generation.openai_generator import OpenAIGenerator
-from enterprise_rag_ops.generation.schema import AnswerWithSources
+from enterprise_rag_ops.generation.schema import ABSTAIN_ANSWER, AnswerWithSources
 from enterprise_rag_ops.retrieval import config, pipeline
 from enterprise_rag_ops.retrieval.vector_store import LanceDBStore
 
 logger = logging.getLogger("enterprise_rag_ops.generation.cli")
 
-ABSTAIN_ANSWER = "I don't have enough information to answer this question."
+# Re-exported from `schema` (the canonical home) so existing importers — including
+# the eval harness, which imports it from here per NFR-5 — keep working unchanged.
+__all__ = ["ABSTAIN_ANSWER", "main"]
 
 
 def _build_parser() -> argparse.ArgumentParser:

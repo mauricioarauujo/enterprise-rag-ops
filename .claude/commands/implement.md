@@ -37,7 +37,7 @@ works from the phase track directly (backward-compatible — SDD is opt-in).
 4. **Quality pass**
 
    ```bash
-   make verify   # format + lint + test
+   make lint test   # lint + test (formatting is auto-applied by the pre-commit hook)
    ```
 
 5. **Report status** — files changed, tests passed/failed, gaps flagged.

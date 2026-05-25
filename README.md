@@ -41,8 +41,8 @@ make format    # ruff format
 make lint      # ruff check
 make test      # pytest
 
-# Or all at once
-make verify
+# Or lint + test together
+make lint test
 ```
 
 ## License

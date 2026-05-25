@@ -1,7 +1,7 @@
 """`Judge` seam contract tests (AC-5/8/10).
 
 Offline by construction — `StubJudge` needs no API key and no network, so this module
-runs under `make verify`. `OpenAIJudge` is checked for structural conformance to the
+runs under `make test`. `OpenAIJudge` is checked for structural conformance to the
 `Judge` Protocol without being instantiated (instantiation would require a key).
 
 Corpus-coverage caveat (AC-13 / Q4): the dev subset contains gold docs for only ~3 of

@@ -137,3 +137,13 @@ class LanceDBStore:
             self._table.search().where(where_clause, prefilter=True).limit(len(chunk_ids)).to_list()
         )
         return [Chunk(chunk_id=r["chunk_id"], doc_id=r["doc_id"], text=r["text"]) for r in records]
+
+    def get_all_chunk_source_types(self) -> dict[str, str]:
+        """Fetch all chunk_id -> source_type mappings from the table (FR-9)."""
+        if self._table is None:
+            return {}
+        # Select only chunk_id and source_type to avoid fetching large vectors or text.
+        tbl = self._table.search().select(["chunk_id", "source_type"]).to_arrow()
+        chunk_ids = tbl["chunk_id"].to_pylist()
+        source_types = tbl["source_type"].to_pylist()
+        return dict(zip(chunk_ids, source_types, strict=True))

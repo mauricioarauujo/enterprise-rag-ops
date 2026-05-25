@@ -24,7 +24,7 @@ jobs:
         run: uv sync --group dev
 
       # CI calls the Make targets so the gate is defined once, in the Makefile —
-      # `make verify` locally and CI cannot drift apart. `make test` excludes the
+      # `make lint`/`make test` locally and CI cannot drift apart. `make test` excludes the
       # `corpus` marker (it validates the gitignored corpus, run via `make
       # check-data`).
       - name: Lint

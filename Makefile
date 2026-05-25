@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test verify clean download-data check-data build-index rebuild-index retrieval-smoke smoke
+.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval install-hooks
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -22,8 +22,15 @@ build-index:  ## Build BM25 + dense + LanceDB indices over data/processed/corpus
 rebuild-index:  ## Force a clean rebuild of all retrieval artifacts
 	uv run rag-index --force
 
+build-index-gold:  ## Fetch HF data using --gold-aware and rebuild the index
+	uv run rag-ingest --gold-aware
+	uv run rag-index --force
+
 retrieval-smoke:  ## Run the BGE-M3 Recall@k smoke gate on the fixed question subset (local-only)
 	uv run pytest tests/retrieval/test_retrieval_smoke.py -m smoke
+
+retrieval-eval:  ## Run the retrieval-level threshold sweep over the evaluation set
+	uv run python src/enterprise_rag_ops/eval/threshold_sweep.py
 
 smoke:  ## Run the end-to-end rag-ask smoke on 10 questions (requires OPENAI_API_KEY + built index)
 	uv run pytest tests/generation/test_generation_smoke.py -m smoke
@@ -44,7 +51,8 @@ test:  ## Run tests with pytest (excludes live-corpus and real-model smoke — s
 test-cov:  ## Run tests with coverage report
 	uv run pytest -m "not corpus and not smoke" --cov --cov-report=term-missing
 
-verify: lint test  ## Full quality pipeline (lint + test)
+install-hooks:  ## Activate the pre-commit framework in this clone (run once per clone)
+	uv run pre-commit install
 
 clean:  ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov dist build *.egg-info

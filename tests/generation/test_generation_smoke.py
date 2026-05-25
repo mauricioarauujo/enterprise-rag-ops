@@ -1,4 +1,4 @@
-"""End-to-end generation smoke gate — local-only, **not** part of `make verify`.
+"""End-to-end generation smoke gate — local-only, **not** part of `make test`.
 
 Two assertion tiers (AC-13), reflecting a hard reality of the dev corpus: the
 default stratified subset (100 docs/source) contains the gold documents for only

@@ -2,7 +2,7 @@
 
 `make check-data` runs the `corpus`-marked test here against the real
 `data/processed/corpus.jsonl`. The unmarked fixture tests exercise the same
-validation logic and run as part of `make verify`. No test in this file touches
+validation logic and run as part of `make test`. No test in this file touches
 the network (NFR-3).
 """
 

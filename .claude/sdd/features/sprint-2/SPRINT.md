@@ -17,7 +17,7 @@ sprint makes that gap measurable.
 | Phase | Intent                                                                                                                                                                                                                                                                                                                                   | Slug                        |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | 4     | Per-fact LLM-as-judge over `answer_facts` (recall/precision + faithfulness of citations); write **ADR-0001** (eval framework)                                                                                                                                                                                                            | `phase-4-perfact-judge`     |
-| 5     | Gold-aware corpus sampling (build the corpus from `expected_doc_ids` + distractors) as the opening task; retrieval metrics (recall@k, precision@k, MRR over `expected_doc_ids`); abstention scoring on `info_not_found`; write **ADR-0005** (LLM provider/model matrix) and calibrate the `0.45` abstention threshold (updates ADR-0002) | `phase-5-retrieval-metrics` |
+| 5     | Gold-aware corpus sampling (build the corpus from `expected_doc_ids` + distractors) as the opening task; retrieval metrics (recall@k, precision@k, MRR over `expected_doc_ids`); abstention scoring on `info_not_found`; write **ADR-0005** (LLM provider/model matrix) and calibrate the `0.45` abstention threshold (updates ADR-0002) | `phase-5-retrieval-eval`    |
 | 6     | Multi-model runner (≥2 families) + cost/latency tracking; HTML+MD report with per-category breakdown; first **published baseline numbers**                                                                                                                                                                                               | `phase-6-multimodel-report` |
 
 Planned breakdown, not a contract — each phase refines on `/brainstorm`.
@@ -87,7 +87,7 @@ and `/update-kb rag-retrieval` (the `VectorStore` 2→3-method widening + new
 - **Judge determinism / reproducibility.** `gpt-5-nano` rejects `temperature=0`, so judge
   stability rests on prompt design and possibly multi-sample aggregation. Eval tests must
   not hit the live API ad hoc — adopt the cassette/replay pattern (the TBD Sprint 2 ADR
-  in CLAUDE.md conventions) so eval results are reproducible offline.
+  in AGENTS.md conventions) so eval results are reproducible offline.
 - **Substrate perf on local hardware.** BGE-M3 encode (~22 min, swaps an 8 GB Air) and
   `load_retriever` re-chunking the corpus per call make repeated 500-q runs painful.
   Mitigate: pay the cheap `load_retriever` fix (build maps from the sidecar + LanceDB,

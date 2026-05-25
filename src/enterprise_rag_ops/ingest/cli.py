@@ -14,10 +14,11 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from enterprise_rag_ops.eval.questions import load_questions
 from enterprise_rag_ops.ingest import config
 from enterprise_rag_ops.ingest.adapters import get_adapter
 from enterprise_rag_ops.ingest.loader import stream_documents
-from enterprise_rag_ops.ingest.sampler import stratified_sample
+from enterprise_rag_ops.ingest.sampler import gold_aware_sample, stratified_sample
 from enterprise_rag_ops.ingest.schema import Document
 from enterprise_rag_ops.ingest.writer import write_corpus
 
@@ -40,18 +41,42 @@ def adapt_records(raw_records: Iterator[dict], skipped: Counter) -> Iterator[Doc
             skipped[raw["source_type"]] += 1
 
 
-def run(docs_per_source: int, output: Path, revision: str) -> int:
+def run(
+    docs_per_source: int,
+    output: Path,
+    revision: str,
+    gold_aware: bool = False,
+    distractors_per_source: int = config.DEFAULT_DISTRACTORS_PER_SOURCE,
+) -> int:
     """Run the full ingest pipeline; return the number of documents written."""
-    logger.info(
-        "Ingesting %s @ %s (config=%s, docs_per_source=%d)",
-        config.DATASET_ID,
-        revision,
-        config.DOCUMENTS_CONFIG,
-        docs_per_source,
-    )
+    if gold_aware:
+        logger.info(
+            "Ingesting %s @ %s (config=%s, gold_aware=True, distractors_per_source=%d)",
+            config.DATASET_ID,
+            revision,
+            config.DOCUMENTS_CONFIG,
+            distractors_per_source,
+        )
+    else:
+        logger.info(
+            "Ingesting %s @ %s (config=%s, docs_per_source=%d)",
+            config.DATASET_ID,
+            revision,
+            config.DOCUMENTS_CONFIG,
+            docs_per_source,
+        )
+
     skipped: Counter = Counter()
     documents = adapt_records(stream_documents(revision=revision), skipped)
-    sample = stratified_sample(documents, docs_per_source)
+
+    if gold_aware:
+        questions = load_questions(revision=revision)
+        gold_ids = {
+            doc_id for q in questions for doc_id in q.expected_doc_ids if q.expected_doc_ids
+        }
+        sample = gold_aware_sample(documents, gold_ids, distractors_per_source)
+    else:
+        sample = stratified_sample(documents, docs_per_source)
 
     counts = Counter(doc.source_type for doc in sample)
     for source_type in sorted(counts):
@@ -92,10 +117,27 @@ def main(argv: list[str] | None = None) -> int:
         default=config.DATASET_REVISION,
         help="pinned HF dataset revision SHA (default: %(default)s)",
     )
+    parser.add_argument(
+        "--gold-aware",
+        action="store_true",
+        help="include all gold documents for answerable questions",
+    )
+    parser.add_argument(
+        "--distractors-per-source",
+        type=int,
+        default=config.DEFAULT_DISTRACTORS_PER_SOURCE,
+        help="distractor documents to keep per source type in gold-aware mode (default: %(default)s)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    run(args.docs_per_source, args.output, args.revision)
+    run(
+        docs_per_source=args.docs_per_source,
+        output=args.output,
+        revision=args.revision,
+        gold_aware=args.gold_aware,
+        distractors_per_source=args.distractors_per_source,
+    )
     return 0
 
 

@@ -17,7 +17,7 @@ Constraints:
 - This is a substrate sprint — the retriever must work and be maintainable, not exotic.
 - Stratified subset is small enough that a server-based vector store is
   over-engineered; an embedded one is enough.
-- CI must run offline — no 568 MB model download on every `make verify`.
+- CI must run offline — no 568 MB model download on every `make test`.
 - The retrieval layer is _substrate_: Sprint 2 will sweep parameters, Sprint 3
   will instrument it. Today's choices must not be obstacles to that work.
 
@@ -45,7 +45,7 @@ The implementation hides every swappable dependency behind three small
 
 - **`Embedder`** — `BGEEmbedder` for production; `StubEmbedder` (hash-based
   deterministic vectors) injected into the CI pipeline-contract test so
-  `make verify` runs offline.
+  `make test` runs offline.
 - **`VectorStore`** — `LanceDBStore` is the only implementation; the seam exists
   for the anticipated LanceDB→Qdrant swap (see _Consequences_).
 - **`Retriever`** — `HybridRetriever` is the only implementation; the seam names
@@ -61,7 +61,7 @@ which our engineering guidance rejects.
 
 - **One-time 568 MB BGE-M3 download** on the first `make build-index` /
   `make retrieval-smoke`. CI uses the stub embedder behind the `Embedder` seam,
-  so `make verify` stays offline (NFR-3).
+  so `make test` stays offline (NFR-3).
 - **Uniform chunking** likely under-serves long structured docs (Confluence
   pages, Jira issues with long descriptions). The Phase 2 smoke gate is the
   early-warning mechanism: if any smoke query yields `Recall@10 == 0`, the
@@ -92,6 +92,10 @@ which our engineering guidance rejects.
   underneath (corpus regeneration, chunker tweak).
 - The chunker's `chunk_id = f"{doc_id}::{offset}"` is deterministic, so the
   index is reproducible (NFR-2).
+
+### Abstention Calibration (Sprint 2 Calibration)
+
+- A threshold sweep (0.30 - 0.65, step 0.05) run over the 500-question eval set confirmed that the current `0.45` threshold serves as a high-precision, zero-false-positive operating point (preventing any incorrect abstentions on answerable questions, though yielding 0.0 recall on unanswerable ones). Raising the threshold (e.g. to `0.55` or `0.60`) increases recall (detecting unanswerable questions) at the cost of a high False Positive rate due to the dense model's uncalibrated score distribution.
 
 ## Alternatives Considered
 
