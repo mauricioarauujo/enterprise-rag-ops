@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-05-20"
+last_updated: "2026-05-24"
 
 limits:
   quick_reference: 100
@@ -35,7 +35,10 @@ domains:
       LLM-as-judge evaluation of RAG answers — per-fact recall/precision scoring
       against gold answer_facts, doc-level (per-doc_id) citation faithfulness, the
       None empty-denominator/abstention convention, structured-output judge prompting,
-      and judge determinism (strict schema + discrete verdict vocabulary).
+      judge determinism (strict schema + discrete verdict vocabulary), retrieval metric
+      aggregation (per-category, None-skipping, dedup-before-metrics), abstention
+      scoring (empty-gold predicate, two-layer gate+generator, sentinel enforcement),
+      and cassette/replay testing with vcrpy (ADR-0006).
     path: rag-eval/
     status: draft
     last_updated: "2026-05-24"
@@ -57,12 +60,21 @@ domains:
       - name: judge-determinism
         path: concepts/judge-determinism.md
         confidence: 0.85
+      - name: retrieval-metric-aggregation
+        path: concepts/retrieval-metric-aggregation.md
+        confidence: 0.95
+      - name: abstention-scoring
+        path: concepts/abstention-scoring.md
+        confidence: 0.95
     patterns:
       - name: per-fact-judge-call
         path: patterns/per-fact-judge-call.md
         confidence: 0.95
       - name: offline-ci-judge
         path: patterns/offline-ci-judge.md
+        confidence: 0.95
+      - name: cassette-replay-eval
+        path: patterns/cassette-replay-eval.md
         confidence: 0.95
 
   rag-retrieval:
