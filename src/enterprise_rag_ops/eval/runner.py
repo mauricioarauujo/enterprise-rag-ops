@@ -6,6 +6,7 @@ different generator configurations, timing each API call and calculating USD cos
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -39,6 +40,40 @@ _GENERATOR_FACTORY = {
     "anthropic": AnthropicGenerator,
 }
 
+# FR-10: dirs existing is not enough — a *plain* index passes the existence check but
+# contains ≈none of the benchmark's gold docs, so retrieval recall is ~0% and every score
+# is meaningless. A gold-aware corpus contains every answerable question's expected_doc_ids
+# by construction. Sample the first questions, take their gold docs, and require a majority
+# to be present in the built corpus — this cleanly separates a gold-aware build (~100%
+# present) from a plain one (~0%) while tolerating a few legitimately-missing docs.
+_GOLD_SAMPLE_SIZE = 50
+_GOLD_PRESENCE_MIN_FRACTION = 0.5
+
+
+def _assert_gold_aware_index() -> None:
+    """Raise unless the built corpus actually contains the benchmark's gold docs (FR-10).
+
+    Reads the chunk-order sidecar (chunk IDs → doc IDs via the canonical ``::`` split),
+    samples the gold ``expected_doc_ids`` of the first questions, and fails fast if too
+    few are present — a non-gold index would otherwise silently produce junk scores.
+    """
+    chunk_order = json.loads(retrieval_config.CHUNK_ORDER_PATH.read_text(encoding="utf-8"))
+    corpus_doc_ids = set(deduplicate_ranked_ids(chunk_order))
+    gold_doc_ids = {
+        doc_id for q in load_questions(limit=_GOLD_SAMPLE_SIZE) for doc_id in q.expected_doc_ids
+    }
+    if not gold_doc_ids:
+        return  # no answerable questions sampled — nothing to verify
+    present_fraction = len(gold_doc_ids & corpus_doc_ids) / len(gold_doc_ids)
+    if present_fraction < _GOLD_PRESENCE_MIN_FRACTION:
+        raise RuntimeError(
+            f"Index exists but is not gold-aware: only {present_fraction:.0%} of sampled "
+            f"gold docs are in the corpus (need >={_GOLD_PRESENCE_MIN_FRACTION:.0%}). "
+            "A plain index yields ~0% retrieval recall and meaningless scores. Run "
+            "`make build-index-gold` to rebuild the corpus from the benchmark's "
+            "expected_doc_ids + distractors."
+        )
+
 
 def run_evaluation(
     config: RunConfig,
@@ -48,10 +83,11 @@ def run_evaluation(
 ) -> Path:
     """Run the evaluation sweep according to the RunConfig.
 
-    Loads the retriever exactly once (Q6, AC-7), fails fast if index is missing (FR-10, AC-11),
-    and halts if total USD cost exceeds cost_ceiling_usd (FR-13, AC-16).
+    Loads the retriever exactly once (Q6, AC-7), fails fast if the gold-aware index is
+    missing or not gold-aware (FR-10, AC-11), and halts if total USD cost exceeds
+    cost_ceiling_usd (FR-13, AC-16).
     """
-    # 1. Fail-fast guard (FR-10, AC-11)
+    # 1. Fail-fast guard (FR-10, AC-11): artifacts present *and* the corpus is gold-aware.
     if not (
         retrieval_config.BM25_INDEX_DIR.exists()
         and retrieval_config.LANCEDB_DIR.exists()
@@ -60,6 +96,7 @@ def run_evaluation(
         raise RuntimeError(
             "Gold-aware index artifacts are missing. Please run `make build-index-gold` first."
         )
+    _assert_gold_aware_index()
 
     # Resolve factories
     gen_factory = generator_classes or _GENERATOR_FACTORY

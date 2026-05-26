@@ -77,6 +77,36 @@ def test_runner_fail_fast_index_missing(monkeypatch, tmp_path, run_config):
         run_evaluation(run_config)
 
 
+def test_runner_fail_fast_index_not_gold_aware(monkeypatch, tmp_path, run_config):
+    """FR-10: artifacts present but the corpus lacks the gold docs → fail fast.
+
+    A plain (non-gold-aware) index passes the dir-existence check but contains ≈none of
+    the benchmark's expected_doc_ids, yielding ~0% retrieval recall. The guard must catch
+    that before the (expensive) retriever load, not silently emit junk scores.
+    """
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    # Sidecar holds a real chunk id, but for an unrelated doc — no gold doc present.
+    (tmp_path / "chunks.json").write_text('["other_doc::0"]')
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.eval.questions import Question
+
+    monkeypatch.setattr(
+        runner,
+        "load_questions",
+        lambda limit: [Question("q1", "Q1", ["F1"], ["doc_1"], "basic")],
+    )
+
+    with pytest.raises(RuntimeError, match="not gold-aware"):
+        run_evaluation(run_config)
+
+
 def test_runner_loads_retriever_once(monkeypatch, tmp_path, run_config):
     """AC-7: runner loads retriever exactly once and reuses it across models."""
     from enterprise_rag_ops.retrieval import config as retrieval_config
@@ -84,7 +114,8 @@ def test_runner_loads_retriever_once(monkeypatch, tmp_path, run_config):
     # Dummy mock index locations
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched questions' gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
 
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
@@ -138,7 +169,8 @@ def test_runner_flushes_jsonl_early_stop(monkeypatch, tmp_path, run_config):
 
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched questions' gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
     monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
@@ -194,7 +226,8 @@ def test_runner_cost_ceiling_overrun(monkeypatch, tmp_path, run_config):
 
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched questions' gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
     monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
@@ -257,7 +290,8 @@ def test_runner_concurrency(monkeypatch, tmp_path, run_config):
 
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched questions' gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
     monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
@@ -307,7 +341,8 @@ def test_runner_concurrency_propagates_worker_exception(monkeypatch, tmp_path, r
 
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched questions' gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
     monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")

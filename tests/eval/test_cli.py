@@ -70,7 +70,8 @@ def test_cli_run_with_stubs(monkeypatch, tmp_path):
 
     (tmp_path / "bm25").mkdir()
     (tmp_path / "lancedb").mkdir()
-    (tmp_path / "chunks.json").write_text("[]")
+    # Gold-aware sidecar: contains doc_1, matching the patched question's gold doc (FR-10).
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
     monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
     monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
     monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
