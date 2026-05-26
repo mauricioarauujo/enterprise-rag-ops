@@ -1,6 +1,6 @@
 # SPRINT 2: Eval Harness
 
-**Sprint:** sprint-2 | **Date:** 2026-05-22 | **Status:** active
+**Sprint:** sprint-2 | **Date:** 2026-05-22 | **Status:** closed (2026-05-26)
 
 ## Goal
 
@@ -95,3 +95,95 @@ and `/update-kb rag-retrieval` (the `VectorStore` 2→3-method widening + new
 - **Eval-framework lock-in (ADR-0001).** Picking RAGAs/DeepEval could constrain per-fact
   granularity or traceability; a thin custom judge avoids lock-in but costs build time.
   Decide on observed retrieval/generation failure modes, not on framework popularity.
+
+---
+
+## Retrospective
+
+**Outcome:** all three planned phases shipped with ✅ READY reviews and merged to `main`
+(Phase 4 → PR #6, Phase 5 → PR #8, Phase 6 → PR #10). Every Success Criterion is met,
+including the published cross-family baseline.
+
+### Success criteria — final status
+
+| Criterion                                                               | Status                                                                              |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| End-to-end `make eval-baseline`, per-category report (10 categories)    | ✅ shipped (Phase 6)                                                                |
+| Per-fact recall/precision + per-citation faithfulness                   | ✅ (Phase 4 judge; anchor "Paris" spurious-citation caught offline)                 |
+| Retrieval recall@k / precision@k / MRR (+ nDCG) over `expected_doc_ids` | ✅ (Phase 5)                                                                        |
+| Abstention scoring on `info_not_found`, false-negative surfacing        | ✅ (Phase 5; sentinel enforced at the generator after the layer-defect fix)         |
+| Multi-model cross-family comparison + cost/latency                      | ✅ `results/baseline.{html,md}`: gpt-5-nano vs Haiku 4.5, ~$2.59, 999 records       |
+| ADRs at decision time (0001, 0005; 0002 threshold; same-family flag)    | ✅ + ADR-0006 (cassette) and ADR-0007 (eval-record schema) shipped                  |
+| Cost discipline (dev subset, full 500 at milestones)                    | ✅ capped dev sweep caught the EOL-model + weak-gold-guard bugs before the paid run |
+
+### What worked
+
+- **Per-phase `/review` caught substantive defects, not just nits.** Phase 5's review
+  found a _hand-fabricated_ cassette that was masking a real architectural defect — FR-8
+  e2e abstention targeted the wrong layer (the gate rarely fires for `info_not_found`, so
+  the **generator** is the operative abstention layer). Recording a genuine cassette forced
+  the fix: one enforced sentinel contract at both abstention points. The "no mocked LLM in
+  eval" rule (ADR-0006) earned its keep.
+- **Run-the-paid-baseline-for-real surfaced six findings the offline suite could not** —
+  EOL Anthropic model (404), a gold-aware index guard too weak to catch 0/20 gold docs,
+  BGE-M3/MPS thread-unsafety under `--concurrency`, missing per-call timeout, tier-1 rate
+  limits, and a dead `.gitignore` negation. The capped dev sweep _before_ the full run
+  caught the two cheapest-to-fix (9, 10) for pennies — now the standard pre-publish step.
+- **Knowledge loop kept pace with the work.** `rag-eval` grew to 15 concepts/patterns
+  across the sprint (PRs #7, #9) — capture happened per-phase, so close had nothing to
+  back-fill.
+
+### What slipped / scope changes vs the SPRINT.md plan
+
+- **ADR count grew from 2 to 4.** Plan named ADR-0001 + ADR-0005 (and an ADR-0002 update).
+  Reality also produced **ADR-0006** (cassette/replay — the "TBD Sprint 2 ADR" the
+  conventions had flagged) and **ADR-0007** (eval-record schema, Phase 6). Both were latent
+  in the plan's risk section; numbering them was the correct call, not creep.
+- **ADR-0003 picked up a behavior change.** The abstention-layer fix hardened the Phase-3
+  generator prompt (exact sentinel, no parametric answers) — recorded as the Sprint-2 update
+  note in ADR-0003. A cross-phase ripple the original plan didn't anticipate.
+- **Baseline is subset/gold-aware, not full-corpus.** As the top risk predicted, credible
+  numbers required gold-aware corpus sampling (Phase 5 opening task); the published numbers
+  are relative on the gold-aware corpus, not a full-500-over-full-corpus leaderboard — that
+  awaits a larger machine. Recall@10 landed 64–100% on the gold-aware build (vs the ~0% a
+  naive run would have reported).
+
+## Sprint Close
+
+**Verdict:** ✅ closed — 3/3 phases shipped, all Success Criteria met, knowledge loop
+current.
+
+### Knowledge capture — already executed (nothing outstanding)
+
+Every per-phase Knowledge Capture suggestion landed during the sprint. `rag-eval` now holds:
+per-fact-judge-call, per-doc-faithfulness, none-empty-denominator, schema-as-ssot,
+judge-determinism, offline-ci-judge, retrieval-metric-aggregation, abstention-scoring,
+cassette-replay-eval (incl. response-header scrubbing), eval-record-schema, cost-accounting,
+stats-capture-seam, multi-model-runner, eval-report-render, concurrent-eval-sweep.
+
+### KB staleness — one open item
+
+- **`rag-generation` KB is an empty scaffold** (`concepts/` + `patterns/` dirs, no files,
+  not registered in `_index.yaml`). This is Sprint 1's carried-forward debt, now compounded:
+  Sprint 2 changed generation behavior (abstention is a single canonical sentinel enforced
+  at both the retrieval gate and the generator prompt — ADR-0003 update). Recommend
+  `/new-kb rag-generation` seeded from the Phase 3 lessons **plus** the Sprint-2 abstention
+  enforcement. Out of Sprint 2's critical path but the freshest it will ever be.
+- `rag-retrieval` is **not** stale (Phase 5 confirmed `retrieval-eval-metrics` consumed
+  verbatim). Optional one-liner: LanceDB no-vector `.search().select().to_arrow()` returns
+  all rows (the default-10 limit applies only to vector/FTS search) — verified on 0.30.2.
+
+### ADRs — all recorded, none missing
+
+0001 (eval framework), 0005 (provider matrix), 0006 (cassette/replay), 0007 (eval-record
+schema) written and accepted this sprint; 0002 updated with the calibrated 0.45 abstention
+threshold; 0003 updated with the enforced-sentinel note; 0004's stranger-test leak scrubbed.
+
+### Doc follow-up (private, gitignored)
+
+- `docs/planning/roadmap.md` ADR ledger is stale: it omits the shipped **ADR-0007
+  (eval-record schema)** and still pencils failure-mode-taxonomy at 0007 — that slot is
+  taken, so taxonomy moves to **0008** (stretch 0009 caching → 0010). One-line fix.
+- Phase 6 left a code follow-up for Sprint 3: **strengthen the FR-10 gold-aware index guard**
+  (it checks dir existence, not gold-aware-ness — a plain index with 0/20 gold docs passed
+  and yielded meaningless scores). A marker file or a sampled-gold-docs assertion.
