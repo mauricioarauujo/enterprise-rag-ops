@@ -3,7 +3,7 @@
 > **Purpose**: Record a real LLM response once, commit the YAML cassette, and replay
 > it in CI without a network or API key — while staying honest about what is and is
 > not tested.
-> **Codebase**: `tests/eval/conftest.py` (`vcr_record` fixture),
+> **Codebase**: `tests/conftest.py` (`vcr_record` fixture — root, shared across suite),
 > `tests/eval/cassettes/abstention_info_not_found.yaml`,
 > `pyproject.toml` (`vcrpy`, `vcr` marker)
 > **ADR**: `docs/adr/0006-cassette-replay.md`
@@ -31,20 +31,37 @@ a real OpenAI response produces. When replaced with a genuine recording, the rea
 model response was free-form ("The provided context does not contain…"), not the
 sentinel, exposing a generator design defect.
 
-## vcrpy Wiring (from `conftest.py`)
+## vcrpy Wiring (from root `tests/conftest.py`)
+
+The `vcr_record` fixture lives in the **root `tests/conftest.py`** (not under
+`tests/eval/`), so it is shared across the entire test suite with a single scrubbing
+policy.
 
 ```python
-# tests/eval/conftest.py
-import os
-import vcr
+# tests/conftest.py  (Phase 6 — canonical location)
+_FILTER_REQUEST_HEADERS = ["authorization", "x-api-key"]
+
+_SCRUB_RESPONSE_HEADERS = {
+    "anthropic-organization-id", "openai-organization",
+    "set-cookie", "cf-ray", "request-id",
+}
+
+def _scrub_response(response: dict) -> dict:
+    """Drop identifying response headers before a cassette is written."""
+    headers = response.get("headers")
+    if headers:
+        for name in list(headers):
+            if name.lower() in _SCRUB_RESPONSE_HEADERS:
+                headers.pop(name)
+    return response
 
 @pytest.fixture
-def vcr_record():
-    record_mode = os.environ.get("VCR_RECORD_MODE", "none")
+def vcr_record() -> vcr.VCR:
     return vcr.VCR(
         cassette_library_dir="tests/eval/cassettes",
-        record_mode=record_mode,
-        filter_headers=["authorization"],
+        record_mode=os.environ.get("VCR_RECORD_MODE", "none"),
+        filter_headers=_FILTER_REQUEST_HEADERS,
+        before_record_response=_scrub_response,
     )
 ```
 
@@ -52,8 +69,10 @@ Key choices:
 
 - `record_mode="none"` by default — raises `CannotSendRequest` if no cassette or
   if the request does not match. Tests fail, never silently hit the network.
-- `filter_headers=["authorization"]` — the `Authorization` header is stripped before
-  the cassette is serialized to YAML. Safe to commit; no key leaks.
+- `filter_headers` covers both OpenAI (`authorization`) and Anthropic (`x-api-key`).
+- `before_record_response` scrubs account-identifying response headers
+  (`anthropic-organization-id`, `set-cookie`, etc.). vcrpy 6 has no
+  `filter_response_headers` kwarg — response scrubbing requires `before_record_response`.
 - `cassette_library_dir` — cassettes live in `tests/eval/cassettes/` and are
   committed to the repository.
 
@@ -102,4 +121,5 @@ A hand-fabricated cassette that fails these checks is a mock in disguise.
 - [offline-ci-judge.md](offline-ci-judge.md) — fakes and stubs (the complement)
 - [../concepts/abstention-scoring.md](../concepts/abstention-scoring.md)
 - `docs/adr/0006-cassette-replay.md`
-- `tests/eval/conftest.py`, `tests/eval/cassettes/`
+- `tests/conftest.py` — root fixture (shared VCR config, response scrubbing)
+- `tests/eval/cassettes/` — committed cassette YAMLs

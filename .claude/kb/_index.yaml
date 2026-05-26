@@ -38,10 +38,16 @@ domains:
       judge determinism (strict schema + discrete verdict vocabulary), retrieval metric
       aggregation (per-category, None-skipping, dedup-before-metrics), abstention
       scoring (empty-gold predicate, two-layer gate+generator, sentinel enforcement),
-      and cassette/replay testing with vcrpy (ADR-0006).
+      cassette/replay testing with vcrpy (ADR-0006), multi-model sweep runner
+      (single retriever, crash-safe JSONL flush, cost ceiling), cost accounting
+      (price-table-in-config, None on missing price), HTML+MD report rendering
+      (string.Template, None->N/A, dynamic k), stats-capture seam
+      (generate_with_stats / judge_with_stats on implementations), AnthropicGenerator
+      (forced tool-use, max_retries=8, timeout=120), and BGE-M3 encoder thread-safety
+      (retrieve_lock). ADRs: 0001, 0006, 0007.
     path: rag-eval/
     status: draft
-    last_updated: "2026-05-24"
+    last_updated: "2026-05-26"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -66,6 +72,15 @@ domains:
       - name: abstention-scoring
         path: concepts/abstention-scoring.md
         confidence: 0.95
+      - name: eval-record-schema
+        path: concepts/eval-record-schema.md
+        confidence: 0.95
+      - name: cost-accounting
+        path: concepts/cost-accounting.md
+        confidence: 0.95
+      - name: stats-capture-seam
+        path: concepts/stats-capture-seam.md
+        confidence: 0.95
     patterns:
       - name: per-fact-judge-call
         path: patterns/per-fact-judge-call.md
@@ -75,6 +90,15 @@ domains:
         confidence: 0.95
       - name: cassette-replay-eval
         path: patterns/cassette-replay-eval.md
+        confidence: 0.95
+      - name: multi-model-runner
+        path: patterns/multi-model-runner.md
+        confidence: 0.95
+      - name: eval-report-render
+        path: patterns/eval-report-render.md
+        confidence: 0.95
+      - name: concurrent-eval-sweep
+        path: patterns/concurrent-eval-sweep.md
         confidence: 0.95
 
   rag-retrieval:
