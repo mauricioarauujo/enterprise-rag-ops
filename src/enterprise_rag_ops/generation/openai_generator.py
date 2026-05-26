@@ -47,7 +47,9 @@ class OpenAIGenerator:
                     "Set it in your shell or .env before running `make smoke` "
                     "or the `rag-ask` CLI."
                 )
-            client = OpenAI()
+            # `timeout` bounds a single call so a dead socket (e.g. after the host
+            # sleeps mid-sweep) fails fast and retries instead of blocking forever.
+            client = OpenAI(timeout=120.0)
         self._client = client
         self._model = model or os.environ.get("RAG_GEN_MODEL", DEFAULT_MODEL)
 

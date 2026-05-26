@@ -4,7 +4,7 @@
 models:
   - model_id: "gpt-5-nano-2025-08-07"
     system: "openai"
-  - model_id: "claude-3-5-haiku-20241022"
+  - model_id: "claude-haiku-4-5-20251001"
     system: "anthropic"
 
 # The judge model to evaluate answers
@@ -33,9 +33,10 @@ prices:
   gpt-4o-mini:
     input_usd_per_1m: 0.15
     output_usd_per_1m: 0.60
-  claude-3-5-haiku-20241022:
-    input_usd_per_1m: 0.80
-    output_usd_per_1m: 4.00
+  # claude-haiku-4-5 price verified against Anthropic's official pricing page (AC-15).
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
   claude-3-5-sonnet-20241022:
     input_usd_per_1m: 3.00
     output_usd_per_1m: 15.00

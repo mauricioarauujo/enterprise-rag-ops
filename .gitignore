@@ -55,7 +55,9 @@ docs/planning/
 # Data / artifacts (large, regenerable)
 data/raw/
 data/processed/
-results/
+# Ignore results/ *contents* (not the dir) so the published baseline reports below
+# can be re-included — a `results/` dir exclusion would make the negations below dead.
+results/*
 !results/baseline.html
 !results/baseline.md
 *.parquet

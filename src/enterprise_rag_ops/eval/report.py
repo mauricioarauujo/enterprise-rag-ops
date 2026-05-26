@@ -196,7 +196,7 @@ This report presents baseline quality, cost, and latency metrics across our benc
 Evaluation is driven by OpenAI and Anthropic generator models, scored against gold annotated facts using an OpenAI judge.
 
 > [!WARNING]
-> **Same-Family Judge Bias Caveat**: OpenAIJudge is evaluated on OpenAI model outputs (`gpt-5-nano`). This might inflate scores for OpenAI-family generations due to stylistic and structural alignment. We mitigate this using cross-family generator sweeps (`claude-3-5-haiku`).
+> **Same-Family Judge Bias Caveat**: OpenAIJudge is evaluated on OpenAI model outputs (`gpt-5-nano`). This might inflate scores for OpenAI-family generations due to stylistic and structural alignment. We mitigate this using cross-family generator sweeps (`claude-haiku-4-5`).
 
 ## Overall Summary
 $summary_table
@@ -370,7 +370,7 @@ def render_html(data: dict) -> str:
 
         <div class="alert">
             <div class="alert-title">Same-Family Judge Bias Warning</div>
-            An OpenAI-family judge (<code>gpt-5-nano</code>) is used to evaluate all answers. This may introduce a stylistic same-family preference for OpenAI generated answers. Cross-family generator checks (<code>claude-3-5-haiku</code>) are included to evaluate this bias.
+            An OpenAI-family judge (<code>gpt-5-nano</code>) is used to evaluate all answers. This may introduce a stylistic same-family preference for OpenAI generated answers. Cross-family generator checks (<code>claude-haiku-4-5</code>) are included to evaluate this bias.
         </div>
 
         <div class="card">

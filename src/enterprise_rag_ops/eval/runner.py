@@ -84,6 +84,10 @@ def run_evaluation(
     halt_run = False
     write_lock = threading.Lock()
     cost_lock = threading.Lock()
+    # The shared retriever's BGE-M3 encoder (torch/MPS) is not thread-safe; concurrent
+    # encodes abort the process. Serialize the (fast) encode under this lock — the slow
+    # LLM calls still run concurrently, which is where --concurrency actually pays off.
+    retrieve_lock = threading.Lock()
 
     # Load questions (limit flows straight through - FR-5)
     questions = list(load_questions(limit=config.limit))
@@ -117,8 +121,9 @@ def run_evaluation(
                     ):
                         return
 
-                # 1. Retrieve chunks
-                chunk_hits = retriever.retrieve_chunks(q.question, top_k=config.k)
+                # 1. Retrieve chunks (encode serialized — see retrieve_lock above)
+                with retrieve_lock:
+                    chunk_hits = retriever.retrieve_chunks(q.question, top_k=config.k)
                 retrieval_ranked_ids = deduplicate_ranked_ids([cid for cid, _, _ in chunk_hits])
 
                 did_abstain_retrieval = len(chunk_hits) == 0

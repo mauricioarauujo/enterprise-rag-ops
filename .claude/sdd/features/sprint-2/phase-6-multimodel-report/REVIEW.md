@@ -1,6 +1,6 @@
 # Review: sprint-2/phase-6-multimodel-report — Multi-Model Runner & Baseline Report
 
-**Branch:** `sprint-2/phase-6-multimodel-report` | **Date:** 2026-05-25 | **Verdict:** ✅ READY (all 8 issues fixed)
+**Branch:** `sprint-2/phase-6-multimodel-report` | **Date:** 2026-05-25 | **Verdict:** ✅ READY — 8 review issues + 6 live-run issues fixed; published baseline shipped
 
 ## Resolution (fixes applied 2026-05-25)
 
@@ -22,6 +22,28 @@ new concurrency regression test) and the scrubbed cassette still replays offline
 - **#7** report-test fixture expanded to all 10 categories with a 10-category assertion.
 
 The original findings are retained below as the record of what was fixed.
+
+## Live baseline run — additional findings & fixes (2026-05-26)
+
+Executing the published baseline (DESIGN step 7) surfaced six issues the offline suite could
+not — all now fixed. The published `results/baseline.{html,md}` is committed.
+
+| #   | Finding                                                                                                                                                                                                            | Fix                                                                                                                                                                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9   | **Baseline Anthropic model EOL.** `claude-3-5-haiku-20241022` reached end-of-life 2026-02-19; the live API returns 404. The test suite's `DeprecationWarning` was the early signal.                                | Swapped to `claude-haiku-4-5-20251001` across `baseline.yaml`, `DEFAULT_MODEL`, ADR-0007, and the report caveat; re-recorded the cassette; price verified ($1/$5 per 1M).                |
+| 10  | **FR-10 guard too weak.** It checks only that the index _dirs exist_, not that they're the gold-aware build. A plain index passed the guard but had **0/20 gold docs** → 0% retrieval recall → meaningless scores. | Ran `make build-index-gold` (gold docs now 20/20, recall 64–100%). **Follow-up recommended:** strengthen the guard to assert gold-aware-ness (marker file, or sample gold docs present). |
+| 11  | **Runner not thread-safe under `--concurrency`.** The shared BGE-M3 encoder (torch/MPS) aborts the process when called from multiple worker threads (semaphore leak) — crashed instantly at `--concurrency 8`.     | Added `retrieve_lock` to serialize the (fast) encode; the slow LLM calls stay concurrent. `runner.py`.                                                                                   |
+| 12  | **No per-call timeout.** A host sleeping mid-sweep left a dead HTTP socket that blocked ~36 min with no error (SDK timeout never fired).                                                                           | Added `timeout=120` to the OpenAI + Anthropic clients so a dead socket fails fast and retries. Run under `caffeinate` to prevent sleep.                                                  |
+| 13  | **Anthropic tier-1 rate limit** (10K output-tokens/min) throttles the sweep.                                                                                                                                       | `Anthropic(max_retries=8)` rides out per-minute windows via `retry-after` backoff.                                                                                                       |
+| 14  | **AC-12 `.gitignore` negation dead.** `results/` excludes the directory, so `!results/baseline.html` could never re-include it — the published artifact was uncommittable.                                         | Changed to `results/*` (ignore contents, not the dir); the two report negations now work, JSONL stays ignored.                                                                           |
+
+**Published baseline (committed):** 499 gpt-5-nano + 500 Haiku 4.5 records (one OpenAI question
+lost to the sleep-hang; report groups per-model so it is unaffected). Total cost ~$2.59. Headline:
+Haiku 4.5 leads on precision (91% vs 80%) and faithfulness (92% vs 88%) at parity recall (~24%),
+3× faster but ~2× cost. All 10 categories render; retrieval Recall@10 64–100%.
+
+**Process note:** the capped dev sweep (run _before_ the full run) caught findings 9 and 10 cheaply —
+worth keeping as the standard pre-publish step.
 
 ## Summary
 

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG Multi-Model Evaluation Report</title>
+    <style>
+        :root {
+            --bg: #0d0f12;
+            --surface: rgba(25, 28, 36, 0.6);
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #f0f4f8;
+            --text-muted: #95a5b5;
+            --primary: #58a6ff;
+            --accent: #ff7b72;
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, var(--primary), #bc8cff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: var(--glass-shadow);
+        }
+        .alert {
+            border-left: 4px solid var(--accent);
+            background: rgba(255, 123, 114, 0.1);
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 30px;
+        }
+        .alert-title {
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 2px solid var(--border);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .model-name {
+            color: var(--primary);
+        }
+        .category-name {
+            font-weight: bold;
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.01);
+            vertical-align: middle;
+        }
+        .cost {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RAG Multi-Model Evaluation Baseline Report</h1>
+        <div class="subtitle">Orchestrated baseline quality, cost, and latency metrics across the benchmark set.</div>
+
+        <div class="alert">
+            <div class="alert-title">Same-Family Judge Bias Warning</div>
+            An OpenAI-family judge (<code>gpt-5-nano</code>) is used to evaluate all answers. This may introduce a stylistic same-family preference for OpenAI generated answers. Cross-family generator checks (<code>claude-haiku-4-5</code>) are included to evaluate this bias.
+        </div>
+
+        <div class="card">
+            <h2>Overall Summary</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Fact Recall</th>
+                        <th>Fact Precision</th>
+                        <th>Faithfulness</th>
+                        <th>Abstain Precision</th>
+                        <th>Abstain Recall</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td class="model-name"><strong>gpt-5-nano-2025-08-07</strong></td>
+            <td>24.6%</td>
+            <td>80.3%</td>
+            <td>88.1%</td>
+            <td>10.5%</td>
+            <td>69.0%</td>
+        </tr>
+        <tr>
+            <td class="model-name"><strong>claude-haiku-4-5-20251001</strong></td>
+            <td>24.1%</td>
+            <td>91.4%</td>
+            <td>92.1%</td>
+            <td>9.7%</td>
+            <td>93.3%</td>
+        </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Cost & Latency Performance</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Total Cost (USD)</th>
+                        <th>Mean Latency</th>
+                        <th>Total Tokens</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td class="model-name"><strong>gpt-5-nano-2025-08-07</strong></td>
+            <td class="cost">$0.8861</td>
+            <td>48.38s</td>
+            <td>3,492,418</td>
+        </tr>
+        <tr>
+            <td class="model-name"><strong>claude-haiku-4-5-20251001</strong></td>
+            <td class="cost">$1.7019</td>
+            <td>15.04s</td>
+            <td>2,963,710</td>
+        </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Detailed Category breakdown</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Model</th>
+                        <th>Retrieval Recall@10</th>
+                        <th>Retrieval nDCG@10</th>
+                        <th>Fact Recall</th>
+                        <th>Fact Precision</th>
+                        <th>Faithfulness</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+            <tr>
+                <td rowspan="2" class="category-name">basic</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>97.1%</td>
+                <td>0.860</td>
+                <td>32.4%</td>
+                <td>79.4%</td>
+                <td>90.1%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>97.1%</td>
+                <td>0.860</td>
+                <td>32.0%</td>
+                <td>92.6%</td>
+                <td>92.1%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">completeness</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>64.2%</td>
+                <td>0.647</td>
+                <td>9.1%</td>
+                <td>56.2%</td>
+                <td>56.3%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>64.2%</td>
+                <td>0.647</td>
+                <td>12.9%</td>
+                <td>68.8%</td>
+                <td>93.8%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">conflicting_info</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>100.0%</td>
+                <td>0.928</td>
+                <td>25.6%</td>
+                <td>90.4%</td>
+                <td>98.5%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>100.0%</td>
+                <td>0.928</td>
+                <td>28.6%</td>
+                <td>93.8%</td>
+                <td>100.0%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">constrained</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>100.0%</td>
+                <td>0.971</td>
+                <td>3.1%</td>
+                <td>59.0%</td>
+                <td>91.8%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>100.0%</td>
+                <td>0.971</td>
+                <td>3.2%</td>
+                <td>83.3%</td>
+                <td>100.0%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">high_level</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>20.0%</td>
+                <td>100.0%</td>
+                <td>77.1%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>17.5%</td>
+                <td>100.0%</td>
+                <td>75.0%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">info_not_found</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>94.7%</td>
+                <td>100.0%</td>
+                <td>0.0%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>100.0%</td>
+                <td>100.0%</td>
+                <td>0.0%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">intra_document_reasoning</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>97.5%</td>
+                <td>0.929</td>
+                <td>15.9%</td>
+                <td>57.4%</td>
+                <td>78.5%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>97.5%</td>
+                <td>0.929</td>
+                <td>18.8%</td>
+                <td>81.7%</td>
+                <td>90.7%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">miscellaneous</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>100.0%</td>
+                <td>0.931</td>
+                <td>24.2%</td>
+                <td>100.0%</td>
+                <td>100.0%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>100.0%</td>
+                <td>0.931</td>
+                <td>20.8%</td>
+                <td>100.0%</td>
+                <td>88.9%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">project_related</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>88.4%</td>
+                <td>0.863</td>
+                <td>20.0%</td>
+                <td>88.9%</td>
+                <td>93.0%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>88.4%</td>
+                <td>0.863</td>
+                <td>12.9%</td>
+                <td>90.2%</td>
+                <td>97.6%</td>
+            </tr>
+            <tr>
+                <td rowspan="2" class="category-name">semantic</td>
+                <td>gpt-5-nano-2025-08-07</td>
+                <td>81.6%</td>
+                <td>0.665</td>
+                <td>15.1%</td>
+                <td>80.1%</td>
+                <td>88.1%</td>
+            </tr>
+            <tr>
+                
+                <td>claude-haiku-4-5-20251001</td>
+                <td>81.6%</td>
+                <td>0.665</td>
+                <td>13.2%</td>
+                <td>93.0%</td>
+                <td>89.5%</td>
+            </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

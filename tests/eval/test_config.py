@@ -19,7 +19,7 @@ def test_run_config_parses_baseline_yaml():
     assert len(config.models) == 2
     assert config.models[0].model_id == "gpt-5-nano-2025-08-07"
     assert config.models[0].system == "openai"
-    assert config.models[1].model_id == "claude-3-5-haiku-20241022"
+    assert config.models[1].model_id == "claude-haiku-4-5-20251001"
     assert config.models[1].system == "anthropic"
 
     assert config.judge_model == "gpt-5-nano-2025-08-07"

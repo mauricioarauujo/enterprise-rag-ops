@@ -85,11 +85,13 @@ Prior to accepting this ADR, we verified the pricing of the baseline model matri
 - **`gpt-5-nano-2025-08-07`**:
   - **Verified pricing**: Input: `$0.05` per 1M tokens, Output: `$0.40` per 1M tokens.
   - Source: Verified against official OpenAI pricing documentation for the nano-tier model.
-- **`claude-3-5-haiku-20241022`**:
-  - **Verified pricing**: Input: `$0.80` per 1M tokens, Output: `$4.00` per 1M tokens.
-  - Source: Verified against official Anthropic pricing documentation.
+- **`claude-haiku-4-5-20251001`**:
+  - **Verified pricing**: Input: `$1.00` per 1M tokens, Output: `$5.00` per 1M tokens.
+  - Source: Verified against official Anthropic pricing documentation. The original baseline
+    model `claude-3-5-haiku-20241022` reached **end-of-life on 2026-02-19** (the live API now
+    returns 404), so the cross-family generator was swapped to Claude Haiku 4.5.
 
-These rates are correctly coded in `configs/baseline.yaml`.
+These rates are coded in `configs/baseline.yaml`.
 
 ## Consequences
 

@@ -19,13 +19,15 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 
 logger = logging.getLogger("enterprise_rag_ops.generation")
 
-DEFAULT_MODEL = "claude-3-5-haiku-20241022"
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
 
 class AnthropicGenerator:
     """`Generator` implementation using Anthropic forced tool-use structured outputs.
 
-    Default model is `claude-3-5-haiku-20241022`; override via env var `RAG_GEN_MODEL_ANTHROPIC`.
+    Default model is `claude-haiku-4-5-20251001` (the current cheapest Claude tier;
+    the original `claude-3-5-haiku-20241022` reached end-of-life on 2026-02-19).
+    Override via env var `RAG_GEN_MODEL_ANTHROPIC`.
     """
 
     def __init__(self, model: str | None = None, client: Anthropic | None = None) -> None:
@@ -35,7 +37,12 @@ class AnthropicGenerator:
                     "ANTHROPIC_API_KEY is not set — required for AnthropicGenerator. "
                     "Set it in your shell or .env before running evaluation."
                 )
-            client = Anthropic()
+            # Higher retry budget than the SDK default (2): tier-1 Anthropic accounts
+            # cap output tokens/min low, so a full sweep throttles; the SDK honours
+            # `retry-after` with backoff, letting calls ride out per-minute windows.
+            # `timeout` bounds a single call so a dead socket (e.g. after the host
+            # sleeps mid-sweep) fails fast and retries instead of blocking forever.
+            client = Anthropic(max_retries=8, timeout=120.0)
         self._client = client
         self._model = model or os.environ.get("RAG_GEN_MODEL_ANTHROPIC", DEFAULT_MODEL)
 
