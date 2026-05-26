@@ -1,0 +1,42 @@
+# Baseline RAG Evaluation configuration for Phase 6.
+# Includes the cheapest cross-family pair and pinned prices (FR-4, FR-9).
+
+models:
+  - model_id: "gpt-5-nano-2025-08-07"
+    system: "openai"
+  - model_id: "claude-haiku-4-5-20251001"
+    system: "anthropic"
+
+# The judge model to evaluate answers
+judge_model: "gpt-5-nano-2025-08-07"
+
+# Optional limit on number of questions (null = run all 500)
+limit: null
+
+# Retrieval k-cutoff
+k: 10
+
+# Output results location
+output_dir: "results"
+
+# Unique run identifier
+run_id: "baseline"
+
+# Cost-overrun guard ceiling in USD
+cost_ceiling_usd: 5.0
+
+# Price table: in_usd_per_1m and out_usd_per_1m
+prices:
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40
+  gpt-4o-mini:
+    input_usd_per_1m: 0.15
+    output_usd_per_1m: 0.60
+  # claude-haiku-4-5 price verified against Anthropic's official pricing page (AC-15).
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
+  claude-3-5-sonnet-20241022:
+    input_usd_per_1m: 3.00
+    output_usd_per_1m: 15.00

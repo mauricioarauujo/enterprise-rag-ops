@@ -9,6 +9,7 @@ function — so the stub path also exercises true aggregation. Mirrors `StubGene
 from __future__ import annotations
 
 from enterprise_rag_ops.eval.aggregate import aggregate
+from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict, JudgeVerdict
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
@@ -16,6 +17,9 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 
 class StubJudge:
     """Returns an all-`present` / all-`supported` `JudgeVerdict` deterministically."""
+
+    def __init__(self, model: str | None = None, **kwargs) -> None:
+        self._model = model or "stub"
 
     def judge(
         self,
@@ -36,4 +40,20 @@ class StubJudge:
             fact_recall=fact_recall,
             fact_precision=fact_precision,
             faithfulness_ratio=faithfulness_ratio,
+        )
+
+    def judge_with_stats(
+        self,
+        question: str,
+        answer_with_sources: AnswerWithSources,
+        answer_facts: list[str],
+        retrieved_docs: list[Chunk],
+    ) -> tuple[JudgeVerdict, CallStats]:
+        return self.judge(question, answer_with_sources, answer_facts, retrieved_docs), CallStats(
+            input_tokens=0,
+            output_tokens=0,
+            latency_s=0.0,
+            model="stub",
+            system="openai",
+            cost_usd=0.0,
         )

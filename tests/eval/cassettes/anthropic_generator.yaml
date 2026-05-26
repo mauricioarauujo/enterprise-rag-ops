@@ -1,0 +1,145 @@
+interactions:
+- request:
+    body: "{\"max_tokens\":4096,\"messages\":[{\"role\":\"user\",\"content\":\"[1]
+      test_doc: The default port for HTTP traffic is 80; for HTTPS it is 443.\\n\\nWhat
+      is the default port for HTTP traffic?\"}],\"model\":\"claude-haiku-4-5-20251001\",\"system\":\"You
+      are an enterprise knowledge assistant. Answer the user's question using only
+      the numbered context provided. Cite the doc_id of every context entry you used
+      in the `sources` field. If the context does not contain enough information to
+      answer, you MUST set `answer` to exactly this string \u2014 \\\"I don't have
+      enough information to answer this question.\\\" \u2014 and return an empty `sources`
+      list. Do not answer from prior knowledge.\\n\\nRespond with a single JSON object
+      matching this schema:\\n{\\n  \\\"additionalProperties\\\": false,\\n  \\\"description\\\":
+      \\\"An LLM-produced answer with cited document identifiers.\\\\n\\\\nFields:\\\\n
+      \   answer: Natural-language answer string. Empty string is allowed by the\\\\n
+      \       schema but flagged by the smoke gate (AC-13).\\\\n    sources: List
+      of `doc_id` strings cited as evidence. Order is the order\\\\n        the model
+      emitted them; deduplication is the model's responsibility.\\\\n\\\\nInvariants:\\\\n
+      \   - Both fields are required (Pydantic raises `ValidationError` on\\\\n      missing
+      or wrong type \\\\u2014 AC-1).\\\\n    - The schema is closed (`extra=\\\\\\\"forbid\\\\\\\"`
+      \\\\u2192 `additionalProperties: false`\\\\n      in JSON Schema), so OpenAI
+      `strict: true` mode rejects any extra fields.\\\",\\n  \\\"properties\\\": {\\n
+      \   \\\"answer\\\": {\\n      \\\"description\\\": \\\"Natural-language answer
+      to the user question.\\\",\\n      \\\"title\\\": \\\"Answer\\\",\\n      \\\"type\\\":
+      \\\"string\\\"\\n    },\\n    \\\"sources\\\": {\\n      \\\"description\\\":
+      \\\"doc_id values cited as evidence for the answer.\\\",\\n      \\\"items\\\":
+      {\\n        \\\"type\\\": \\\"string\\\"\\n      },\\n      \\\"title\\\": \\\"Sources\\\",\\n
+      \     \\\"type\\\": \\\"array\\\"\\n    }\\n  },\\n  \\\"required\\\": [\\n
+      \   \\\"answer\\\",\\n    \\\"sources\\\"\\n  ],\\n  \\\"title\\\": \\\"AnswerWithSources\\\",\\n
+      \ \\\"type\\\": \\\"object\\\"\\n}\",\"tool_choice\":{\"type\":\"tool\",\"name\":\"emit_answer\"},\"tools\":[{\"name\":\"emit_answer\",\"description\":\"Emit
+      the structured answer with sources.\",\"input_schema\":{\"additionalProperties\":false,\"description\":\"An
+      LLM-produced answer with cited document identifiers.\\n\\nFields:\\n    answer:
+      Natural-language answer string. Empty string is allowed by the\\n        schema
+      but flagged by the smoke gate (AC-13).\\n    sources: List of `doc_id` strings
+      cited as evidence. Order is the order\\n        the model emitted them; deduplication
+      is the model's responsibility.\\n\\nInvariants:\\n    - Both fields are required
+      (Pydantic raises `ValidationError` on\\n      missing or wrong type \u2014 AC-1).\\n
+      \   - The schema is closed (`extra=\\\"forbid\\\"` \u2192 `additionalProperties:
+      false`\\n      in JSON Schema), so OpenAI `strict: true` mode rejects any extra
+      fields.\",\"properties\":{\"answer\":{\"description\":\"Natural-language answer
+      to the user question.\",\"title\":\"Answer\",\"type\":\"string\"},\"sources\":{\"description\":\"doc_id
+      values cited as evidence for the answer.\",\"items\":{\"type\":\"string\"},\"title\":\"Sources\",\"type\":\"array\"}},\"required\":[\"answer\",\"sources\"],\"type\":\"object\"}}]}"
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '3127'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - Anthropic/Python 0.104.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - MacOS
+      x-stainless-package-version:
+      - 0.104.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.7
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA3RSyU7DMBD9lchnipJAEfQISHApAho4gJBl7Elj1bFTewwtVf6dcURYxS1+y7xZ
+        smOtU2DYjEkjooJJI/QqTg4n00mZl9Mizwu2x7QiQRuWPC8W801bbS/nLZ5vN/cXd93p/aZZkAa3
+        HSQVhCCWQIB3JgEiBB1QWCRIOotAX7PH3ahH5wyPAcaU9I6UU3RXZ2pxcVvhGsv1W6muH/z2hlRW
+        tMkHrUYubHgFn6y2i1R2xz6QGasayBTUIhrMOucxq53PLqvqOkMv6lrLTIfsON8nc3DRSwjUFUMI
+        yJWT7KmnboUxqdZnr0p7kMj6/olM6DruQQRnf04xEAHWEawkk43GfIAKUGgTRiwOe6LqQ/Mc3Qos
+        kcXByVHKlg1wSQGoneU/JfnIE63+40ZvSoCugRa8MHza/tV/sUXzm6U1uIjfoaOSxgH/oiVw1MOu
+        03mV8Go4RA0+Tc6X4Iiyjq70QmOLZ/ob+v4dAAD//wMAGwfoh3ACAAA=
+    headers:
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Security-Policy:
+      - default-src 'none'; frame-ancestors 'none'
+      Content-Type:
+      - application/json
+      Date:
+      - Mon, 25 May 2026 21:28:27 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      X-Robots-Tag:
+      - none
+      anthropic-ratelimit-input-tokens-limit:
+      - '50000'
+      anthropic-ratelimit-input-tokens-remaining:
+      - '49000'
+      anthropic-ratelimit-input-tokens-reset:
+      - '2026-05-25T21:28:28Z'
+      anthropic-ratelimit-output-tokens-limit:
+      - '10000'
+      anthropic-ratelimit-output-tokens-remaining:
+      - '10000'
+      anthropic-ratelimit-output-tokens-reset:
+      - '2026-05-25T21:28:27Z'
+      anthropic-ratelimit-requests-limit:
+      - '50'
+      anthropic-ratelimit-requests-remaining:
+      - '49'
+      anthropic-ratelimit-requests-reset:
+      - '2026-05-25T21:28:27Z'
+      anthropic-ratelimit-tokens-limit:
+      - '60000'
+      anthropic-ratelimit-tokens-remaining:
+      - '59000'
+      anthropic-ratelimit-tokens-reset:
+      - '2026-05-25T21:28:27Z'
+      cf-cache-status:
+      - DYNAMIC
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      traceresponse:
+      - 00-a0405cc86c312cace4f4ff278b9f2ec0-1128f2cc2ed366ab-01
+      vary:
+      - Accept-Encoding
+      x-envoy-upstream-service-time:
+      - '922'
+    status:
+      code: 200
+      message: OK
+version: 1

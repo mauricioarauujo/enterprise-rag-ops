@@ -19,6 +19,7 @@ from openai import OpenAI
 
 from enterprise_rag_ops.eval.aggregate import aggregate
 from enterprise_rag_ops.eval.prompt import build_judge_system_prompt, build_judge_user_prompt
+from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.eval.schema import JudgeVerdict, _LLMJudgeVerdict
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
@@ -47,7 +48,9 @@ class OpenAIJudge:
                     "Set it in your shell or .env before running a live judge. "
                     "CI and `make test` use StubJudge and need no key."
                 )
-            client = OpenAI()
+            # `timeout` bounds a single call so a dead socket (e.g. after the host
+            # sleeps mid-sweep) fails fast and retries instead of blocking forever.
+            client = OpenAI(timeout=120.0)
         self._client = client
         self._model = model or os.environ.get("RAG_JUDGE_MODEL", DEFAULT_MODEL)
 
@@ -59,6 +62,21 @@ class OpenAIJudge:
         retrieved_docs: list[Chunk],
     ) -> JudgeVerdict:
         """Call OpenAI once and return a validated, aggregated `JudgeVerdict`."""
+        result, _ = self.judge_with_stats(
+            question, answer_with_sources, answer_facts, retrieved_docs
+        )
+        return result
+
+    def judge_with_stats(
+        self,
+        question: str,
+        answer_with_sources: AnswerWithSources,
+        answer_facts: list[str],
+        retrieved_docs: list[Chunk],
+    ) -> tuple[JudgeVerdict, CallStats]:
+        """Call OpenAI once and return a validated, aggregated `JudgeVerdict` along with `CallStats`."""
+        import time
+
         # Resolve each cited doc_id to its text (None if not in the retrieved set),
         # preserving citation order — the per-doc_id isolation the prompt renders.
         # A doc may be split across several chunks; join them in retrieval order so the
@@ -84,6 +102,7 @@ class OpenAIJudge:
             "strict": True,
         }
 
+        start_time = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self._model,
             messages=[
@@ -92,24 +111,44 @@ class OpenAIJudge:
             ],
             response_format={"type": "json_schema", "json_schema": json_schema},
         )
+        latency = time.perf_counter() - start_time
+
         raw = response.choices[0].message.content or ""
         llm_verdict = _LLMJudgeVerdict.model_validate_json(raw)
 
         fact_recall, fact_precision, faithfulness_ratio = aggregate(
             llm_verdict.per_fact, llm_verdict.per_citation
         )
+
+        # Read usage stats
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        stats = CallStats(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_s=latency,
+            model=self._model,
+            system="openai",
+        )
+
         logger.info(
-            "eval.openai_judge facts=%d citations=%d recall=%s precision=%s faithfulness=%s",
+            "eval.openai_judge facts=%d citations=%d recall=%s precision=%s faithfulness=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             len(llm_verdict.per_fact),
             len(llm_verdict.per_citation),
             fact_recall,
             fact_precision,
             faithfulness_ratio,
+            input_tokens,
+            output_tokens,
+            latency,
         )
-        return JudgeVerdict(
+        verdict = JudgeVerdict(
             per_fact=llm_verdict.per_fact,
             per_citation=llm_verdict.per_citation,
             fact_recall=fact_recall,
             fact_precision=fact_precision,
             faithfulness_ratio=faithfulness_ratio,
         )
+        return verdict, stats

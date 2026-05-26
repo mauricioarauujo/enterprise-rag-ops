@@ -14,6 +14,7 @@ import os
 
 from openai import OpenAI
 
+from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.generation.prompt import build_system_prompt, build_user_prompt
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
@@ -46,12 +47,25 @@ class OpenAIGenerator:
                     "Set it in your shell or .env before running `make smoke` "
                     "or the `rag-ask` CLI."
                 )
-            client = OpenAI()
+            # `timeout` bounds a single call so a dead socket (e.g. after the host
+            # sleeps mid-sweep) fails fast and retries instead of blocking forever.
+            client = OpenAI(timeout=120.0)
         self._client = client
         self._model = model or os.environ.get("RAG_GEN_MODEL", DEFAULT_MODEL)
 
     def generate(self, context_chunks: list[Chunk], question: str) -> AnswerWithSources:
         """Call OpenAI and return a validated `AnswerWithSources`."""
+        result, _ = self.generate_with_stats(context_chunks, question)
+        return result
+
+    def generate_with_stats(
+        self,
+        context_chunks: list[Chunk],
+        question: str,
+    ) -> tuple[AnswerWithSources, CallStats]:
+        """Call OpenAI and return a validated `AnswerWithSources` along with `CallStats`."""
+        import time
+
         system_prompt = build_system_prompt()
         user_prompt = build_user_prompt(context_chunks, question)
 
@@ -62,6 +76,7 @@ class OpenAIGenerator:
             "strict": True,
         }
 
+        start_time = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self._model,
             messages=[
@@ -70,11 +85,30 @@ class OpenAIGenerator:
             ],
             response_format={"type": "json_schema", "json_schema": json_schema},
         )
+        latency = time.perf_counter() - start_time
+
         raw = response.choices[0].message.content or ""
         result = AnswerWithSources.model_validate_json(raw)
+
+        # Read usage stats
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        stats = CallStats(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_s=latency,
+            model=self._model,
+            system="openai",
+        )
+
         logger.info(
-            "generation.openai sources=%s context_doc_ids=%s",
+            "generation.openai sources=%s context_doc_ids=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             result.sources,
             [c.doc_id for c in context_chunks],
+            input_tokens,
+            output_tokens,
+            latency,
         )
-        return result
+        return result, stats
