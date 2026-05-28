@@ -43,6 +43,9 @@ changed, and how they interact.
 
 Every file → the specialist agent that owns it, or `direct` if no specialist exists.
 
+**Convention:** tests mirror `src/` into subdirs (`tests/<module>/test_*.py`), each with an
+`__init__.py` — never a flat `tests/test_<module>.py`. Manifest test paths accordingly.
+
 ### Step 3 — Phase ordering
 
 Order the manifest by this convention:
