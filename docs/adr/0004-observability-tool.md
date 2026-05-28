@@ -2,7 +2,7 @@
 
 ## Status
 
-proposed
+accepted
 
 > Drafted in Sprint 2 / Phase 6 to constrain the eval-record schema **now**, so the
 > Sprint 3 observability layer is an additive exporter rather than a rewrite. Acceptance is
@@ -102,3 +102,13 @@ Rationale:
   pricing pages when ADR-0007 locks the table.
 - This ADR picks the **tool + wire conventions**; **ADR-0007** pins the **persisted record
   schema + cost-accounting model**. The two are written together in Phase 6.
+
+## Acceptance Note
+
+### Arize Phoenix Deployment (2026-05-28)
+
+We have formally accepted **Arize Phoenix** as the deployed observability backend.
+
+- **Hardware Rationale:** Our development environments run on 8 GB RAM machines. The self-hosted Langfuse stack (requiring ClickHouse, Postgres, and Redis) has an operational memory footprint (~4-6 GB) that is prohibitive for concurrent local workflows. Arize Phoenix runs as a single lightweight container, fitting comfortably within our hardware budget.
+- **Pinned Image Tag:** We have deployed Arize Phoenix using the specific stable tag `arizephoenix/phoenix:version-15.0.0` to guarantee reproducible deployments and avoid issues with `:latest` image drift.
+- **Schema Portability:** Because we strictly adhere to OpenTelemetry GenAI semantic conventions and the OpenInference wire format, all traced metadata (question ID, category, tokens, cost) and offline metric annotations (faithfulness, recall, precision, abstentions) are mapped using standardized keys. This ensures zero lock-in: if hardware capacity scales in a future sprint, migrating to Langfuse or an OTel Collector fan-out remains a thin mapping configuration swap rather than a pipeline rewrite.
