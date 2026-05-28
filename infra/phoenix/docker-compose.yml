@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix:version-15.0.0
+    container_name: phoenix-server
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+    restart: unless-stopped
+
+volumes:
+  phoenix-data:
