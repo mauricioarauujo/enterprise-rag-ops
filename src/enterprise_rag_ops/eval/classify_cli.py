@@ -99,12 +99,11 @@ def main(argv: list[str] | None = None) -> int:
                 counter[str(record.failure_mode)] += 1
                 records.append(record)
 
-        # Print the distribution
-        print("Failure mode distribution:")
-        for mode_str, count in counter.most_common():
-            print(f"  {mode_str}: {count}")
-
         if args.dry_run:
+            # Dry run: print the distribution to stdout and write nothing.
+            print("Failure mode distribution:")
+            for mode_str, count in counter.most_common():
+                print(f"  {mode_str}: {count}")
             logger.info("Dry run requested. Write bypassed.")
             return 0
 
@@ -129,8 +128,16 @@ def main(argv: list[str] | None = None) -> int:
                     temp_path.unlink()
                 raise
 
-        os.replace(temp_path, output_path)
+        try:
+            os.replace(temp_path, output_path)
+        except Exception:
+            if temp_path.exists():
+                temp_path.unlink()
+            raise
+
         logger.info("Successfully wrote classified records to %s", output_path)
+        for mode_str, count in counter.most_common():
+            logger.info("  %s: %d", mode_str, count)
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
