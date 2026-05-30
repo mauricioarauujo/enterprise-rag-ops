@@ -53,19 +53,20 @@ human-readable registries. Update them when you add an artifact — cache-safe.
 
 ### Command Registry
 
-| Command         | Purpose                                                        |
-| --------------- | -------------------------------------------------------------- |
-| `/new-kb`       | Create/extend a KB domain (kb-architect, 3-pillar)             |
-| `/update-kb`    | Refresh a KB domain against the 3 pillars                      |
-| `/new-agent`    | Scaffold a specialist agent                                    |
-| `/new-command`  | Scaffold a slash command                                       |
-| `/sprint-start` | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan         |
-| `/brainstorm`   | SDD Stage 0 — explore approaches                               |
-| `/define`       | SDD Stage 1 — requirements + Clarity gate (≥12/15)             |
-| `/design`       | SDD Stage 2 — architecture + manifest + consistency self-check |
-| `/implement`    | Execute implementation per the design                          |
-| `/review`       | Validate a branch — checks + code review + KB loop             |
-| `/sprint-close` | Close a sprint — knowledge loop + archive                      |
+| Command          | Purpose                                                                |
+| ---------------- | ---------------------------------------------------------------------- |
+| `/new-kb`        | Create/extend a KB domain (kb-architect, 3-pillar)                     |
+| `/update-kb`     | Refresh a KB domain against the 3 pillars                              |
+| `/new-agent`     | Scaffold a specialist agent                                            |
+| `/new-command`   | Scaffold a slash command                                               |
+| `/sprint-start`  | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan                 |
+| `/brainstorm`    | SDD Stage 0 — explore approaches                                       |
+| `/define`        | SDD Stage 1 — requirements + Clarity gate (≥12/15)                     |
+| `/design`        | SDD Stage 2 — architecture + manifest + consistency self-check         |
+| `/implement`     | Execute implementation per the design                                  |
+| `/implement-agy` | Execute implementation by delegating to `agy` (Gemini); Claude reviews |
+| `/review`        | Validate a branch — checks + code review + KB loop                     |
+| `/sprint-close`  | Close a sprint — knowledge loop + archive                              |
 
 ### Agent Registry
 
@@ -96,10 +97,11 @@ Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 Auto-triggered workflows/tool procedures. Format + when-to-add: § Self-Improvement →
 "When to add a skill". Each lives at `.claude/skills/<name>/SKILL.md`.
 
-| Skill      | Triggers on                                                               | Origin                        |
-| ---------- | ------------------------------------------------------------------------- | ----------------------------- |
-| `diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                   | Adapted from mattpocock (MIT) |
-| `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end | Adapted from mattpocock (MIT) |
+| Skill      | Triggers on                                                                | Origin                        |
+| ---------- | -------------------------------------------------------------------------- | ----------------------------- |
+| `diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                    | Adapted from mattpocock (MIT) |
+| `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Adapted from mattpocock (MIT) |
+| `agy`      | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                      |
 
 ---
 

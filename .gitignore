@@ -60,6 +60,7 @@ data/processed/
 results/*
 !results/baseline.html
 !results/baseline.md
+!results/baseline.jsonl
 *.parquet
 *.duckdb
 *.sqlite

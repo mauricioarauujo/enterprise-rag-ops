@@ -42,6 +42,10 @@ Functional and non-functional. Each requirement is testable and falsifiable.
 Rewrite vague ACs into measurable statements. Note dependencies (datasets, modules,
 libraries, upstream phases).
 
+**Convention:** when an AC names a test file, tests mirror `src/` into subdirs
+(`tests/<module>/test_*.py`, each with an `__init__.py`) — never a flat
+`tests/test_<module>.py`.
+
 ### Step 3 — Clarity gate (≥12/15)
 
 Score 5 dimensions 0–3 each:
