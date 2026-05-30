@@ -337,6 +337,34 @@ def test_cli_endpoint_precedence(tmp_path, two_record_jsonl_content):
         )
 
 
+def test_split_endpoint_normalizes_otlp_and_base_url():
+    """Regression: live exit demo hit 405 because `register(endpoint=...)` was passed
+    a bare host (`http://localhost:6006`) instead of the full OTLP-HTTP traces URL.
+    Lock the helper that splits user input into the two distinct URLs Phoenix needs."""
+    from enterprise_rag_ops.observability.phoenix_client import split_endpoint
+
+    # Bare host (the CLI default): must append /v1/traces for OTLP, leave base as-is.
+    assert split_endpoint("http://localhost:6006") == (
+        "http://localhost:6006/v1/traces",
+        "http://localhost:6006",
+    )
+    # Trailing slash is tolerated and normalized.
+    assert split_endpoint("http://localhost:6006/") == (
+        "http://localhost:6006/v1/traces",
+        "http://localhost:6006",
+    )
+    # User already supplied the OTLP path: keep it for register, strip for client.
+    assert split_endpoint("http://localhost:6006/v1/traces") == (
+        "http://localhost:6006/v1/traces",
+        "http://localhost:6006",
+    )
+    # Non-default host + port survives both sides.
+    assert split_endpoint("https://phoenix.example.com:443") == (
+        "https://phoenix.example.com:443/v1/traces",
+        "https://phoenix.example.com:443",
+    )
+
+
 def test_cli_dry_run(tmp_path, two_record_jsonl_content):
     from unittest.mock import patch
 
