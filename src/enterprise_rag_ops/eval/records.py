@@ -92,3 +92,4 @@ class EvalRecord(BaseModel):
     retrieval_ranked_ids: list[str] = Field(default_factory=list)
     did_abstain_retrieval: bool
     did_abstain_e2e: bool
+    failure_mode: str | None = None
