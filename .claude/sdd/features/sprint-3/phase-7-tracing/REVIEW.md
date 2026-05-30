@@ -205,3 +205,27 @@ Phoenix endpoint to OTLP-HTTP path`).
 - `Trace Latency` in Metrics reflects replay latency (~ms), not real inference
   latency (`latency_s` lives in the per-span attribute). Worth a docstring note on
   the exporter if Phase 8 surfaces a latency dashboard.
+- **Phoenix UI sort on annotation aggregation columns doesn't work** in v15 (the
+  per-metric columns in the Traces view are computed aggregates, not raw fields).
+  Workaround: use the Spans tab in `All` mode and sort on the raw per-span score
+  columns. Sidestepped naturally by Phase 9's Streamlit dashboard, which will read
+  the JSONL directly.
+- **`HUMAN` annotations are lost on reset-and-replay.** The FR-4 idempotency
+  strategy clears the project before each ingest, so any annotation a reviewer
+  adds manually in the Phoenix UI is wiped on the next export. Proposed fix
+  (Phase 9 or a dedicated `fix/`): pull `annotator_kind="HUMAN"` annotations
+  from the Phoenix REST API into a persistent `results/human_annotations.jsonl`,
+  re-inject them after the next export. Out of scope for Phase 7 (the exporter
+  is one-way by design).
+- **Raw question / answer text not in trace attributes.** Phase 9 dashboard or
+  any UI deep-dive that wants to show the prompt/answer inline will need either
+  (a) the `--enrich-from-index` seam (FR-12, already named for `document.content`
+  / `document.score`) extended to join the dataset for `question` text and the
+  `EvalRecord` for `answer` text, or (b) a small ADR-0007 amendment to store
+  `question_text` / `answer_text` on `EvalRecord`. Trade-off: bigger JSONL vs
+  zero-join trace inspection.
+- **No batching / concurrent I/O in the exporter.** The current implementation
+  is linear-synchronous — fine at 999 records (under 1 min), would saturate at
+  10k+ on a real backend. Future concern (Sprint 4+); the OTel `BatchSpanProcessor`
+  - `httpx.AsyncClient` pattern is the standard fix. Section O of the personal
+    study notes sketches it.
