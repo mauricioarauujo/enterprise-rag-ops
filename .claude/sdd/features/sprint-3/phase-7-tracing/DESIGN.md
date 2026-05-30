@@ -188,7 +188,9 @@ conventions enum vs the `openinference_span_kind=` kwarg on `start_as_current_sp
 ### Score write-back contract (FR-5)
 
 `attributes.build_score_rows(record, span_ids)` returns `dict[metric_name -> list[row]]`
-where each row carries `span_id` + (`score` float | `label` str) + optional `explanation`.
+where each row carries `span_id` + `score` (float) + `label` (str). The optional
+OpenInference `explanation` column is omitted — pre-computed metrics have no natural
+explanation string.
 **A `None` float skips its row** (no `0`/`None` written). Metric → span placement:
 
 | Metric                  | Type    | Attaches to span | Skip if None |

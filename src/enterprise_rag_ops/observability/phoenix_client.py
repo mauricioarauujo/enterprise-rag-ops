@@ -75,7 +75,11 @@ class PhoenixScoreSink(ScoreSink):
         try:
             self.client.projects.delete(project_name=project)
         except Exception as e:
-            # Catch errors in case the project doesn't exist yet or is 'default' (undeletable)
+            # TODO(observability): narrow this to the 404-style "project not found" error
+            # the Phoenix client raises. Today this also swallows auth/network failures,
+            # which would let the export proceed and produce duplicate traces — defeating
+            # FR-4 idempotency. The `make trace-reset` volume-wipe is the documented
+            # fallback (DESIGN § Reset-and-replay) until the narrow exception is wired.
             logger.warning(f"Could not delete project '{project}': {e}")
 
     @contextmanager

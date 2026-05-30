@@ -1,4 +1,10 @@
-# ADR 0004: Observability & Cost-Tracking Tool — Langfuse Self-Hosted, OTEL-Native Records
+# ADR 0004: Observability & Cost-Tracking Tool — OTEL-Native Records (Phoenix deployed)
+
+> **Deployed tool: Arize Phoenix** (see `## Acceptance Note` below). The Decision section
+> records the original choice (Langfuse primary / Phoenix runner-up); on acceptance we
+> deployed the pre-justified runner-up for hardware reasons, and the OTEL-GenAI /
+> OpenInference wire format kept the persisted schema identical, so the swap was a
+> localized remap, not a rewrite.
 
 ## Status
 

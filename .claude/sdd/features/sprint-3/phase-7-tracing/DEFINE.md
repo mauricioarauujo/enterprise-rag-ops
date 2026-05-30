@@ -120,9 +120,10 @@ separate `fix/` + ADR-0007 amendment. It does **not** replace the exporter's def
   `phoenix.client.Client().spans.log_span_annotations_dataframe(dataframe=df,
 annotation_name=..., annotator_kind="CODE")` (the deprecated
   `px.Client().log_evaluations(SpanEvaluations(...))` path is **not** used). The dataframe
-  is keyed on the in-process-captured `span_id` and carries `score` (float) / `label` (str)
-  / `explanation` (str). `annotator_kind="CODE"` (these are pre-computed, not LLM-judged at
-  export time). Placement:
+  is keyed on the in-process-captured `span_id` and carries `score` (float) / `label`
+  (str). `annotator_kind="CODE"` (these are pre-computed, not LLM-judged at export time;
+  the optional `explanation` column is omitted — pre-computed metrics have no natural
+  explanation string). Placement:
   - `did_abstain_e2e` (**BOOLEAN**) → **root `chain`** span.
   - `did_abstain_retrieval` (**BOOLEAN**) → **`retriever`** span.
   - `faithfulness_ratio` (**NUMERIC**) → **`llm` "generation"** span.
@@ -214,10 +215,10 @@ and not smoke"`).
 trace in the Phoenix UI → see why it failed` (retrieval miss vs hallucination vs format),
   using the committed `results/baseline.jsonl` (FR-8) — **no paid eval re-run, no managed
   service**. This is the Sprint 3 portfolio bar applied to Phase 7.
-- **NFR-6 (Budget — ~5h)** — The phase fits a ~5h budget: one docker-compose file, one
-  exporter module + CLI, one test file, Makefile/pyproject/gitignore wiring, and the ADR-0004
-  status edit. Minimal-scope / clean-structure ethos; Shoulds/Coulds (FR-11/12) slot in only
-  after the Must spine and their absence does not fail the phase.
+- **NFR-6 (Minimal scope — one module + CLI + infra)** — The phase is bounded to one
+  docker-compose file, one exporter module + CLI, one test file, Makefile/pyproject/gitignore
+  wiring, and the ADR-0004 status edit. Minimal-scope / clean-structure ethos; Shoulds/Coulds
+  (FR-11/12) slot in only after the Must spine and their absence does not fail the phase.
 - **NFR-7 (Conventions + mirrored tests + stranger test)** — English; YYYY-MM-DD dates in
   docs; Conventional Commits; the new module gets its mirrored `tests/observability/test_exporter.py`;
   `make lint test` passes with no network/key. No career/personal content in any tracked
@@ -306,7 +307,7 @@ trace in the Phoenix UI → see why it failed` (retrieval miss vs hallucination 
 | Users       | 2     | Consumers are the maintainer (`make trace-up` / `make export-traces`, diagnosing failures) and the reviewer/hiring manager who clones the repo and opens a failed trace in the Phoenix UI. Internal observability phase — no external end-user workflow — so workflow-impact is inherently thin, scored honestly and consistently with the Phase 1–6 DEFINEs (which also scored Users 2).                                                                                                                                                                        |
 | Success     | 3     | 14 numbered, falsifiable acceptance criteria covering every FR/NFR: single-pinned-container compose + `make trace-up`, one-trace-per-record, the four-span tree + OpenInference attribute names, reset-and-replay idempotency, score→span mapping with NUMERIC/BOOLEAN data types + `None`-skip, the cost-`None` rule, CLI flags + endpoint precedence, the committed-baseline `.gitignore` negation, ADR-0004 acceptance, the offline test suite, the additive invariant, and the cloneable exit demo. Shoulds/Coulds marked "absence does not fail the phase." |
 | Scope       | 3     | Full MoSCoW carried from the BRAINSTORM and re-pointed to Phoenix: Musts (compose + exporter + span tree + idempotency + score write-back + CLI + Make target + committed JSONL + ADR acceptance + offline tests), Should (`--dry-run`), Could (`--enrich-from-index` named-not-built), explicit Won't (Langfuse/cloud, OTEL-Collector fan-out, failure classifier→Phase 8, dashboard→Phase 9, any `EvalRecord`/eval-path change, content/score re-hydration). The fail-loud price-validation backlog item is explicitly out-of-scope.                           |
-| Constraints | 3     | All constraints named as NFRs: offline `make test` with no network/Phoenix/key and no cassette needed (NFR-1), purely additive — no eval-path code touched (NFR-2), `observability/` as the tool-swap seam (NFR-3), dependency hygiene with exact package pinning deferred to `/design` (NFR-4), cloneable 8 GB exit demo (NFR-5), ~5h budget (NFR-6), conventions + mirrored tests + stranger test (NFR-7). Plus the pinned-not-`:latest` image tag and env-only credentials.                                                                                   |
+| Constraints | 3     | All constraints named as NFRs: offline `make test` with no network/Phoenix/key and no cassette needed (NFR-1), purely additive — no eval-path code touched (NFR-2), `observability/` as the tool-swap seam (NFR-3), dependency hygiene with exact package pinning deferred to `/design` (NFR-4), cloneable 8 GB exit demo (NFR-5), minimal scope (NFR-6), conventions + mirrored tests + stranger test (NFR-7). Plus the pinned-not-`:latest` image tag and env-only credentials.                                                                                |
 
 **Total: 14/15 — PASS (≥12).** Users scored 2 for the same structural reason as Phases
 1–6: an internal observability phase whose "users" are the maintainer and a portfolio
