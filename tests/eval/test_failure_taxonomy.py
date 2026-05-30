@@ -166,6 +166,27 @@ def test_one_fixture_per_label():
     assert classify(rec_correct, q_correct) == FailureMode.CORRECT
 
 
+def test_cascade_priority_wins():
+    """AC-2: when multiple predicates fire, the higher-priority label wins.
+
+    The canonical "false abstention + low recall" example is degenerate here because
+    is_incomplete guards on `not did_abstain_e2e`. The genuine multi-fire case is a
+    false abstention that is *also* a retrieval miss: is_abstention_error and
+    is_retrieval_miss both evaluate True independently, and the cascade must return the
+    higher-priority abstention_error.
+    """
+    q = make_question(expected_doc_ids=["doc1"])  # answerable
+    rec = make_eval_record(
+        did_abstain_e2e=True,  # false abstention -> is_abstention_error True
+        retrieval_ranked_ids=["doc2"],  # gold not in top-k -> is_retrieval_miss True
+    )
+    # Both predicates fire on independent evaluation.
+    assert is_abstention_error(rec, q)
+    assert is_retrieval_miss(rec, q)
+    # First-match-wins: the higher-priority label is returned.
+    assert classify(rec, q) == FailureMode.ABSTENTION_ERROR
+
+
 def test_edge_cases_fr12_ac10():
     """AC-10: Test specific edge cases from the contract requirements.
 
@@ -275,7 +296,7 @@ def test_classify_cli_offline(tmp_path):
     assert out_rec2.failure_mode == "hallucination"
 
 
-def test_classify_cli_dry_run(tmp_path):
+def test_classify_cli_dry_run(tmp_path, capsys):
     """AC-14: Test --dry-run prints Counter distribution and writes nothing."""
     results_file = tmp_path / "results_dry.jsonl"
     rec = make_eval_record(
@@ -297,6 +318,11 @@ def test_classify_cli_dry_run(tmp_path):
 
         retval = main(["--results", str(results_file), "--dry-run"])
         assert retval == 0
+
+    # The distribution is printed to stdout under --dry-run.
+    out = capsys.readouterr().out
+    assert "Failure mode distribution:" in out
+    assert "correct: 1" in out
 
     # Ensure the file's failure_mode field remains None (no write)
     with open(results_file, encoding="utf-8") as f:
@@ -329,3 +355,52 @@ def test_classify_cli_revision_forwarding(tmp_path):
         retval = main(["--results", str(results_file), "--questions-revision", "custom-rev-sha"])
         assert retval == 0
         mock_load.assert_called_once_with(revision="custom-rev-sha")
+
+
+def test_classify_cli_skips_missing_question_id(tmp_path, caplog):
+    """DESIGN: a record whose question_id is absent from the gold map is skipped.
+
+    It passes through untagged (failure_mode stays None), a warning is logged, and the
+    run still returns 0 — robustness over fail-fast for a one-time idempotent classifier.
+    """
+    import logging
+
+    results_file = tmp_path / "results_missing.jsonl"
+    # q1 is in the gold map; q_unknown is not.
+    rec_known = make_eval_record(
+        question_id="q1",
+        fact_recall=1.0,
+        faithfulness_ratio=1.0,
+        retrieval_ranked_ids=["doc1"],
+    )
+    rec_unknown = make_eval_record(
+        question_id="q_unknown",
+        fact_recall=1.0,
+        faithfulness_ratio=1.0,
+        retrieval_ranked_ids=["doc1"],
+    )
+
+    with open(results_file, "w", encoding="utf-8") as f:
+        f.write(rec_known.model_dump_json() + "\n")
+        f.write(rec_unknown.model_dump_json() + "\n")
+
+    q1 = make_question(question_id="q1", expected_doc_ids=["doc1"])
+
+    with patch("enterprise_rag_ops.eval.classify_cli.load_questions") as mock_load:
+        mock_load.return_value = [q1]
+
+        from enterprise_rag_ops.eval.classify_cli import main
+
+        with caplog.at_level(logging.WARNING):
+            retval = main(["--results", str(results_file)])
+        assert retval == 0
+        assert "q_unknown" in caplog.text
+
+    with open(results_file, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    out_known = EvalRecord.model_validate_json(lines[0])
+    out_unknown = EvalRecord.model_validate_json(lines[1])
+
+    assert out_known.failure_mode == "correct"
+    assert out_unknown.failure_mode is None
