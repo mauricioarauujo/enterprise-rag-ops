@@ -107,7 +107,8 @@ field defaulting to `None`; ADR-0008 owns the schema extension. A `rag-classify`
 console script reads a JSONL and writes the tags back in-place (or to a new file with a
 `--output` option).
 
-**Overall rationale.** The budget is 5h and the user values minimum viable scope. The
+**Overall rationale.** The minimal-scope constraint favours the smallest thing that
+proves the point. The
 pure-Python rule logic over persisted records needs zero LLM calls — tests are plain
 fixtures, no cassettes. The cascade is the simplest shape that meets the stated
 acceptance criteria (one tag per answer, ADR-0008 schema). The persistence decision

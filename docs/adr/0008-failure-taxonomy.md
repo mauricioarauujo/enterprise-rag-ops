@@ -55,7 +55,7 @@ We define the threshold constants exactly as:
 
 - **`HALLUCINATION_FAITHFULNESS_THRESHOLD = 0.5`**, predicate `faithfulness_ratio < 0.5` (**strict `<`**).
   - **Distribution:** `faithfulness_ratio` is 519 non-null, 480 `None` (≈ the 478 e2e abstentions → no sources cited → `None` per ADR-0007 empty-denominator). Strongly **bimodal**: **433 records at exactly 1.0**, a low tail, **37 records < 0.5**, with a borderline cluster of **21 at exactly 0.5**, 58 < 0.6.
-  - **Why strict `<` 0.5:** the conservative "majority of cited docs unfaithful" reading. The 21 `==0.5` borderline records stay **OUT** of hallucination (exactly half faithful is not flagged). Flags 37/519 ≈ 7.1% of grounded answers — a real, non-trivial tail, not noise.
+  - **Why strict `<` 0.5:** the conservative "majority of cited docs unfaithful" reading. The 21 `==0.5` borderline records stay **OUT** of hallucination (exactly half faithful is not flagged). The predicate flags 37/519 ≈ 7.1% of grounded answers **in isolation** — a real, non-trivial tail, not noise. **Post-cascade**, the committed baseline carries **33** `hallucination` tags: a few low-faithfulness records are claimed earlier by `abstention_error`/`retrieval_miss` (checked first), so the final tally is ≤ the isolated-predicate count by construction.
 
 - **`INCOMPLETE_RECALL_THRESHOLD = 0.5`**, predicate `fact_recall < 0.5`.
   - **Distribution:** `fact_recall` is 999 non-null, 0 `None`. Zero-inflated: **630 at exactly 0.0**, median 0.0, p75 = 0.4, p90 = 1.0, mean 0.243.
