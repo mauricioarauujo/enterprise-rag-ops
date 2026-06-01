@@ -125,8 +125,11 @@ def phoenix_trace_url(
         return None
 
     stripped = endpoint.rstrip("/")
-    base_url = stripped[:-10] if stripped.endswith("/v1/traces") else stripped
+    base_url = stripped.removesuffix("/v1/traces")
 
+    # TODO(FR-11): switch to a per-trace/span URL once the Phoenix v15 deep-link
+    # format is confirmed. `question_id` is the seam for that one-line change;
+    # until then every failed-row link resolves to the project-scoped view.
     return f"{base_url}/projects/{project}"
 
 

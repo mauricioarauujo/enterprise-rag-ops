@@ -81,21 +81,18 @@ def test_single_model_structure(tmp_path):
     assert BASELINE_PATH.is_file()
     all_records = load_run_records([BASELINE_PATH])
 
-    # Extract all unique models
-    models = {r.gen_ai.request.model for r in all_records}
-    assert len(models) >= 1
+    # Pick a model guaranteed to have at least one classified record, so the
+    # zero-fill path is actually exercised (avoids a vacuous len<=1 pass).
+    classified_models = {r.gen_ai.request.model for r in all_records if r.failure_mode is not None}
+    assert classified_models, "baseline must contain classified records"
 
-    target_model = next(iter(models))
+    target_model = next(iter(classified_models))
     single_model_records = [r for r in all_records if r.gen_ai.request.model == target_model]
 
-    # Test failure_mode_distribution returns a valid one-key dict
+    # failure_mode_distribution returns exactly one model key, zero-filled to 5 labels.
     dist = failure_mode_distribution(single_model_records)
-    # Note that it might return no keys if all failure modes are None,
-    # but if there's at least one non-None failure mode, it must have only that one model key.
-    assert len(dist) <= 1
-    if dist:
-        assert list(dist.keys()) == [target_model]
-        assert len(dist[target_model]) == 5
+    assert list(dist.keys()) == [target_model]
+    assert len(dist[target_model]) == 5
 
     # Write single model records to a temp file and test summary_rows
     temp_jsonl = tmp_path / "single_model.jsonl"
