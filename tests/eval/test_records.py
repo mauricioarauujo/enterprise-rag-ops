@@ -129,3 +129,18 @@ def test_compute_cost_usd_missing_price(caplog):
 
     assert cost is None
     assert "No price entry found for model missing-model under system missing-system" in caplog.text
+
+
+def test_compute_cost_usd_gemini():
+    """AC-8: Price(0.10, 0.40) for gemini-2.5-flash-lite yields non-None compute_cost_usd for system='google' CallStats."""
+    stats = CallStats(
+        input_tokens=100_000,
+        output_tokens=50_000,
+        latency_s=0.5,
+        model="gemini-2.5-flash-lite",
+        system="google",
+    )
+    price = Price(input_usd_per_1m=0.10, output_usd_per_1m=0.40)
+    cost = compute_cost_usd(stats, price)
+    assert cost is not None
+    assert cost == pytest.approx(0.03)

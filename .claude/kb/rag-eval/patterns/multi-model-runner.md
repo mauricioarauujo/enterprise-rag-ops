@@ -33,8 +33,9 @@ for model in config.models:
         f.flush()                                    # crash-safe checkpoint
 ```
 
-`_GENERATOR_FACTORY = {"openai": OpenAIGenerator, "anthropic": AnthropicGenerator}`
-Adding a new provider requires only a new entry here plus a YAML price row.
+`_GENERATOR_FACTORY = {"openai": OpenAIGenerator, "anthropic": AnthropicGenerator, "google": GeminiGenerator}`
+Adding a new provider requires only a new entry here plus a YAML price row (Gemini
+was added this way in Sprint 4 / Phase 10 — see ADR-0005 amendment).
 
 ## The FR-10 Fail-Fast Guard and Its Known Gap
 

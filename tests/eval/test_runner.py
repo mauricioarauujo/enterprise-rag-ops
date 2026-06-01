@@ -374,3 +374,15 @@ def test_runner_concurrency_propagates_worker_exception(monkeypatch, tmp_path, r
             judge_class=StubJudge,
             concurrency=2,
         )
+
+
+def test_runner_factory_dispatch_google():
+    """AC-6: ModelConfig(system="google") resolves through _GENERATOR_FACTORY to GeminiGenerator."""
+    from enterprise_rag_ops.eval.runner import _GENERATOR_FACTORY
+    from enterprise_rag_ops.generation.anthropic_generator import AnthropicGenerator
+    from enterprise_rag_ops.generation.gemini_generator import GeminiGenerator
+    from enterprise_rag_ops.generation.openai_generator import OpenAIGenerator
+
+    assert _GENERATOR_FACTORY["google"] is GeminiGenerator
+    assert _GENERATOR_FACTORY["openai"] is OpenAIGenerator
+    assert _GENERATOR_FACTORY["anthropic"] is AnthropicGenerator

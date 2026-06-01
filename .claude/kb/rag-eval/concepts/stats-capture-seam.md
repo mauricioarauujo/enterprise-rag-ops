@@ -35,7 +35,7 @@ class CallStats(BaseModel):
     output_tokens: int
     latency_s: float
     model: str         # the model string sent to the API
-    system: str        # "openai" | "anthropic"
+    system: str        # "openai" | "anthropic" | "google"
     cost_usd: float | None = None   # filled in by runner after the call
 ```
 

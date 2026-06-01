@@ -12,8 +12,12 @@ import os
 import pytest
 import vcr
 
-# Request headers carrying credentials — OpenAI sends `authorization`, Anthropic `x-api-key`.
-_FILTER_REQUEST_HEADERS = ["authorization", "x-api-key"]
+# Request headers carrying credentials — OpenAI sends `authorization`, Anthropic `x-api-key`,
+# Google Gemini (google-genai) sends `x-goog-api-key`.
+_FILTER_REQUEST_HEADERS = ["authorization", "x-api-key", "x-goog-api-key"]
+
+# Query params carrying credentials — the google-genai SDK can pass the key as `?key=`.
+_FILTER_QUERY_PARAMS = ["key"]
 
 # Response headers that identify the recording account or carry session state. These must
 # never land in a public cassette; vcrpy 6's `filter_headers` only covers request headers,
@@ -48,5 +52,6 @@ def vcr_record() -> vcr.VCR:
         cassette_library_dir="tests/eval/cassettes",
         record_mode=os.environ.get("VCR_RECORD_MODE", "none"),
         filter_headers=_FILTER_REQUEST_HEADERS,
+        filter_query_parameters=_FILTER_QUERY_PARAMS,
         before_record_response=_scrub_response,
     )
