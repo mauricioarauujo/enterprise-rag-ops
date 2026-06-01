@@ -99,3 +99,4 @@ These rates are coded in `configs/baseline.yaml`.
 - **Reduced Storage Overheads**: By omitting the raw JSON arrays of per-fact judgment lists, the JSONL file remains small enough to review and parse efficiently.
 - **Safe Cost Calculation**: Reports distinguish clearly between zero cost (e.g., stubs) and missing price information (rendered as `"N/A"`).
 - **Flexible Sweeps**: Pricing changes can be handled completely inside the YAML configuration files without requiring codebase modifications.
+- **Failure Taxonomy**: See [ADR 0008](0008-failure-taxonomy.md) for the additive `failure_mode` field and rule-based failure classification.

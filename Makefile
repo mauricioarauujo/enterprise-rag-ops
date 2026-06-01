@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval eval-baseline install-hooks trace-up trace-reset export-traces
+.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval eval-baseline install-hooks trace-up trace-reset export-traces classify
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -43,6 +43,9 @@ eval-baseline:  ## Run the multi-model baseline evaluation sweep (requires API k
 
 export-traces:  ## Export traces and scores from results JSONL file to local Arize Phoenix
 	uv run rag-export-traces --results $(RESULTS_FILE)
+
+classify:  ## Classify failure modes in results JSONL file using rag-classify
+	uv run rag-classify --results $(RESULTS_FILE)
 
 format:  ## Format code with ruff and Markdown with prettier
 	uv run ruff format src tests
