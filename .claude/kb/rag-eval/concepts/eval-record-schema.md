@@ -25,7 +25,14 @@ sources       — list[str] of cited doc_ids
 fact_recall / fact_precision / faithfulness_ratio — float|None aggregates
 retrieval_ranked_ids — deduplicated doc-level IDs (retrieval metric input)
 did_abstain_retrieval / did_abstain_e2e — bool flags
+failure_mode  — str|None: failure-taxonomy tag, written by `rag-classify` post-hoc
+                (None until classified). Backward-compatible (added Sprint 3 / Phase 8).
 ```
+
+The `failure_mode` field is persisted here but **owned by the observability domain** —
+its vocabulary, cascade, and thresholds live in
+[observability/failure-taxonomy](../../observability/concepts/failure-taxonomy.md). This
+concept only records that the field exists on the schema.
 
 ## What the Record Deliberately Excludes
 

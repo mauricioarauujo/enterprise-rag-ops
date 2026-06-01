@@ -1,6 +1,6 @@
 # SPRINT 3: Observability
 
-**Sprint:** sprint-3 | **Date:** 2026-05-26 | **Status:** active
+**Sprint:** sprint-3 | **Date:** 2026-05-26 | **Status:** closed (2026-06-01)
 
 ## Goal
 
@@ -88,3 +88,70 @@ design-space research is done; the remaining pre-work is implementation-doc grou
   abstention contracts (single enforced sentinel at gate and generator — ADR-0003 update),
   so `/new-kb rag-generation` is cheapest to pay before Phase 8 brainstorm. Not on the
   Sprint 3 critical path, but the freshest it will ever be.
+
+---
+
+## Retrospective
+
+**Outcome: all three phases shipped ✅ READY, all success criteria met.** The
+differentiator layer (observability) is now end-to-end: traced span trees → failure
+attribution → an aggregate dashboard, all over the cloneable JSONL.
+
+| Phase | Slug                       | Shipped    | PR  | Verdict  |
+| ----- | -------------------------- | ---------- | --- | -------- |
+| 7     | `phase-7-tracing`          | 2026-05-30 | #12 | ✅ READY |
+| 8     | `phase-8-failure-taxonomy` | 2026-05-30 | #13 | ✅ READY |
+| 9     | `phase-9-dashboard`        | 2026-06-01 | #15 | ✅ READY |
+
+(KB domain for Phases 7–8 landed separately in #14.)
+
+### What worked
+
+- **ADR-0004's pre-justified runner-up paid off.** The Langfuse→Phoenix swap at Phase 7
+  acceptance was a localized remap, not a rewrite — exactly because the OTEL-GenAI /
+  OpenInference wire format was decided up front. The highest sprint risk (self-host
+  footprint on 8 GB hardware) resolved cleanly via the planned fallback.
+- **The JSONL-as-SSoT spine held across all three phases.** Tracing (replay), taxonomy
+  (post-hoc tag), and the dashboard (render) all read the same `EvalRecord` JSONL — no
+  re-instrumentation, no schema migration. Phase 9's dashboard reuses
+  `generate_report_data` unchanged.
+- **Schema forward-compatibility from Sprint 2 was real, not aspirational.** `failure_mode`
+  added as an additive `str | None` field; older records parse cleanly.
+- **The implement-in-Antigravity split scaled.** Phase 9's implement ran in Gemini against
+  the DESIGN contract; Claude stayed orchestrator/reviewer and caught a real env-var drift
+  (`PHOENIX_BASE_URL` → `PHOENIX_COLLECTOR_ENDPOINT`) at design time.
+
+### What slipped / scope notes
+
+- **Tool flipped from the ADR-0004 primary (Langfuse) to the runner-up (Phoenix)** at
+  Phase 7 acceptance — anticipated and absorbed, but the SPRINT.md plan/success-criteria
+  text was written Langfuse-first and read slightly stale through the sprint. Minor; the
+  ADR Acceptance Note is the SSoT.
+- **Dashboard held to scope.** The "bottomless dashboard" risk did not materialize —
+  aggregate-only, deep-linking to Phoenix rather than rebuilding its explorer. Two small
+  follow-ups deferred to Sprint 4 (empty-JSONL guard; per-trace deep-link once the Phoenix
+  v15 URL shape is confirmed — seam marked `TODO(FR-11)`).
+
+### Carried forward → Sprint 4
+
+- **`rag-generation` KB scaffold is still empty and unregistered** — flagged in the Sprint 2
+  retro AND this sprint's risks ("cheapest to pay before Phase 8 brainstorm"), and deferred
+  **both** times. Phase 8 shipped fine without it, so it was never on the critical path —
+  but it is now twice-deferred KB debt. Decide in Sprint 4: pay it (`/new-kb rag-generation`)
+  or formally drop the scaffold.
+- **Two dashboard follow-ups** (above) — natural fit for Sprint 4 polish.
+
+## Sprint Close
+
+- **Phase completion:** 3/3 phases shipped with ✅ READY reviews (PRs #12, #13, #15; KB #14).
+- **Knowledge capture:** complete. Phases 7–8 → `observability` KB domain (#14: 5 concepts,
+  3 patterns). Phase 9 → `observability/patterns/dashboard-phoenix-boundary` (this session).
+  No outstanding `/new-kb` / `/update-kb` for Sprint 3 material.
+- **KB staleness sweep:** one Low item fixed — `rag-eval/eval-record-schema` now lists the
+  `failure_mode` field and cross-references the observability taxonomy that owns it. No
+  other drift (`rag-retrieval` untouched; `observability` current).
+- **ADR sweep:** all decisions recorded — ADR-0004 **accepted** (Phase 7, Phoenix validated
+  against the running deployment), ADR-0008 **written + accepted** (Phase 8, taxonomy).
+  Phase 9 correctly added no ADR (presentation layer over ADR-0004/0007/0008).
+- **Archived:** `.claude/sdd/features/sprint-3/` → `.claude/sdd/archive/sprint-3/`
+  (phase-9 folder renamed `phase-9-dashboard` for naming consistency with phases 7–8).
