@@ -22,11 +22,12 @@
 
 ### Patterns
 
-| File                                                                               | Purpose                                                                    |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [patterns/eval-jsonl-replay.md](patterns/eval-jsonl-replay.md)                     | Replay eval-JSONL → Phoenix: ScoreSink, reset, span loop, score write-back |
-| [patterns/manual-span-instrumentation.md](patterns/manual-span-instrumentation.md) | Manual Python 3.11 OTel span tree via `phoenix.otel.register`              |
-| [patterns/failure-classifier-cascade.md](patterns/failure-classifier-cascade.md)   | Rule-based `classify()` cascade wired to `rag-classify` CLI                |
+| File                                                                               | Purpose                                                                      |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [patterns/eval-jsonl-replay.md](patterns/eval-jsonl-replay.md)                     | Replay eval-JSONL → Phoenix: ScoreSink, reset, span loop, score write-back   |
+| [patterns/manual-span-instrumentation.md](patterns/manual-span-instrumentation.md) | Manual Python 3.11 OTel span tree via `phoenix.otel.register`                |
+| [patterns/failure-classifier-cascade.md](patterns/failure-classifier-cascade.md)   | Rule-based `classify()` cascade wired to `rag-classify` CLI                  |
+| [patterns/dashboard-phoenix-boundary.md](patterns/dashboard-phoenix-boundary.md)   | Where each view belongs: dashboard (aggregate, JSONL) vs Phoenix (per-trace) |
 
 ---
 

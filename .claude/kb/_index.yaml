@@ -149,6 +149,9 @@ domains:
       - name: failure-classifier-cascade
         path: patterns/failure-classifier-cascade.md
         confidence: 0.95
+      - name: dashboard-phoenix-boundary
+        path: patterns/dashboard-phoenix-boundary.md
+        confidence: 0.95
 
   rag-retrieval:
     name: RAG Retrieval
