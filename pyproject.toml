@@ -31,6 +31,7 @@ rag-ask = "enterprise_rag_ops.generation.cli:main"
 rag-eval = "enterprise_rag_ops.eval.cli:main"
 rag-export-traces = "enterprise_rag_ops.observability.cli:main"
 rag-classify = "enterprise_rag_ops.eval.classify_cli:main"
+rag-inspect = "enterprise_rag_ops.eval.inspect_cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
