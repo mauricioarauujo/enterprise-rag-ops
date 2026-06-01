@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-05-24"
+last_updated: "2026-06-01"
 
 limits:
   quick_reference: 100
@@ -99,6 +99,55 @@ domains:
         confidence: 0.95
       - name: concurrent-eval-sweep
         path: patterns/concurrent-eval-sweep.md
+        confidence: 0.95
+
+  observability:
+    name: Observability
+    description: >
+      Observability for the custom RAG eval harness — OTel-GenAI / OpenInference span trees
+      (chain → retriever → generation → judge), the deterministic eval-JSONL → Arize Phoenix
+      replay exporter (reset-and-replay idempotency, no upsert-by-seed), span-attribute mapping
+      (OpenInference retrieval.documents.* + gen_ai.* conventions), cost/token economics on
+      spans (cost_usd omitted when None), offline score write-back (log_span_annotations_dataframe),
+      ScoreSink Protocol seam for tool-swap, and the rule-based failure-mode taxonomy
+      (5-label first-match cascade over EvalRecord aggregates + gold Questions,
+      HALLUCINATION_FAITHFULNESS_THRESHOLD=0.5, INCOMPLETE_RECALL_THRESHOLD=0.5).
+      ADRs: 0004 (tool — Phoenix deployed, Langfuse rejected on 8 GB hardware),
+      0008 (taxonomy), 0007 (schema).
+    path: observability/
+    status: draft
+    last_updated: "2026-06-01"
+    agents: [kb-architect]
+    pillars_used: [codebase, deep-research]
+    research_source: _research/archive/observability-2026-05-25.md
+    entry_points:
+      index: index.md
+      quick_reference: quick-reference.md
+    concepts:
+      - name: span-tree-shape
+        path: concepts/span-tree-shape.md
+        confidence: 0.95
+      - name: span-attribute-mapping
+        path: concepts/span-attribute-mapping.md
+        confidence: 0.95
+      - name: reset-and-replay-idempotency
+        path: concepts/reset-and-replay-idempotency.md
+        confidence: 0.95
+      - name: failure-taxonomy
+        path: concepts/failure-taxonomy.md
+        confidence: 0.95
+      - name: aggregate-granularity-limit
+        path: concepts/aggregate-granularity-limit.md
+        confidence: 0.95
+    patterns:
+      - name: eval-jsonl-replay
+        path: patterns/eval-jsonl-replay.md
+        confidence: 0.95
+      - name: manual-span-instrumentation
+        path: patterns/manual-span-instrumentation.md
+        confidence: 0.90
+      - name: failure-classifier-cascade
+        path: patterns/failure-classifier-cascade.md
         confidence: 0.95
 
   rag-retrieval:
