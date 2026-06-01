@@ -153,6 +153,46 @@ domains:
         path: patterns/dashboard-phoenix-boundary.md
         confidence: 0.95
 
+  rag-generation:
+    name: RAG Generation
+    description: >
+      The Generator Protocol seam and its three-provider matrix (OpenAI / Anthropic / Google):
+      the AnswerWithSources closed-schema output contract (extra="forbid", ABSTAIN_ANSWER sentinel),
+      model-agnostic shared prompt (build_system_prompt / build_user_prompt), _GENERATOR_FACTORY
+      dispatch by model.system, and the three divergent structured-output mechanisms
+      (OpenAI strict:true JSON schema; Anthropic forced tool-use; Gemini open-schema mirror
+      _GeminiResponseSchema because Gemini rejects additionalProperties — live 400 INVALID_ARGUMENT),
+      with closed-schema enforcement always applied client-side via model_validate_json.
+      Per-provider token accounting: OpenAI prompt_tokens/completion_tokens; Anthropic
+      input_tokens/output_tokens; Gemini prompt_token_count + candidates_token_count +
+      thoughts_token_count (Gemini 2.5 thinking tokens billed as output but excluded from
+      candidates). Retry hardening born from real sweep throttling (Anthropic max_retries=8;
+      Gemini HttpRetryOptions attempts=8). Cassette key-scrub headers per provider.
+      ADRs: 0003 (Generator seam + structured outputs + abstention), 0005 (three-provider matrix
+      + Gemini schema-dialect amendment).
+    path: rag-generation/
+    status: draft
+    last_updated: "2026-06-01"
+    agents: [kb-architect]
+    pillars_used: [codebase, mcp]
+    entry_points:
+      index: index.md
+      quick_reference: quick-reference.md
+    concepts:
+      - name: generator-seam
+        path: concepts/generator-seam.md
+        confidence: 0.95
+      - name: structured-output-per-provider
+        path: concepts/structured-output-per-provider.md
+        confidence: 0.95
+      - name: per-provider-token-accounting
+        path: concepts/per-provider-token-accounting.md
+        confidence: 0.95
+    patterns:
+      - name: add-a-generator
+        path: patterns/add-a-generator.md
+        confidence: 0.95
+
   rag-retrieval:
     name: RAG Retrieval
     description: >
