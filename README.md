@@ -99,6 +99,8 @@ An exhaustive analysis of all **262** `abstention_error` records for Claude Haik
 
 This confirms that Claude Haiku systematically elects to abstain even when provided with the correct gold context, prioritizing safety/precision over recall. (The 90.46% figure uses gold-doc overlap; a looser proxy that only requires retrieval to return any documents gives 99.2% — both well past the 70% bar.)
 
+Read the full analysis: [Over-Abstention: when a RAG generator refuses answers it has](docs/analysis/over-abstention.md).
+
 ## Quickstart & Reproducing Results
 
 You can explore the aggregate baseline results locally in **under 15 minutes** without requiring API keys or infrastructure spin-up.

@@ -67,3 +67,6 @@ results/*
 
 # Notebooks scratch
 .ipynb_checkpoints/
+
+# Antigravity CLI (agy) runtime project cache
+cache/
