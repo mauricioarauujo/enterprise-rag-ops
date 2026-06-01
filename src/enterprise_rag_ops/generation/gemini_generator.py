@@ -63,7 +63,19 @@ class GeminiGenerator:
                     "Neither GEMINI_API_KEY nor GOOGLE_API_KEY is set — required for "
                     "GeminiGenerator. Set one in your shell or .env before running evaluation."
                 )
-            client = genai.Client()
+            # Harden retries for a full sweep: the SDK default is 5 attempts, which a
+            # transient `503 UNAVAILABLE` ("high demand") spike can exhaust mid-sweep.
+            # Mirror the Anthropic generator (max_retries=8, timeout=120): retry 429/5xx
+            # with backoff, and bound a single call so a dead socket fails fast.
+            client = genai.Client(
+                http_options=types.HttpOptions(
+                    timeout=120_000,  # milliseconds
+                    retry_options=types.HttpRetryOptions(
+                        attempts=8,
+                        http_status_codes=[429, 500, 502, 503, 504],
+                    ),
+                )
+            )
         self._client = client
         self._model = model or os.environ.get("RAG_GEN_MODEL_GOOGLE", DEFAULT_MODEL)
 
