@@ -20,6 +20,7 @@ dependencies = [
     "arize-phoenix-otel>=0.16.0",
     "arize-phoenix-client>=2.7.0",
     "pandas>=2.0,<3.0",
+    "streamlit>=1.40,<2.0",
 ]
 
 [project.scripts]

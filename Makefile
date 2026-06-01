@@ -1,4 +1,4 @@
-.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval eval-baseline install-hooks trace-up trace-reset export-traces classify
+.PHONY: help sync format lint test clean download-data check-data build-index rebuild-index build-index-gold retrieval-smoke smoke retrieval-eval eval-baseline install-hooks trace-up trace-reset export-traces classify dash
 
 # Documents kept per source type when building the corpus subset.
 DOCS_PER_SOURCE ?= 100
@@ -46,6 +46,9 @@ export-traces:  ## Export traces and scores from results JSONL file to local Ari
 
 classify:  ## Classify failure modes in results JSONL file using rag-classify
 	uv run rag-classify --results $(RESULTS_FILE)
+
+dash:  ## Launch the Streamlit aggregate dashboard over results/*.jsonl (no Phoenix needed)
+	uv run streamlit run src/enterprise_rag_ops/dashboard/app.py
 
 format:  ## Format code with ruff and Markdown with prettier
 	uv run ruff format src tests
