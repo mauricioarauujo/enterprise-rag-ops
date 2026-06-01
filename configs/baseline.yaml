@@ -6,6 +6,8 @@ models:
     system: "openai"
   - model_id: "claude-haiku-4-5-20251001"
     system: "anthropic"
+  - model_id: "gemini-2.5-flash-lite"
+    system: "google"
 
 # The judge model to evaluate answers
 judge_model: "gpt-5-nano-2025-08-07"
@@ -40,3 +42,7 @@ prices:
   claude-3-5-sonnet-20241022:
     input_usd_per_1m: 3.00
     output_usd_per_1m: 15.00
+  # gemini-2.5-flash-lite price verified against Google's official Gemini API pricing (AC-8).
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40

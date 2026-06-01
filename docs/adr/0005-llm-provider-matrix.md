@@ -38,3 +38,32 @@ To handle same-family bias:
 - Multi-model sweeps can run cleanly comparing OpenAI and Anthropic answers.
 - Local development has a zero-cost path using Ollama.
 - Prompts must remain model-agnostic where possible, or adapt schemas to each provider's capabilities.
+
+## Amendment (2026-06-01) — Google / Gemini as third generator family
+
+4. **Google (Gemini)**: Third multi-model generator (Sprint 4, Phase 10).
+   - **Generation**: `gemini-2.5-flash-lite` — added to the multi-model sweep behind the
+     proven `Generator` Protocol (`generation/gemini_generator.py`), overridable via env
+     var `RAG_GEN_MODEL_GOOGLE`. Uses native JSON-schema structured output
+     (`response_schema` in `GenerateContentConfig`); the output is re-validated our side
+     via `AnswerWithSources.model_validate_json` (`extra="forbid"`).
+   - **Schema-dialect note (provider friction, found at cassette-record time):** Gemini's
+     structured-output schema dialect **rejects `additionalProperties`**, which
+     `AnswerWithSources` emits via `extra="forbid"` (a live `400 Unknown name
+"additional_properties"`). So the schema handed to the SDK is an **open mirror**
+     (`_GeminiResponseSchema`, same fields, no `extra="forbid"`); the _closed_-schema
+     contract is still enforced our side by `model_validate_json`. This is the
+     per-provider structured-output divergence (OpenAI `strict` / Anthropic forced
+     tool-use / Gemini open-schema-validated-our-side) — a candidate for the
+     `rag-generation` KB.
+   - **Evaluation (Judge)**: never. Gemini is a generator only.
+   - **Pricing**: `0.10` input / `0.40` output USD per 1M tokens, per Google's official
+     Gemini API pricing page (recorded in `configs/baseline.yaml`). Cost-accurate output
+     tokens = `candidates_token_count + thoughts_token_count` (Gemini 2.5 thinking tokens
+     are billed as output but excluded from `candidates_token_count`).
+
+**Independence restated:** adding Google widens the _generator_ matrix to a genuine
+three-way comparison (OpenAI / Anthropic / Google). The judge slot is unchanged: it is
+resolved from `RunConfig.judge_model` (a plain string) through `OpenAIJudge` only, with no
+`system`-keyed judge factory. Gemini cannot be wired as a judge, preserving the
+same-family-bias guarantee this ADR exists to enforce.

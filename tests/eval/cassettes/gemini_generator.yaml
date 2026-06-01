@@ -1,0 +1,98 @@
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "[1] test_doc: The default port for HTTP
+      traffic is 80; for HTTPS it is 443.\n\nWhat is the default port for HTTP traffic?"}],
+      "role": "user"}], "systemInstruction": {"parts": [{"text": "You are an enterprise
+      knowledge assistant. Answer the user''s question using only the numbered context
+      provided. Cite the doc_id of every context entry you used in the `sources` field.
+      If the context does not contain enough information to answer, you MUST set `answer`
+      to exactly this string \u2014 \"I don''t have enough information to answer this
+      question.\" \u2014 and return an empty `sources` list. Do not answer from prior
+      knowledge.\n\nRespond with a single JSON object matching this schema:\n{\n  \"additionalProperties\":
+      false,\n  \"description\": \"An LLM-produced answer with cited document identifiers.\\n\\nFields:\\n    answer:
+      Natural-language answer string. Empty string is allowed by the\\n        schema
+      but flagged by the smoke gate (AC-13).\\n    sources: List of `doc_id` strings
+      cited as evidence. Order is the order\\n        the model emitted them; deduplication
+      is the model''s responsibility.\\n\\nInvariants:\\n    - Both fields are required
+      (Pydantic raises `ValidationError` on\\n      missing or wrong type \\u2014
+      AC-1).\\n    - The schema is closed (`extra=\\\"forbid\\\"` \\u2192 `additionalProperties:
+      false`\\n      in JSON Schema), so OpenAI `strict: true` mode rejects any extra
+      fields.\",\n  \"properties\": {\n    \"answer\": {\n      \"description\": \"Natural-language
+      answer to the user question.\",\n      \"title\": \"Answer\",\n      \"type\":
+      \"string\"\n    },\n    \"sources\": {\n      \"description\": \"doc_id values
+      cited as evidence for the answer.\",\n      \"items\": {\n        \"type\":
+      \"string\"\n      },\n      \"title\": \"Sources\",\n      \"type\": \"array\"\n    }\n  },\n  \"required\":
+      [\n    \"answer\",\n    \"sources\"\n  ],\n  \"title\": \"AnswerWithSources\",\n  \"type\":
+      \"object\"\n}"}], "role": "user"}, "generationConfig": {"responseMimeType":
+      "application/json", "responseSchema": {"description": "Open-schema mirror of
+      `AnswerWithSources` for Gemini''s `response_schema`.\n\nGemini''s structured-output
+      schema dialect rejects `additionalProperties`, which\n`AnswerWithSources` emits
+      because of its `extra=\"forbid\"` config (passing it directly\nyields a 400
+      `Unknown name \"additional_properties\"`). So the schema handed to the SDK\nis
+      this open variant; the real *closed*-schema contract is still enforced our side
+      by\n`AnswerWithSources.model_validate_json(resp.text)` (FR-3), so a Gemini response
+      with an\nextra field still raises. Fields mirror `AnswerWithSources` exactly.",
+      "properties": {"answer": {"title": "Answer", "type": "STRING"}, "sources": {"items":
+      {"type": "STRING"}, "title": "Sources", "type": "ARRAY"}}, "property_ordering":
+      ["answer", "sources"], "required": ["answer", "sources"], "title": "_GeminiResponseSchema",
+      "type": "OBJECT"}}}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '2954'
+      content-type:
+      - application/json
+      host:
+      - generativelanguage.googleapis.com
+      user-agent:
+      - google-genai-sdk/1.75.0 gl-python/3.12.7
+      x-goog-api-client:
+      - google-genai-sdk/1.75.0 gl-python/3.12.7
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAC/12RUU/CMBSF3/crmj4DWQSC8c2gUTRGoo2aMGKa9Q4qo53tHSrL/rvt5qC4h6a5
+        59xzb79VESE05UpIwREsvSALVyGkak6vaYWg0AldyRULbvDobb8quDsLwrdvolWiCEkoV/YLTOIq
+        CWVrIAIyXuZICm2QZNqQW8bmBA3PMpkSacl5PEhor222ujQpWN+9SFyyxXeh04QuE1XTYGx9uC97
+        x2WNzsFvstUC8s5edwaaSSXt+gm41crbntnjnB5UqQR8u3IcdQOaaFpavoIHQO6w8QMcWhi9LZDp
+        DaipLhtso8mwTQswnxiG8Z+OGnl+Io3jrjcItldurMxD/sGvca/kucQf/xR2/cZoQAL/7dWxiAJk
+        1ILZyRSYBOMzLLqtuREeXAOt5fgCxsoW2Aq2DmH/bDDuZzm3674bD81YasAWWlmYCW/c348E3+1f
+        p5/laj+Zzc3dzcfmMqVRHf0CMXlwsocCAAA=
+    headers:
+      Alt-Svc:
+      - h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=UTF-8
+      Date:
+      - Mon, 01 Jun 2026 16:09:48 GMT
+      Server:
+      - scaffolding on HTTPServer2
+      Server-Timing:
+      - gfet4t7; dur=658
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      - X-Origin
+      - Referer
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Gemini-Service-Tier:
+      - standard
+      X-XSS-Protection:
+      - '0'
+    status:
+      code: 200
+      message: OK
+version: 1

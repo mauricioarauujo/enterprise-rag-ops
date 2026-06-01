@@ -19,7 +19,7 @@ class ModelConfig(BaseModel):
     """Configuration for a generator model evaluated in a sweep (FR-4)."""
 
     model_id: str
-    system: Literal["openai", "anthropic"]
+    system: Literal["openai", "anthropic", "google"]
 
 
 class RunConfig(BaseModel):

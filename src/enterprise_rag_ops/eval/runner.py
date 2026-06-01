@@ -26,6 +26,7 @@ from enterprise_rag_ops.eval.retrieval_metrics import deduplicate_ranked_ids
 from enterprise_rag_ops.generation.anthropic_generator import AnthropicGenerator
 from enterprise_rag_ops.generation.cli import ABSTAIN_ANSWER
 from enterprise_rag_ops.generation.context import ContextAssembler
+from enterprise_rag_ops.generation.gemini_generator import GeminiGenerator
 from enterprise_rag_ops.generation.openai_generator import OpenAIGenerator
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval import config as retrieval_config
@@ -38,6 +39,7 @@ logger = logging.getLogger("enterprise_rag_ops.eval.runner")
 _GENERATOR_FACTORY = {
     "openai": OpenAIGenerator,
     "anthropic": AnthropicGenerator,
+    "google": GeminiGenerator,
 }
 
 # FR-10: dirs existing is not enough — a *plain* index passes the existence check but
