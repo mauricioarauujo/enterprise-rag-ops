@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from enterprise_rag_ops.generation.gemini_generator import GeminiGenerator
+from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
 
 # --- Fake client for offline testing (AC-2, AC-3) ---------------------------
@@ -83,7 +84,10 @@ def test_offline_injected_client():
     # rejects the `additionalProperties` that AnswerWithSources(extra="forbid") emits
     # (regression guard for the live 400 "Unknown name additional_properties").
     assert "additionalProperties" not in config.response_schema.model_json_schema()
-    assert set(config.response_schema.model_fields) == {"answer", "sources"}
+    # Field sets must match AnswerWithSources EXACTLY — machine-checks the open mirror
+    # against the real schema in both directions, so a future field added to
+    # AnswerWithSources fails here instead of silently in a live Gemini call.
+    assert set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields)
 
     # Extra field path
     extra_field_json = (
@@ -228,5 +232,6 @@ def test_live_replay(vcr_record, monkeypatch):
     assert result.sources == ["test_doc"]
     assert stats.input_tokens > 0
     assert stats.output_tokens > 0
+    assert stats.latency_s > 0.0
     assert stats.system == "google"
     assert stats.model == "gemini-2.5-flash-lite"

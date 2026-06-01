@@ -49,10 +49,10 @@ To handle same-family bias:
      via `AnswerWithSources.model_validate_json` (`extra="forbid"`).
    - **Schema-dialect note (provider friction, found at cassette-record time):** Gemini's
      structured-output schema dialect **rejects `additionalProperties`**, which
-     `AnswerWithSources` emits via `extra="forbid"` (a live `400 Unknown name
-"additional_properties"`). So the schema handed to the SDK is an **open mirror**
-     (`_GeminiResponseSchema`, same fields, no `extra="forbid"`); the _closed_-schema
-     contract is still enforced our side by `model_validate_json`. This is the
+     `AnswerWithSources` emits via `extra="forbid"` (a live `400 INVALID_ARGUMENT`:
+     "Unknown name `additional_properties`"). So the schema handed to the SDK is an
+     **open mirror** (`_GeminiResponseSchema`, same fields, no `extra="forbid"`); the
+     **closed**-schema contract is still enforced our side by `model_validate_json`. This is the
      per-provider structured-output divergence (OpenAI `strict` / Anthropic forced
      tool-use / Gemini open-schema-validated-our-side) — a candidate for the
      `rag-generation` KB.

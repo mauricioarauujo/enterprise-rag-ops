@@ -50,7 +50,7 @@ The `gen_ai` nested object mirrors the OTEL GenAI semantic conventions:
 
 ```python
 gen_ai.request.model  →  gen_ai_request_model  (OTEL attribute)
-gen_ai.system         →  gen_ai_system         ("openai" | "anthropic")
+gen_ai.system         →  gen_ai_system         ("openai" | "anthropic" | "google")
 gen_ai.operation.name →  gen_ai_operation_name (default "chat")
 ```
 
