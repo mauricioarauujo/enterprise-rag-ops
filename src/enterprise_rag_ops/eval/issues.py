@@ -30,7 +30,15 @@ def _cluster_identity(failure_mode: str, category: str, schema_version: str) -> 
 
     Returns the stable ``{failure_mode}|{category} schema={schema_version}`` token so the
     hidden HTML-comment marker and the search fingerprint can never drift apart.
+
+    ``|`` is the field separator and also GitHub search's OR operator, so a ``|`` inside a
+    cluster key would corrupt the dedup search — reject it rather than emit a broken token.
     """
+    if "|" in failure_mode or "|" in category:
+        raise ValueError(
+            f"'|' in failure_mode/category breaks the fingerprint separator: "
+            f"{failure_mode!r}, {category!r}"
+        )
     return f"{failure_mode}|{category} schema={schema_version}"
 
 
@@ -54,14 +62,13 @@ def build_issue_draft(
     cluster: TriageCluster,
     report: TriageReport,
     *,
-    repo: str | None = None,
     labels: list[str] | None = None,
 ) -> IssueDraft:
     """Build a deterministic, grounded ``IssueDraft`` for one triage cluster.
 
     Pure: no I/O, no network, no mutation of inputs. The body is grounded in the real
     cluster stats and representative example carried by ``triage.json`` — never generated
-    prose. ``repo`` is accepted for forward-compat (repo-qualified links) but unused in v1.
+    prose.
     """
     schema_version = report.schema_version
     fm = cluster.failure_mode

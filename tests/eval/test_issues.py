@@ -229,9 +229,10 @@ def test_ac10_atomic_write_cleanup(tmp_path):
     triage = write_triage(tmp_path, make_report([cluster]))
     out = tmp_path / "issues"
 
+    # os.replace fails after the temp file is written → cleanup unlinks the temp, no target.
+    # (The write-failure branch is the identical classify_cli.py house idiom; not re-tested.)
     with patch("enterprise_rag_ops.eval.issues_cli.os.replace", side_effect=OSError("boom")):
         rc = main(["--triage", str(triage), "--output-dir", str(out)])
-
     assert rc == 1
     assert not (out / "abstention_error-basic.md").exists()
     assert list(out.glob(".rag-issues-tmp-*")) == []
@@ -271,8 +272,8 @@ def test_ac12_create_skips_existing(tmp_path, capsys):
     assert "issues/7" in out_text
 
 
-def test_ac12_create_files_new_issue(tmp_path):
-    """AC-12: --create with no match calls create_issue once with the draft title/body/labels."""
+def test_ac12_create_files_new_issue(tmp_path, capsys):
+    """AC-12: --create with no match calls create_issue once and reports the returned URL."""
     cluster = make_cluster()
     triage = write_triage(tmp_path, make_report([cluster]))
     out = tmp_path / "issues"
@@ -286,6 +287,7 @@ def test_ac12_create_files_new_issue(tmp_path):
     assert "abstention_error" in title
     assert "<!-- rag-triage-cluster: abstention_error|basic schema=1.0 -->" in body
     assert labels == ["rag-triage"]
+    assert "https://github.com/owner/repo/issues/1" in capsys.readouterr().out
 
 
 def test_ac13_offline_guarantee():
@@ -295,6 +297,26 @@ def test_ac13_offline_guarantee():
     )
     result = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True)
     assert result.returncode == 0, f"issues import pulled in an LLM client: {result.stderr}"
+
+
+def test_ac13_ghcli_never_instantiated_in_dry_run(tmp_path, monkeypatch):
+    """AC-13: a dry-run pass (no --create) never constructs the real GhCliClient seam impl."""
+    import enterprise_rag_ops.eval.github as github_mod
+
+    instantiated: list[bool] = []
+    original_init = github_mod.GhCliClient.__init__
+
+    def _spy_init(self, *args, **kwargs):
+        instantiated.append(True)
+        original_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(github_mod.GhCliClient, "__init__", _spy_init)
+
+    triage = write_triage(tmp_path, make_report([make_cluster()]))
+    rc = main(["--triage", str(triage), "--output-dir", str(tmp_path / "out")])
+
+    assert rc == 0
+    assert instantiated == [], "GhCliClient was instantiated during a dry-run"
 
 
 def test_ac14_console_script_and_help():

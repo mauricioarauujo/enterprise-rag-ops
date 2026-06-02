@@ -89,7 +89,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _draft_filename(draft: IssueDraft) -> str:
-    return f"{draft.failure_mode}-{draft.category}.md"
+    # Guard against path separators in cluster keys turning the draft into a subdirectory.
+    fm = draft.failure_mode.replace("/", "_").replace(" ", "_")
+    cat = draft.category.replace("/", "_").replace(" ", "_")
+    return f"{fm}-{cat}.md"
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -163,7 +166,7 @@ def main(argv: list[str] | None = None, *, client: GitHubClient | None = None) -
             print("No clusters to draft (empty triage report).")
             return 0
 
-        drafts = [build_issue_draft(c, report, repo=args.repo, labels=labels) for c in selected]
+        drafts = [build_issue_draft(c, report, labels=labels) for c in selected]
 
         # Draft markdown files are always written (dry-run and --create alike).
         print("=" * 80)
