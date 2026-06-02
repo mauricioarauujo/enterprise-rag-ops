@@ -41,6 +41,7 @@ CLAUDE.local.md
 .claude/storage/
 .claude/worktrees/
 .claude/.gates/
+.claude/scheduled_tasks.lock
 
 # Antigravity / Gemini CLI — local tool state
 .antigravitycli/
