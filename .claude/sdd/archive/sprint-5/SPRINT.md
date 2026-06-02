@@ -1,6 +1,6 @@
 # SPRINT 5: Closed-Loop — Eval → Observability → Action
 
-**Sprint:** sprint-5 | **Date:** 2026-06-01 | **Status:** active
+**Sprint:** sprint-5 | **Date:** 2026-06-01 | **Status:** closed (2026-06-02)
 
 ## Goal
 
@@ -75,3 +75,64 @@ phase's brainstorm/ADR, KB work lands _after_ its ADR:
 - **Scope creep into a bot.** "Agent drafts issues" can balloon into a full automation product.
   Hold the line: cluster → draft markdown → create issue (dry-run default). Phase 16 (legibility)
   is the flex; the action loop (14→15) is the sprint's point.
+
+---
+
+## Retrospective
+
+**Closed:** 2026-06-02 | **Verdict:** all 3 phases shipped ✅
+
+### Phases shipped vs planned
+
+| Phase | Slug                                    | Verdict  | PR(s)       |
+| ----- | --------------------------------------- | -------- | ----------- |
+| 14    | `rag-triage` core                       | ✅ READY | #21         |
+| 15    | triage → GitHub Issues + ADR-0009       | ✅ READY | #22         |
+| 16    | `--enrich-from-index` Phoenix hydration | ✅ READY | #24, KB #25 |
+
+All planned phases shipped. No phase cut — Phase 16 (the designated flex) made it in.
+
+### What worked
+
+- **The action loop is grounded, not a gadget.** `rag-triage` → `rag-issues` runs on the
+  real classified `baseline.jsonl` and drafts a GitHub Issue anchored in the actual
+  over-abstention cluster (`abstention_error`/`basic`, 201 records / 13.4%) with an idempotency
+  marker — exactly the anti-gadget bar the Risks section set.
+- **Outward-facing safety held.** Issue creation is dry-run/draft by default; live `--create`
+  is explicit opt-in and idempotent via a body-marker fingerprint (ADR-0009).
+- **The observability coupling regression was avoided.** Phase 16 activated `--enrich-from-index`
+  with the heavy corpus read at the CLI/exporter boundary; `attributes.py` stayed import-light and
+  signature-stable (NFR-1/NFR-3 intact).
+- **No-re-run guard respected throughout.** All three phases consumed already-published artifacts
+  (classified JSONL, gold, corpus) — zero fresh sweeps.
+- **Knowledge loop fully discharged at close.** ADR-0009 landed (and the pre-existing ADR-0008
+  index gap was backfilled); both scheduled KB captures shipped — `/update-kb rag-eval` (#23,
+  `failure-triage` + `triage-to-issues`) and `/update-kb observability` (#25, the now-live
+  `.content` seam). No outstanding KB/ADR debt.
+
+### What slipped / scope changes
+
+- **None against the plan.** Phase order and scope held. The only post-review polish was folding
+  the three non-blocking phase-16 nits into the impl branch before merge.
+- **Legibility is partial by design — and surfaced a follow-up.** Phase 16 delivered _retrieval_
+  legibility (doc content on the retriever span) but the chain/generation/judge spans still carry
+  only metadata: the question text isn't on the chain span, `record.answer` isn't on the
+  generation span, and judge reasoning / generation input aren't persisted in `EvalRecord` at all.
+  Validated visually in Phoenix on `qst_0493`. This is the seed for the **next sprint** (full
+  trace legibility) — see Sprint Close.
+
+## Sprint Close
+
+- **Knowledge capture:** complete. No further `/new-kb` / `/update-kb` outstanding — the two
+  scheduled captures (rag-eval #23, observability #25) and ADR-0009 all landed before close.
+- **KB staleness sweep:** clean. The observability `.content` seam (the one stale spot) was
+  refreshed in #25; no other domain the sprint touched is outdated.
+- **ADR sweep:** clean. ADR-0009 (triage→issues) recorded; ADR-0008 index gap backfilled. No
+  architectural decision left unrecorded.
+- **Next sprint (decided 2026-06-02):** **full trace legibility** — hydrate the question text
+  (gold join) → chain span, `record.answer` → generation span, and judge reasoning + generation
+  input prompt onto their spans. Scope chosen: **full legibility** (incl. judge reasoning +
+  generation input), which requires an `EvalRecord` schema change and re-running the eval sweep.
+  ⚠️ Likely overflows a single sprint's budget — `/brainstorm` should propose splitting into a
+  cheap export-only phase (answer + question, no re-run) and a costlier schema-change + re-run
+  phase. Open via `/sprint-start` after this close.
