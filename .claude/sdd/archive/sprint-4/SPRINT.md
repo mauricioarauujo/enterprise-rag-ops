@@ -1,6 +1,6 @@
 # SPRINT 4: Polish & Ship (results-first)
 
-**Sprint:** sprint-4 | **Date:** 2026-06-01 | **Status:** active
+**Sprint:** sprint-4 | **Date:** 2026-06-01 | **Status:** closed
 
 ## Goal
 
@@ -74,3 +74,58 @@ phase's brainstorm/ADR, KB work lands _after_ its ADR:
   unregistered scaffold (deferred in Sprint 2 and Sprint 3). Phase 10 is its natural
   home; if Phase 10 slips, decide explicitly to pay it or drop the scaffold rather than
   carrying it a third time.
+
+---
+
+## Retrospective
+
+**Closed:** 2026-06-01 | **Phases shipped:** 10, 11, 12 (3 of 4 planned; 13 consciously deferred).
+
+### Phases shipped vs planned
+
+| Phase | Slug                        | Verdict  | PR  | Outcome                                                                                                                                                                                                                  |
+| ----- | --------------------------- | -------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 10    | `phase-10-gemini-generator` | ✅ READY | #17 | `GeminiGenerator` behind the `Generator` Protocol; `system` Literal → `google`; price entry; cassette; **ADR-0005 amended**; the twice-deferred **`rag-generation` KB built** (debt paid).                               |
+| 11    | `phase-11-readme-results`   | ✅ READY | #18 | Published the 1499-record three-way baseline; `rag-inspect` read-only CLI; results-first README; the **AC-8 verification gate** (90.46% of claude-haiku abstentions are genuine generator behaviour, not the 0.45 gate). |
+| 12    | `phase-12-writeup`          | ✅ READY | #19 | `docs/analysis/over-abstention.md` — the over-abstention finding walked end-to-end (`qst_0126`), grounded in published evidence.                                                                                         |
+| 13    | `phase-13-leaderboard`      | —        | —   | **Skipped → backlog (LOW).** See Scope changes.                                                                                                                                                                          |
+
+### Success criteria — final
+
+- ✅ **Three-way comparison is real** — Gemini runs behind the seam; report + dashboard show three generators; judge held cross-family.
+- ✅ **Provider addition localized** — a new generator file + one-line wire + config; runner/judge/observability untouched. ADR-0005 records it.
+- ✅ **Clone-to-understand in minutes** — README gives architecture, run path, three-way numbers, headline finding; `make dash` works on a fresh clone.
+- ✅ **A specific, reproducible finding is written up** — root cause verified _before_ publication (Phase 11 `rag-inspect` + AC-8), then deepened in the Phase 12 analysis.
+- ❌ **Results submitted to the leaderboard** — **not met; consciously deferred** (the one unmet criterion). See Scope changes.
+
+### What worked
+
+- **Finding-before-evidence risk handled exactly as planned.** `rag-inspect` + the AC-8 gate (exhaustive over all 262 records) verified the over-abstention is genuine generator behaviour _before_ the README/writeup claimed it. The highest sprint risk was retired by design, not luck.
+- **Results-first ordering held.** Phase 10's third generator produced the evidence (the abstention↔hallucination tradeoff) that Phases 11–12 wrote up; no ship phase starved.
+- **agy-implement + Claude-review split paid off.** Token-heavy drafting ran in Antigravity/Gemini; Claude's review caught real defects every time — a personal-budget stranger-test leak in Phase 11's DESIGN, and absolute `file:///Users/...` link leaks + a stray `cache/` dir in Phase 12. The review gate, not the draft, protected quality.
+- **Carried KB debt paid at its ripest moment.** `rag-generation` (twice-deferred) was built when three concrete providers made the multi-provider pattern real.
+
+### What slipped / could improve
+
+- **Recurring `agy` artifact friction.** Each `agy` run introduced a stray artifact that review had to clean (Phase 12: a local-path link leak + a `cache/` dir, now gitignored). Approaching the ≥2 threshold for a harness guardrail — a stranger-test grep (`/Users`, `file:///`) in the `/review` checklist would catch this mechanically. Logged as a watch item, not yet built.
+- **Phase 13 mis-scoped at planning.** It was framed as a same-effort "email Joachim" step, but it is outward-facing, third-party-dependent, and only credible _with_ Onyx's official `answer_evaluation` scorer — real engineering that collides with the no-re-runs guard. Better surfaced late than shipped half-baked.
+
+### Scope changes
+
+- **Phase 13 (leaderboard) skipped and backlogged (LOW priority).** Decision (2026-06-01, with the user): emailing our custom-judge numbers without the official Onyx scorer doesn't hold up, and integrating that scorer is real effort against the no-re-runs guard and a tight budget — for a roadmap "(Stretch)" goal. The core portfolio value shipped in Phases 10–12. Recorded in `docs/planning/roadmap.md` § Backlog. The LinkedIn cross-post (Phase 12) was likewise kept out of tracked scope as a personal follow-on.
+
+## Sprint Close
+
+### Knowledge-feedback loop (sprint aggregate)
+
+- **Knowledge capture — DONE in-sprint.** The one substantive item — `/new-kb rag-generation` (Phase 10) — was built and committed in PR #17 (`concepts/{generator-seam, structured-output-per-provider, per-provider-token-accounting}`, `patterns/add-a-generator`). Phase 11's optional "read-only inspect CLI" pattern was judged low-value and **not** built (raise only if a third such CLI appears). Phase 12: none. **No outstanding `/new-kb` / `/update-kb`.**
+- **KB staleness — CLEAN.** Phase 10's three `rag-eval` staleness items (`multi-model-runner`, `stats-capture-seam`, `eval-record-schema` gaining `google`) were fixed within that phase's review. Phases 11–12 changed no documented API/enum/constraint. Nothing outstanding.
+- **ADR sweep — CLEAN.** **ADR-0005 amended** (provider matrix → third generator family, independence restated, schema-dialect note) in Phase 10. No new ADRs warranted: Phases 11–12 cite existing ADRs and make no durable architectural decision; the Phase 13 skip is a scope/planning call (backlog), not an ADR.
+
+### Archive
+
+`.claude/sdd/features/sprint-4/` → `.claude/sdd/archive/sprint-4/` (joins sprint-1, sprint-2, sprint-3).
+
+### Entry point for the next sprint
+
+The substrate + eval + observability + public artifact are all shipped. Open items carried forward: (1) the leaderboard submission (backlog, LOW, gated on the official scorer); (2) the `/review` stranger-test grep guardrail (watch item); (3) the closed-loop ideas in `docs/planning/roadmap.md` § Backlog (`rag-triage` → GitHub Issues, `--enrich-from-index` Phoenix hydration). Next sprint TBD — `/sprint-start sprint-5` when scoped.
