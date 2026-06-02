@@ -50,6 +50,12 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         "gen_ai.usage.output_tokens": record.generation.output_tokens,
         "latency_s": record.generation.latency_s,
     }
+    # Phase 17: hydrate the generated answer onto the generation span as the OpenInference
+    # output.value so Phoenix's Info tab renders it. Always-on — record.answer is an in-record
+    # field (no external read), mapped like every other field here; only the gold-derived
+    # question (input.value, written at the exporter boundary) is opt-in (FR-4/NFR-7).
+    gen_attrs["output.value"] = record.answer
+    gen_attrs["output.mime_type"] = "text/plain"
     # Cost rule (Q3 / FR-3): Omit cost_usd if it is None (never write 0)
     if record.generation.cost_usd is not None:
         gen_attrs["cost_usd"] = record.generation.cost_usd
