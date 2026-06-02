@@ -43,11 +43,15 @@ domains:
       (price-table-in-config, None on missing price), HTML+MD report rendering
       (string.Template, None->N/A, dynamic k), stats-capture seam
       (generate_with_stats / judge_with_stats on implementations), AnthropicGenerator
-      (forced tool-use, max_retries=8, timeout=120), and BGE-M3 encoder thread-safety
-      (retrieve_lock). ADRs: 0001, 0006, 0007.
+      (forced tool-use, max_retries=8, timeout=120), BGE-M3 encoder thread-safety
+      (retrieve_lock), failure-mode triage clustering (groupby-aggregate over classified
+      JSONL, frozen TriageReport/TriageCluster, SCHEMA_VERSION cross-phase contract,
+      deterministic representative + sort), and triage-to-issues (grounded GitHub Issue
+      drafts, body-marker fingerprint idempotency, GitHubClient Protocol seam, dry-run
+      default, schema gate). ADRs: 0001, 0006, 0007, 0009.
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-01"
+    last_updated: "2026-06-02"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -81,6 +85,9 @@ domains:
       - name: stats-capture-seam
         path: concepts/stats-capture-seam.md
         confidence: 0.95
+      - name: failure-triage
+        path: concepts/failure-triage.md
+        confidence: 0.95
     patterns:
       - name: per-fact-judge-call
         path: patterns/per-fact-judge-call.md
@@ -99,6 +106,9 @@ domains:
         confidence: 0.95
       - name: concurrent-eval-sweep
         path: patterns/concurrent-eval-sweep.md
+        confidence: 0.95
+      - name: triage-to-issues
+        path: patterns/triage-to-issues.md
         confidence: 0.95
 
   observability:
