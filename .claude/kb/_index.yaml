@@ -119,14 +119,17 @@ domains:
       replay exporter (reset-and-replay idempotency, no upsert-by-seed), span-attribute mapping
       (OpenInference retrieval.documents.* + gen_ai.* conventions), cost/token economics on
       spans (cost_usd omitted when None), offline score write-back (log_span_annotations_dataframe),
-      ScoreSink Protocol seam for tool-swap, and the rule-based failure-mode taxonomy
+      ScoreSink Protocol seam for tool-swap, opt-in content enrichment (--enrich-from-index
+      hydrates retrieval.documents.{i}.document.content at the exporter boundary from corpus.jsonl;
+      pure mapper attributes.py unchanged; .score still out — not in EvalRecord),
+      and the rule-based failure-mode taxonomy
       (5-label first-match cascade over EvalRecord aggregates + gold Questions,
       HALLUCINATION_FAITHFULNESS_THRESHOLD=0.5, INCOMPLETE_RECALL_THRESHOLD=0.5).
       ADRs: 0004 (tool — Phoenix deployed, Langfuse rejected on 8 GB hardware),
       0008 (taxonomy), 0007 (schema).
     path: observability/
     status: draft
-    last_updated: "2026-06-01"
+    last_updated: "2026-06-02"
     agents: [kb-architect]
     pillars_used: [codebase, deep-research]
     research_source: _research/archive/observability-2026-05-25.md

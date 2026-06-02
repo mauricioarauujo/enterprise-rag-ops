@@ -24,13 +24,22 @@ Attributes follow **OTel GenAI semantic conventions** (`gen_ai.*`) for LLM spans
 
 ## Retriever Span
 
-| Attribute                               | Source                           | Convention    |
-| --------------------------------------- | -------------------------------- | ------------- |
-| `retrieval.documents.{i}.document.id`   | `record.retrieval_ranked_ids[i]` | OpenInference |
-| `retrieval.documents.{i}.document.rank` | `i`                              | OpenInference |
+| Attribute                                  | Source                           | Convention    |
+| ------------------------------------------ | -------------------------------- | ------------- |
+| `retrieval.documents.{i}.document.id`      | `record.retrieval_ranked_ids[i]` | OpenInference |
+| `retrieval.documents.{i}.document.rank`    | `i`                              | OpenInference |
+| `retrieval.documents.{i}.document.content` | `doc_lookup[doc_id]` (opt-in)    | OpenInference |
 
-Note: `.document.content` and `.document.score` are intentionally omitted in Phase 7
-(seam FR-12 — `--enrich-from-index` path reserved for a future phase).
+`.content` is **live** (Phase 16) but opt-in: the pure mapper (`attributes.py`) emits only
+`.id` and `.rank`; the exporter (`exporter.py`) post-processes `span_attrs["retriever"]` after
+`build_span_attrs` returns when `doc_lookup` is non-None (i.e., `--enrich-from-index` was
+passed). A missing `doc_id` is omitted and logged as a warning — never an empty string, never a
+crash (FR-5). `.document.score` is still out: scores are not persisted in `EvalRecord`
+(field is `list[str]`, no scores); deriving them requires a retrieval re-run (FR-7).
+
+**ID identity assumption:** `EvalRecord.retrieval_ranked_ids` holds doc-level IDs identical to
+`Document.id` in `corpus.jsonl`. If chunking ever makes these IDs diverge, every lookup misses
+and warns per record.
 
 ## Generation and Judge Spans (identical shape)
 
