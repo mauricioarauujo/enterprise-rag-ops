@@ -20,27 +20,10 @@ Downstream averaging must **exclude** `None`, not coerce to `0`.
 | `_LLMJudgeVerdict` | `per_fact: list[FactVerdict]`, `per_citation: list[CitationVerdict]`              | LLM-facing only; no floats |
 | `JudgeVerdict`     | above + `fact_recall`, `fact_precision`, `faithfulness_ratio` (all `float\|None`) | Public output              |
 
-## Judge call shape
+## Judge call / Prompt
 
-```python
-response_format = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "JudgeVerdict",
-        "schema": _LLMJudgeVerdict.model_json_schema(),
-        "strict": True,
-    },
-}
-```
-
-## Prompt structure
-
-```
-System: role + rubric + _LLMJudgeVerdict JSON schema
-User:   QUESTION / ANSWER UNDER JUDGMENT /
-        GOLD FACTS (numbered checklist) /
-        CITED DOCUMENTS (one === doc {doc_id} === block per cited doc)
-```
+`response_format`: `type=json_schema`, `name=JudgeVerdict`, `schema=_LLMJudgeVerdict.model_json_schema()`, `strict=True`.  
+Prompt: `System` = role+rubric+schema; `User` = QUESTION / ANSWER / GOLD FACTS (numbered) / CITED DOCUMENTS (one block per `doc_id`).
 
 ## Env variables
 
@@ -86,13 +69,31 @@ vcr.VCR(
 # Replay (default): make test  (no key, no network)
 ```
 
+## Triage / Issues (Sprint 5, Phase 14+15)
+
+```
+rag-triage --results results/baseline.jsonl       # writes results/triage.json
+rag-issues --triage results/triage.json           # dry-run: writes results/issues/*.md
+rag-issues --triage results/triage.json --create  # idempotent GitHub creation via gh CLI
+rag-issues ... --all-clusters                     # all clusters (default: dominant only)
+```
+
+| Item             | Value                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| Cluster key      | `(failure_mode, category)` from the record's own fields                              |
+| Rate             | `count / total_records` (integer division never occurs; `total==0` → early return)   |
+| Representative   | `min(bucket, key=lambda r: r.question_id)` — lex-first question_id                   |
+| Sort order       | `count desc`, tiebreaker `(failure_mode, category) asc`                              |
+| `SCHEMA_VERSION` | `"1.0"` — embedded in `TriageReport`; `rag-issues` hard-rejects mismatches           |
+| Fingerprint      | `rag-triage-cluster: {fm}\|{cat} schema={version}` — substring of hidden HTML marker |
+| Default labels   | `["rag-triage"]`                                                                     |
+
 ## File map (key modules)
 
 Phase 4/5: `eval/schema.py` · `eval/aggregate.py` · `eval/interfaces.py` · `eval/prompt.py`
 · `eval/openai_judge.py` · `eval/stub_judge.py` · `eval/questions.py`
 · `eval/retrieval_metrics.py` · `eval/retrieval_eval.py` · `eval/abstention.py`
 · `generation/schema.py` (ABSTAIN_ANSWER) · `tests/eval/cassettes/`
-
 Phase 6: `eval/records.py` · `eval/config.py` · `eval/runner.py` · `eval/report.py`
-· `generation/openai_generator.py` · `generation/anthropic_generator.py`
-· `tests/conftest.py` (root vcr_record fixture)
+· `generation/openai_generator.py` · `generation/anthropic_generator.py` · `tests/conftest.py`
+Phase 14+15: `eval/triage.py` · `eval/triage_cli.py` · `eval/issues.py` · `eval/github.py` · `eval/issues_cli.py`
