@@ -384,3 +384,213 @@ def test_cli_dry_run(tmp_path, two_record_jsonl_content):
         # Verify it passed a NoOpScoreSink subclass instance
         called_sink = mock_replay.call_args[1]["sink"]
         assert isinstance(called_sink, cli.NoOpScoreSink)
+
+
+# --- Phase 16: --enrich-from-index content hydration -----------------------------------
+
+
+def _one_record_jsonl(ranked_ids: list[str]) -> str:
+    """A single valid EvalRecord JSONL line with the given doc-level ranked ids."""
+    rec = {
+        "question_id": "qst_0001",
+        "category": "basic",
+        "run_id": "baseline",
+        "k": 10,
+        "gen_ai": {
+            "request": {"model": "gpt-5-nano-2025-08-07"},
+            "system": "openai",
+            "operation": {"name": "chat"},
+        },
+        "generation": {
+            "input_tokens": 100,
+            "output_tokens": 200,
+            "latency_s": 1.5,
+            "model": "gpt-5-nano-2025-08-07",
+            "system": "openai",
+            "cost_usd": 0.0001,
+        },
+        "judge": {
+            "input_tokens": 300,
+            "output_tokens": 400,
+            "latency_s": 2.5,
+            "model": "gpt-5-nano-2025-08-07",
+            "system": "openai",
+            "cost_usd": 0.0002,
+        },
+        "answer": "Answer 1",
+        "sources": list(ranked_ids),
+        "fact_recall": 1.0,
+        "fact_precision": 0.8,
+        "faithfulness_ratio": 0.9,
+        "retrieval_ranked_ids": list(ranked_ids),
+        "did_abstain_retrieval": False,
+        "did_abstain_e2e": False,
+    }
+    return json.dumps(rec) + "\n"
+
+
+def _retriever_attrs(sink: "FakeScoreSink") -> dict[str, Any]:
+    attrs = next(
+        (s.attributes for s in sink.spans if s.openinference_span_kind == "retriever"), None
+    )
+    assert attrs is not None, "no retriever span was exported"
+    return attrs
+
+
+def test_ac1_enrich_default_no_behavior_change(tmp_path):
+    """AC-1: no doc_lookup -> only .id/.rank, no .content (byte-identical to today)."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1", "d2"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p")  # default doc_lookup=None
+
+    attrs = _retriever_attrs(sink)
+    assert attrs["retrieval.documents.0.document.id"] == "d1"
+    assert attrs["retrieval.documents.0.document.rank"] == 0
+    assert "retrieval.documents.0.document.content" not in attrs
+    assert "retrieval.documents.1.document.content" not in attrs
+
+
+def test_ac2_content_hydration_with_fake_lookup(tmp_path):
+    """AC-2: doc_lookup hydrates .content per doc; .id/.rank preserved; no file I/O."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1", "d2"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", doc_lookup={"d1": "alpha text", "d2": "beta text"})
+
+    attrs = _retriever_attrs(sink)
+    assert attrs["retrieval.documents.0.document.content"] == "alpha text"
+    assert attrs["retrieval.documents.1.document.content"] == "beta text"
+    assert attrs["retrieval.documents.0.document.id"] == "d1"
+    assert attrs["retrieval.documents.1.document.id"] == "d2"
+    assert attrs["retrieval.documents.0.document.rank"] == 0
+    assert attrs["retrieval.documents.1.document.rank"] == 1
+
+
+def test_ac3_missing_doc_id_omit_and_warn(tmp_path, caplog):
+    """AC-3: a ranked id absent from the map omits .content + warns; no crash."""
+    import logging
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1", "dX"]))
+    sink = FakeScoreSink()
+
+    with caplog.at_level(logging.WARNING, logger="enterprise_rag_ops.observability.exporter"):
+        replay_jsonl(jsonl, sink, project="p", doc_lookup={"d1": "alpha text"})
+
+    attrs = _retriever_attrs(sink)
+    assert attrs["retrieval.documents.0.document.content"] == "alpha text"
+    assert "retrieval.documents.1.document.content" not in attrs
+    assert "dX" in caplog.text
+
+
+def test_ac4_no_score_key_in_v1(tmp_path):
+    """AC-4: enrichment never writes a .document.score key."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1", "d2"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", doc_lookup={"d1": "a", "d2": "b"})
+
+    attrs = _retriever_attrs(sink)
+    assert not any(".document.score" in key for key in attrs)
+
+
+def test_ac5_attributes_purity_and_unchanged_signature():
+    """AC-5: build_span_attrs keeps its single-param signature; attributes.py imports no
+    retrieval/ingest/phoenix/otel (scan import statements only, not comments)."""
+    import inspect
+
+    from enterprise_rag_ops.observability import attributes as attrs_mod
+
+    assert list(inspect.signature(attrs_mod.build_span_attrs).parameters) == ["record"]
+
+    import_lines = " ".join(
+        ln.strip()
+        for ln in inspect.getsource(attrs_mod).splitlines()
+        if ln.strip().startswith(("import ", "from "))
+    )
+    for forbidden in ("retrieval", "ingest", "phoenix", "opentelemetry"):
+        assert forbidden not in import_lines, f"attributes.py imports {forbidden}"
+
+
+def test_ac6_offline_no_heavy_import(tmp_path):
+    """AC-6: the enrichment path runs on a purely in-memory lookup + fake sink — content
+    comes from the map, not a corpus file (none exists), and no real Phoenix/LanceDB sink
+    is involved."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", doc_lookup={"d1": "alpha"})
+
+    # No corpus.jsonl was created or read — content came from the in-memory Mapping.
+    assert not (tmp_path / "corpus.jsonl").exists()
+    assert _retriever_attrs(sink)["retrieval.documents.0.document.content"] == "alpha"
+
+
+def test_ac7_cli_wires_corpus_map_only_with_flag(tmp_path, two_record_jsonl_content):
+    """AC-7: --enrich-from-index builds the map once via read_corpus and passes it;
+    without the flag, read_corpus is never called and doc_lookup is None."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from enterprise_rag_ops.observability import cli
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(two_record_jsonl_content)
+    fake_docs = [
+        SimpleNamespace(id="doc_1", text="alpha"),
+        SimpleNamespace(id="doc_2", text="beta"),
+    ]
+
+    with (
+        patch(
+            "enterprise_rag_ops.observability.cli.read_corpus", return_value=iter(fake_docs)
+        ) as mock_rc,
+        patch("enterprise_rag_ops.observability.cli.replay_jsonl") as mock_replay,
+        patch("enterprise_rag_ops.observability.cli.PhoenixScoreSink"),
+    ):
+        cli.main(["--results", str(jsonl), "--project", "p", "--enrich-from-index"])
+        mock_rc.assert_called_once()
+        assert mock_replay.call_args[1]["doc_lookup"] == {"doc_1": "alpha", "doc_2": "beta"}
+
+    with (
+        patch("enterprise_rag_ops.observability.cli.read_corpus") as mock_rc2,
+        patch("enterprise_rag_ops.observability.cli.replay_jsonl") as mock_replay2,
+        patch("enterprise_rag_ops.observability.cli.PhoenixScoreSink"),
+    ):
+        cli.main(["--results", str(jsonl), "--project", "p"])
+        mock_rc2.assert_not_called()
+        assert mock_replay2.call_args[1]["doc_lookup"] is None
+
+
+def test_ac7_help_lists_flag(capsys):
+    """AC-7: rag-export-traces --help exits 0 and advertises --enrich-from-index."""
+    from enterprise_rag_ops.observability import cli
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--help"])
+    assert exc_info.value.code == 0
+    assert "--enrich-from-index" in capsys.readouterr().out
+
+
+def test_ac8_map_from_corpus_drives_hydration(tmp_path):
+    """AC-8: a {doc.id: doc.text} map built from a fake Document iterable drives AC-2
+    hydration end-to-end through replay_jsonl."""
+    from types import SimpleNamespace
+
+    fake_docs = [SimpleNamespace(id="d1", text="alpha"), SimpleNamespace(id="d2", text="beta")]
+    doc_lookup = {doc.id: doc.text for doc in fake_docs}
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1", "d2"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", doc_lookup=doc_lookup)
+
+    attrs = _retriever_attrs(sink)
+    assert attrs["retrieval.documents.0.document.content"] == "alpha"
+    assert attrs["retrieval.documents.1.document.content"] == "beta"
