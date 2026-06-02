@@ -21,16 +21,14 @@ boundary pattern. Lint clean, 279 tests pass, all 8 ACs covered, no blocking iss
 ## Issues
 
 <details>
-<summary>⚠️ Function-local imports in the AC-5 test — <code>test_exporter.py</code> (<code>test_p17_ac5_*</code>)</summary>
+<summary>✅ RESOLVED — Function-local imports hoisted to module level — <code>test_exporter.py</code></summary>
 
-`import inspect` and `from enterprise_rag_ops.observability import attributes as attrs_mod`
-live inside the test body rather than the module import block.
-
-**Assessment:** intentional and consistent — the phase-16 sibling `test_ac5_*` uses the same
-local-import idiom for introspection/purity tests (keeps the module-under-test import
-self-contained). Fixing only phase-17 would make it _inconsistent_ with phase-16. **Recommend
-leaving as-is** for file-wide consistency; if it's bothersome, hoist both in a separate
-test-cleanup pass, not here. Non-blocking, test passes either way.
+The one nit was function-local imports (`inspect`, `logging`, `SimpleNamespace`, `patch`,
+`cli`, `attrs_mod`, `split_endpoint`) scattered across the test bodies — present in both the
+phase-16 and phase-17 tests. To fix it **without leaving an inconsistency** (the reviewer's
+reason for hesitating), all ~22 occurrences were hoisted to the module-level import block in
+one pass, giving the whole file a single import style. Gate re-run clean: lint passes,
+279 tests pass. No remaining function-local imports.
 
 </details>
 

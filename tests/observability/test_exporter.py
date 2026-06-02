@@ -1,11 +1,18 @@
+import inspect
 import json
+import logging
 from collections.abc import Generator
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
+from enterprise_rag_ops.observability import attributes as attrs_mod
+from enterprise_rag_ops.observability import cli
 from enterprise_rag_ops.observability.exporter import replay_jsonl
+from enterprise_rag_ops.observability.phoenix_client import split_endpoint
 
 
 class FakeSpanContext:
@@ -287,9 +294,6 @@ def test_exporter_dry_run(tmp_path, two_record_jsonl_content):
 
 
 def test_cli_endpoint_precedence(tmp_path, two_record_jsonl_content):
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl_file = tmp_path / "test_baseline.jsonl"
     jsonl_file.write_text(two_record_jsonl_content)
@@ -341,7 +345,6 @@ def test_split_endpoint_normalizes_otlp_and_base_url():
     """Regression: live exit demo hit 405 because `register(endpoint=...)` was passed
     a bare host (`http://localhost:6006`) instead of the full OTLP-HTTP traces URL.
     Lock the helper that splits user input into the two distinct URLs Phoenix needs."""
-    from enterprise_rag_ops.observability.phoenix_client import split_endpoint
 
     # Bare host (the CLI default): must append /v1/traces for OTLP, leave base as-is.
     assert split_endpoint("http://localhost:6006") == (
@@ -366,9 +369,6 @@ def test_split_endpoint_normalizes_otlp_and_base_url():
 
 
 def test_cli_dry_run(tmp_path, two_record_jsonl_content):
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl_file = tmp_path / "test_baseline.jsonl"
     jsonl_file.write_text(two_record_jsonl_content)
@@ -471,7 +471,6 @@ def test_ac2_content_hydration_with_fake_lookup(tmp_path):
 
 def test_ac3_missing_doc_id_omit_and_warn(tmp_path, caplog):
     """AC-3: a ranked id absent from the map omits .content + warns; no crash."""
-    import logging
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(_one_record_jsonl(["d1", "dX"]))
@@ -501,9 +500,6 @@ def test_ac4_no_score_key_in_v1(tmp_path):
 def test_ac5_attributes_purity_and_unchanged_signature():
     """AC-5: build_span_attrs keeps its single-param signature; attributes.py imports no
     retrieval/ingest/phoenix/otel (scan import statements only, not comments)."""
-    import inspect
-
-    from enterprise_rag_ops.observability import attributes as attrs_mod
 
     assert list(inspect.signature(attrs_mod.build_span_attrs).parameters) == ["record"]
 
@@ -534,10 +530,6 @@ def test_ac6_offline_no_heavy_import(tmp_path):
 def test_ac7_cli_wires_corpus_map_only_with_flag(tmp_path, two_record_jsonl_content):
     """AC-7: --enrich-from-index builds the map once via read_corpus and passes it;
     without the flag, read_corpus is never called and doc_lookup is None."""
-    from types import SimpleNamespace
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(two_record_jsonl_content)
@@ -569,7 +561,6 @@ def test_ac7_cli_wires_corpus_map_only_with_flag(tmp_path, two_record_jsonl_cont
 
 def test_ac7_help_lists_flag(capsys):
     """AC-7: rag-export-traces --help exits 0 and advertises --enrich-from-index."""
-    from enterprise_rag_ops.observability import cli
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--help"])
@@ -580,7 +571,6 @@ def test_ac7_help_lists_flag(capsys):
 def test_ac8_map_from_corpus_drives_hydration(tmp_path):
     """AC-8: a {doc.id: doc.text} map built from a fake Document iterable drives AC-2
     hydration end-to-end through replay_jsonl."""
-    from types import SimpleNamespace
 
     fake_docs = [SimpleNamespace(id="d1", text="alpha"), SimpleNamespace(id="d2", text="beta")]
     doc_lookup = {doc.id: doc.text for doc in fake_docs}
@@ -663,7 +653,6 @@ def test_p17_ac3_answer_always_on_without_lookup(tmp_path):
 def test_p17_ac4_missing_question_id_omit_and_warn(tmp_path, caplog):
     """AC-4: a question_id absent from the map omits input.value + warns; no crash.
     The always-on answer is unaffected."""
-    import logging
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(_one_record_jsonl(["d1"]))  # question_id == "qst_0001"
@@ -682,9 +671,6 @@ def test_p17_ac4_missing_question_id_omit_and_warn(tmp_path, caplog):
 def test_p17_ac5_mapper_emits_output_value_not_input_value():
     """AC-5: the pure mapper emits output.value (always-on answer) but not input.value
     (question is boundary-only); imports + signature unchanged."""
-    import inspect
-
-    from enterprise_rag_ops.observability import attributes as attrs_mod
 
     assert list(inspect.signature(attrs_mod.build_span_attrs).parameters) == ["record"]
 
@@ -717,10 +703,6 @@ def test_p17_ac6_offline_no_gold_file(tmp_path):
 def test_p17_ac7_cli_wires_question_map_only_with_flag(tmp_path, two_record_jsonl_content):
     """AC-7: --enrich-from-questions builds the map once via load_questions and passes it;
     without the flag, load_questions is never called and question_lookup is None."""
-    from types import SimpleNamespace
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(two_record_jsonl_content)
@@ -756,7 +738,6 @@ def test_p17_ac7_cli_wires_question_map_only_with_flag(tmp_path, two_record_json
 
 def test_p17_ac7_help_lists_flag(capsys):
     """AC-7: rag-export-traces --help exits 0 and advertises --enrich-from-questions."""
-    from enterprise_rag_ops.observability import cli
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--help"])
@@ -766,9 +747,6 @@ def test_p17_ac7_help_lists_flag(capsys):
 
 def test_p17_ac8_dry_run_skips_gold_load(tmp_path, two_record_jsonl_content):
     """AC-8: --enrich-from-questions --dry-run does not call load_questions (no HF on dry-run)."""
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(two_record_jsonl_content)
