@@ -430,7 +430,11 @@ def _one_record_jsonl(ranked_ids: list[str]) -> str:
 
 
 def _retriever_attrs(sink: "FakeScoreSink") -> dict[str, Any]:
-    return next(s.attributes for s in sink.spans if s.openinference_span_kind == "retriever")
+    attrs = next(
+        (s.attributes for s in sink.spans if s.openinference_span_kind == "retriever"), None
+    )
+    assert attrs is not None, "no retriever span was exported"
+    return attrs
 
 
 def test_ac1_enrich_default_no_behavior_change(tmp_path):
@@ -473,7 +477,7 @@ def test_ac3_missing_doc_id_omit_and_warn(tmp_path, caplog):
     jsonl.write_text(_one_record_jsonl(["d1", "dX"]))
     sink = FakeScoreSink()
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger="enterprise_rag_ops.observability.exporter"):
         replay_jsonl(jsonl, sink, project="p", doc_lookup={"d1": "alpha text"})
 
     attrs = _retriever_attrs(sink)

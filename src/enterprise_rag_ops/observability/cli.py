@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
             sink = PhoenixScoreSink(project=args.project, endpoint=endpoint)
 
         doc_lookup = None
-        if args.enrich_from_index:
+        if args.enrich_from_index and not args.dry_run:
             doc_lookup = {doc.id: doc.text for doc in read_corpus(Path(args.corpus))}
 
         summary = replay_jsonl(
