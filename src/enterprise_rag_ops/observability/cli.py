@@ -14,8 +14,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from enterprise_rag_ops.ingest.writer import read_corpus
 from enterprise_rag_ops.observability.exporter import replay_jsonl
 from enterprise_rag_ops.observability.phoenix_client import PhoenixScoreSink, ScoreSink
+from enterprise_rag_ops.retrieval.config import CORPUS_PATH
 
 logger = logging.getLogger("enterprise_rag_ops.observability.cli")
 
@@ -72,6 +74,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Parse and validate the JSONL file without exporting to Phoenix.",
     )
+    parser.add_argument(
+        "--enrich-from-index",
+        action="store_true",
+        help="Hydrate retrieval.documents.{i}.document.content on retriever spans from corpus.jsonl (opt-in; default off).",
+    )
+    parser.add_argument(
+        "--corpus",
+        default=str(CORPUS_PATH),
+        help="Path to corpus.jsonl for --enrich-from-index (default: CORPUS_PATH).",
+    )
     return parser
 
 
@@ -100,11 +112,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             sink = PhoenixScoreSink(project=args.project, endpoint=endpoint)
 
+        doc_lookup = None
+        if args.enrich_from_index:
+            doc_lookup = {doc.id: doc.text for doc in read_corpus(Path(args.corpus))}
+
         summary = replay_jsonl(
             path=results_path,
             sink=sink,
             project=args.project,
             dry_run=args.dry_run,
+            doc_lookup=doc_lookup,
         )
 
         if args.dry_run:

@@ -1,6 +1,7 @@
 """Orchestrator for replaying evaluation records into Phoenix traces (FR-2, FR-4, FR-5)."""
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ def replay_jsonl(
     *,
     project: str,
     dry_run: bool = False,
+    doc_lookup: Mapping[str, str] | None = None,
 ) -> ReplaySummary:
     """Read a results JSONL file and export trace span trees and scores to Phoenix (FR-2, FR-4, FR-5).
 
@@ -35,6 +37,7 @@ def replay_jsonl(
         sink: The ScoreSink implementation to write to.
         project: Target project name in Phoenix.
         dry_run: If True, parses and validates records without exporting them (FR-11).
+        doc_lookup: Optional mapping of doc_id to content text (FR-3).
 
     Returns:
         ReplaySummary: Counts of processed records and telemetry.
@@ -77,6 +80,19 @@ def replay_jsonl(
 
     for record in records:
         span_attrs = build_span_attrs(record)
+        if doc_lookup is not None:
+            for i, doc_id in enumerate(record.retrieval_ranked_ids):
+                if doc_id in doc_lookup:
+                    span_attrs["retriever"][f"retrieval.documents.{i}.document.content"] = (
+                        doc_lookup[doc_id]
+                    )
+                else:
+                    logger.warning(
+                        "doc_id %r in retrieval_ranked_ids not found in corpus map; "
+                        "omitting .content for retrieval.documents.%d",
+                        doc_id,
+                        i,
+                    )
         span_ids: dict[str, str] = {}
 
         # Root chain span (name is the question ID)

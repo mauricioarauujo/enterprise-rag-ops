@@ -36,12 +36,10 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         retriever_attrs[f"retrieval.documents.{i}.document.id"] = doc_id
         retriever_attrs[f"retrieval.documents.{i}.document.rank"] = i
 
-        # SEAM: --enrich-from-index (FR-12 / AC-14)
-        # In a future phase, a re-hydration path can be implemented here by importing
-        # BM25/LanceDB to look up document contents. This would populate:
-        # - retrieval.documents.{i}.document.content = content
-        # - retrieval.documents.{i}.document.score = score
-        # Building this is out of scope for Phase 7, so these attribute slots are omitted.
+        # Enrichment activated in Phase 16: retrieval.documents.{i}.document.content is
+        # hydrated at the exporter boundary (observability/exporter.py), not in this pure
+        # mapper, to keep attributes.py free of retrieval/ingest imports (NFR-1). Score
+        # (.score) remains out — not persisted in EvalRecord (FR-7).
 
     # 3. Child generation span attributes
     gen_attrs = {
