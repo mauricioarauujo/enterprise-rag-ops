@@ -133,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
             temp_path = Path(tmp_file.name)
             try:
                 # Deterministic JSON dump
-                json.dump(_report_to_dict(report), tmp_file, indent=2)
+                json.dump(_report_to_dict(report), tmp_file, indent=2, sort_keys=False)
             except Exception:
                 if temp_path.exists():
                     temp_path.unlink()

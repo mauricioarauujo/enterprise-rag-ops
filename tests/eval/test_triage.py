@@ -6,6 +6,8 @@ Covers AC-1 through AC-16 as specified in the Phase 14 design contract.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -306,12 +308,13 @@ def test_ac13_deterministic_bytes():
         make_dummy_record("qst_02", "basic", "correct"),
     ]
 
-    report = compute_triage(records, gold)
-    d1 = _report_to_dict(report)
-    d2 = _report_to_dict(report)
+    # Two independent compute_triage passes must serialize byte-identically — this
+    # falsifies any dict/set iteration-order leak across separate invocations.
+    report_a = compute_triage(records, gold)
+    report_b = compute_triage(records, gold)
 
-    bytes1 = json.dumps(d1, indent=2)
-    bytes2 = json.dumps(d2, indent=2)
+    bytes1 = json.dumps(_report_to_dict(report_a), indent=2)
+    bytes2 = json.dumps(_report_to_dict(report_b), indent=2)
 
     assert bytes1 == bytes2
 
@@ -337,6 +340,7 @@ def test_ac14_stdout_summary_dry_run(tmp_path, capsys):
     assert "TRIAGE REPORT SUMMARY" in captured.out
     assert "DOMINANT CLUSTER:" in captured.out
     assert "correct" in captured.out
+    assert exit_code == 0
 
 
 def test_ac15_offline_guarantee():
@@ -345,10 +349,16 @@ def test_ac15_offline_guarantee():
     gold = {"qst_01": Question("qst_01", "Q1", [], [], "basic")}
     records = [make_dummy_record("qst_01", "basic", "correct")]
 
-    # If any network imports were invoked or OpenAI clients built, it would trigger errors or delay
-    # We assert that compute_triage works simply with local objects.
     report = compute_triage(records, gold)
     assert report.total_records == 1
+
+    # Importing the pure core in a clean interpreter must not pull in the LLM client.
+    # (Run in a subprocess so an LLM import from a sibling test cannot pollute the check.)
+    check = (
+        "import sys, enterprise_rag_ops.eval.triage; sys.exit(1 if 'openai' in sys.modules else 0)"
+    )
+    result = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True)
+    assert result.returncode == 0, f"triage import pulled in an LLM client: {result.stderr}"
 
 
 def test_ac16_console_script_and_help():

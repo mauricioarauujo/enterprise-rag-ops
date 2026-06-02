@@ -87,7 +87,7 @@ def compute_triage(
     for (fm, cat), bucket in groups.items():
         count = len(bucket)
         rate = count / total
-        models_seen = sorted(list(set(r.gen_ai.request.model for r in bucket)))
+        models_seen = sorted({r.gen_ai.request.model for r in bucket})
 
         # Representative is lexicographically first question_id
         rep = min(bucket, key=lambda r: r.question_id)
@@ -110,7 +110,7 @@ def compute_triage(
     clusters.sort(key=lambda c: (-c.count, c.failure_mode, c.category))
 
     # 6. Metadata and report construction
-    overall_models_seen = sorted(list(set(r.gen_ai.request.model for r in records)))
+    overall_models_seen = sorted({r.gen_ai.request.model for r in records})
     dominant_cluster = clusters[0] if clusters else None
 
     return TriageReport(
