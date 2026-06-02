@@ -33,6 +33,7 @@ rag-export-traces = "enterprise_rag_ops.observability.cli:main"
 rag-classify = "enterprise_rag_ops.eval.classify_cli:main"
 rag-inspect = "enterprise_rag_ops.eval.inspect_cli:main"
 rag-triage = "enterprise_rag_ops.eval.triage_cli:main"
+rag-issues = "enterprise_rag_ops.eval.issues_cli:main"
 
 [project.urls]
 Repository = "https://github.com/mauricioarauujo/enterprise-rag-ops"
