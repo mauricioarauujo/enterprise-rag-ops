@@ -14,6 +14,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from enterprise_rag_ops.eval.questions import load_questions
+from enterprise_rag_ops.ingest import config
 from enterprise_rag_ops.ingest.writer import read_corpus
 from enterprise_rag_ops.observability.exporter import replay_jsonl
 from enterprise_rag_ops.observability.phoenix_client import PhoenixScoreSink, ScoreSink
@@ -84,6 +86,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=str(CORPUS_PATH),
         help="Path to corpus.jsonl for --enrich-from-index (default: CORPUS_PATH).",
     )
+    parser.add_argument(
+        "--enrich-from-questions",
+        action="store_true",
+        help="Hydrate input.value on chain spans with the gold question text from load_questions (opt-in; default off).",
+    )
+    parser.add_argument(
+        "--questions-revision",
+        default=config.DATASET_REVISION,
+        help=f"Dataset revision SHA for the gold question map (default: {config.DATASET_REVISION}).",
+    )
     return parser
 
 
@@ -116,12 +128,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.enrich_from_index and not args.dry_run:
             doc_lookup = {doc.id: doc.text for doc in read_corpus(Path(args.corpus))}
 
+        question_lookup = None
+        if args.enrich_from_questions and not args.dry_run:
+            question_lookup = {
+                q.question_id: q.question for q in load_questions(revision=args.questions_revision)
+            }
+
         summary = replay_jsonl(
             path=results_path,
             sink=sink,
             project=args.project,
             dry_run=args.dry_run,
             doc_lookup=doc_lookup,
+            question_lookup=question_lookup,
         )
 
         if args.dry_run:

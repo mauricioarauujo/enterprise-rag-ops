@@ -1,11 +1,18 @@
+import inspect
 import json
+import logging
 from collections.abc import Generator
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
+from enterprise_rag_ops.observability import attributes as attrs_mod
+from enterprise_rag_ops.observability import cli
 from enterprise_rag_ops.observability.exporter import replay_jsonl
+from enterprise_rag_ops.observability.phoenix_client import split_endpoint
 
 
 class FakeSpanContext:
@@ -287,9 +294,6 @@ def test_exporter_dry_run(tmp_path, two_record_jsonl_content):
 
 
 def test_cli_endpoint_precedence(tmp_path, two_record_jsonl_content):
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl_file = tmp_path / "test_baseline.jsonl"
     jsonl_file.write_text(two_record_jsonl_content)
@@ -341,7 +345,6 @@ def test_split_endpoint_normalizes_otlp_and_base_url():
     """Regression: live exit demo hit 405 because `register(endpoint=...)` was passed
     a bare host (`http://localhost:6006`) instead of the full OTLP-HTTP traces URL.
     Lock the helper that splits user input into the two distinct URLs Phoenix needs."""
-    from enterprise_rag_ops.observability.phoenix_client import split_endpoint
 
     # Bare host (the CLI default): must append /v1/traces for OTLP, leave base as-is.
     assert split_endpoint("http://localhost:6006") == (
@@ -366,9 +369,6 @@ def test_split_endpoint_normalizes_otlp_and_base_url():
 
 
 def test_cli_dry_run(tmp_path, two_record_jsonl_content):
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl_file = tmp_path / "test_baseline.jsonl"
     jsonl_file.write_text(two_record_jsonl_content)
@@ -471,7 +471,6 @@ def test_ac2_content_hydration_with_fake_lookup(tmp_path):
 
 def test_ac3_missing_doc_id_omit_and_warn(tmp_path, caplog):
     """AC-3: a ranked id absent from the map omits .content + warns; no crash."""
-    import logging
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(_one_record_jsonl(["d1", "dX"]))
@@ -501,9 +500,6 @@ def test_ac4_no_score_key_in_v1(tmp_path):
 def test_ac5_attributes_purity_and_unchanged_signature():
     """AC-5: build_span_attrs keeps its single-param signature; attributes.py imports no
     retrieval/ingest/phoenix/otel (scan import statements only, not comments)."""
-    import inspect
-
-    from enterprise_rag_ops.observability import attributes as attrs_mod
 
     assert list(inspect.signature(attrs_mod.build_span_attrs).parameters) == ["record"]
 
@@ -534,10 +530,6 @@ def test_ac6_offline_no_heavy_import(tmp_path):
 def test_ac7_cli_wires_corpus_map_only_with_flag(tmp_path, two_record_jsonl_content):
     """AC-7: --enrich-from-index builds the map once via read_corpus and passes it;
     without the flag, read_corpus is never called and doc_lookup is None."""
-    from types import SimpleNamespace
-    from unittest.mock import patch
-
-    from enterprise_rag_ops.observability import cli
 
     jsonl = tmp_path / "b.jsonl"
     jsonl.write_text(two_record_jsonl_content)
@@ -569,7 +561,6 @@ def test_ac7_cli_wires_corpus_map_only_with_flag(tmp_path, two_record_jsonl_cont
 
 def test_ac7_help_lists_flag(capsys):
     """AC-7: rag-export-traces --help exits 0 and advertises --enrich-from-index."""
-    from enterprise_rag_ops.observability import cli
 
     with pytest.raises(SystemExit) as exc_info:
         cli.main(["--help"])
@@ -580,7 +571,6 @@ def test_ac7_help_lists_flag(capsys):
 def test_ac8_map_from_corpus_drives_hydration(tmp_path):
     """AC-8: a {doc.id: doc.text} map built from a fake Document iterable drives AC-2
     hydration end-to-end through replay_jsonl."""
-    from types import SimpleNamespace
 
     fake_docs = [SimpleNamespace(id="d1", text="alpha"), SimpleNamespace(id="d2", text="beta")]
     doc_lookup = {doc.id: doc.text for doc in fake_docs}
@@ -594,3 +584,175 @@ def test_ac8_map_from_corpus_drives_hydration(tmp_path):
     attrs = _retriever_attrs(sink)
     assert attrs["retrieval.documents.0.document.content"] == "alpha"
     assert attrs["retrieval.documents.1.document.content"] == "beta"
+
+
+# --- Phase 17: question + answer legibility (input.value / output.value) ----------------
+
+
+def _chain_attrs(sink: "FakeScoreSink") -> dict[str, Any]:
+    attrs = next((s.attributes for s in sink.spans if s.openinference_span_kind == "chain"), None)
+    assert attrs is not None, "no chain span was exported"
+    return attrs
+
+
+def _generation_attrs(sink: "FakeScoreSink") -> dict[str, Any]:
+    attrs = next((s.attributes for s in sink.spans if s.name == "generation"), None)
+    assert attrs is not None, "no generation span was exported"
+    return attrs
+
+
+def test_p17_ac1_default_answer_on_no_question(tmp_path):
+    """AC-1: default call (no question_lookup) -> generation has output.value==answer
+    (always-on), chain has no input.value/input.mime_type."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p")  # default question_lookup=None
+
+    gen = _generation_attrs(sink)
+    assert gen["output.value"] == "Answer 1"
+    assert gen["output.mime_type"] == "text/plain"
+
+    chain = _chain_attrs(sink)
+    assert "input.value" not in chain
+    assert "input.mime_type" not in chain
+
+
+def test_p17_ac2_question_hydration_with_fake_lookup(tmp_path):
+    """AC-2: question_lookup hydrates chain input.value; existing chain keys preserved."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", question_lookup={"qst_0001": "What is X?"})
+
+    chain = _chain_attrs(sink)
+    assert chain["input.value"] == "What is X?"
+    assert chain["input.mime_type"] == "text/plain"
+    # Existing chain keys untouched.
+    assert chain["question_id"] == "qst_0001"
+    assert chain["category"] == "basic"
+
+
+def test_p17_ac3_answer_always_on_without_lookup(tmp_path):
+    """AC-3: the answer rides the default path; no lookup needed. Generation metadata intact."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p")  # no question_lookup
+
+    gen = _generation_attrs(sink)
+    assert gen["output.value"] == "Answer 1"
+    assert gen["gen_ai.request.model"] == "gpt-5-nano-2025-08-07"
+    assert gen["gen_ai.usage.input_tokens"] == 100
+    assert gen["latency_s"] == 1.5
+
+
+def test_p17_ac4_missing_question_id_omit_and_warn(tmp_path, caplog):
+    """AC-4: a question_id absent from the map omits input.value + warns; no crash.
+    The always-on answer is unaffected."""
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))  # question_id == "qst_0001"
+    sink = FakeScoreSink()
+
+    with caplog.at_level(logging.WARNING, logger="enterprise_rag_ops.observability.exporter"):
+        replay_jsonl(jsonl, sink, project="p", question_lookup={"qst_other": "..."})
+
+    chain = _chain_attrs(sink)
+    assert "input.value" not in chain
+    assert "qst_0001" in caplog.text
+    # Answer still written despite the missing question.
+    assert _generation_attrs(sink)["output.value"] == "Answer 1"
+
+
+def test_p17_ac5_mapper_emits_output_value_not_input_value():
+    """AC-5: the pure mapper emits output.value (always-on answer) but not input.value
+    (question is boundary-only); imports + signature unchanged."""
+
+    assert list(inspect.signature(attrs_mod.build_span_attrs).parameters) == ["record"]
+
+    # Assert on the emitted key literals (quoted), not prose: the mapper writes the
+    # "output.value" key but never an "input.value" key (the question is boundary-only).
+    source = inspect.getsource(attrs_mod)
+    assert '"output.value"' in source
+    assert '"input.value"' not in source
+
+    import_lines = " ".join(
+        ln.strip() for ln in source.splitlines() if ln.strip().startswith(("import ", "from "))
+    )
+    for forbidden in ("questions", "datasets", "ingest", "retrieval", "phoenix", "opentelemetry"):
+        assert forbidden not in import_lines, f"attributes.py imports {forbidden}"
+
+
+def test_p17_ac6_offline_no_gold_file(tmp_path):
+    """AC-6: the enrichment path runs on an in-memory question_lookup + fake sink — no gold
+    file is read, content comes from the map."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p", question_lookup={"qst_0001": "What is X?"})
+
+    assert not (tmp_path / "questions.jsonl").exists()
+    assert _chain_attrs(sink)["input.value"] == "What is X?"
+
+
+def test_p17_ac7_cli_wires_question_map_only_with_flag(tmp_path, two_record_jsonl_content):
+    """AC-7: --enrich-from-questions builds the map once via load_questions and passes it;
+    without the flag, load_questions is never called and question_lookup is None."""
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(two_record_jsonl_content)
+    fake_questions = [
+        SimpleNamespace(question_id="qst_0001", question="What is X?"),
+        SimpleNamespace(question_id="qst_0002", question="What is Y?"),
+    ]
+
+    with (
+        patch(
+            "enterprise_rag_ops.observability.cli.load_questions",
+            return_value=iter(fake_questions),
+        ) as mock_lq,
+        patch("enterprise_rag_ops.observability.cli.replay_jsonl") as mock_replay,
+        patch("enterprise_rag_ops.observability.cli.PhoenixScoreSink"),
+    ):
+        cli.main(["--results", str(jsonl), "--project", "p", "--enrich-from-questions"])
+        mock_lq.assert_called_once()
+        assert mock_replay.call_args[1]["question_lookup"] == {
+            "qst_0001": "What is X?",
+            "qst_0002": "What is Y?",
+        }
+
+    with (
+        patch("enterprise_rag_ops.observability.cli.load_questions") as mock_lq2,
+        patch("enterprise_rag_ops.observability.cli.replay_jsonl") as mock_replay2,
+        patch("enterprise_rag_ops.observability.cli.PhoenixScoreSink"),
+    ):
+        cli.main(["--results", str(jsonl), "--project", "p"])
+        mock_lq2.assert_not_called()
+        assert mock_replay2.call_args[1]["question_lookup"] is None
+
+
+def test_p17_ac7_help_lists_flag(capsys):
+    """AC-7: rag-export-traces --help exits 0 and advertises --enrich-from-questions."""
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["--help"])
+    assert exc_info.value.code == 0
+    assert "--enrich-from-questions" in capsys.readouterr().out
+
+
+def test_p17_ac8_dry_run_skips_gold_load(tmp_path, two_record_jsonl_content):
+    """AC-8: --enrich-from-questions --dry-run does not call load_questions (no HF on dry-run)."""
+
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(two_record_jsonl_content)
+
+    with patch("enterprise_rag_ops.observability.cli.load_questions") as mock_lq:
+        cli.main(
+            ["--results", str(jsonl), "--project", "p", "--enrich-from-questions", "--dry-run"]
+        )
+        mock_lq.assert_not_called()

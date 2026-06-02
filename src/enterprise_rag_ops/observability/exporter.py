@@ -29,6 +29,7 @@ def replay_jsonl(
     project: str,
     dry_run: bool = False,
     doc_lookup: Mapping[str, str] | None = None,
+    question_lookup: Mapping[str, str] | None = None,
 ) -> ReplaySummary:
     """Read a results JSONL file and export trace span trees and scores to Phoenix (FR-2, FR-4, FR-5).
 
@@ -38,6 +39,8 @@ def replay_jsonl(
         project: Target project name in Phoenix.
         dry_run: If True, parses and validates records without exporting them (FR-11).
         doc_lookup: Optional mapping of doc_id to content text (FR-3).
+        question_lookup: Optional mapping of question_id to question text. When provided,
+            the chain span gets input.value = question_lookup[question_id] (Phase 17 / FR-5).
 
     Returns:
         ReplaySummary: Counts of processed records and telemetry.
@@ -93,6 +96,15 @@ def replay_jsonl(
                         doc_id,
                         i,
                     )
+        if question_lookup is not None:
+            if record.question_id in question_lookup:
+                span_attrs["chain"]["input.value"] = question_lookup[record.question_id]
+                span_attrs["chain"]["input.mime_type"] = "text/plain"
+            else:
+                logger.warning(
+                    "question_id %r not found in question map; omitting input.value on chain span",
+                    record.question_id,
+                )
         span_ids: dict[str, str] = {}
 
         # Root chain span (name is the question ID)
