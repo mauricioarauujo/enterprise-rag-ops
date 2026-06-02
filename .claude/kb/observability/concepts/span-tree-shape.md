@@ -60,8 +60,11 @@ The span tree is a **projection** of one `EvalRecord`:
   child's context manager is exited before the next sibling opens (no overlap).
 - `cost_usd_total` is only set on the chain span when both `generation.cost_usd` and
   `judge.cost_usd` are non-None. If either is None, the field is omitted entirely.
-- The retriever span carries `retrieval.documents.{i}.document.id` and `.rank` only;
-  `.content` and `.score` are reserved as a future `--enrich-from-index` seam (FR-12).
+- The pure mapper (`attributes.py`) writes `retrieval.documents.{i}.document.id` and `.rank`
+  only. `.content` is live (Phase 16) via the opt-in `--enrich-from-index` path: when
+  `doc_lookup` is non-None, `exporter.py` post-processes `span_attrs["retriever"]` after
+  `build_span_attrs` returns to hydrate `.content` from `corpus.jsonl`. A missing `doc_id` is
+  omitted + warned, never a crash. `.score` is still out — not persisted in `EvalRecord`.
 
 ## Sources
 

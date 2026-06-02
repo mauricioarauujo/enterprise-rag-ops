@@ -130,7 +130,9 @@ from day 0.
 ## Testing
 
 - Framework: pytest + pytest-cov.
-- Layout: tests mirror `src/` (`tests/test_<module>.py`).
+- Layout: tests mirror `src/` package-by-package — `tests/<package>/test_<module>.py`
+  (e.g. `tests/eval/test_triage.py`), each package dir carrying an `__init__.py` (and a
+  `conftest.py` where fixtures are shared).
 - Run: `make test` or `uv run pytest`.
 
 ---
@@ -149,7 +151,7 @@ To implement a phase `sprint-N/phase-slug`:
 3. **Confirm the branch.** You should be on `sprint-N/phase-slug`. If on `main`, create
    it before committing any code.
 4. **Implement** following the manifest's phase order. Honour § Engineering Behavior and
-   § Conventions. Every new module gets a mirrored `tests/test_<module>.py`. Eval-path
+   § Conventions. Every new module gets a mirrored `tests/<package>/test_<module>.py`. Eval-path
    code uses the cassette/replay pattern — never a mocked LLM API.
 5. **Quality pass:** run `make lint test` — the real gate (lint + test), also run in CI
    on every PR. A pre-commit hook (pre-commit framework) runs `make format` on commit

@@ -32,6 +32,17 @@ stopped**. Querying the Phoenix API would couple the dashboard to a running cont
 break clone-without-infra. (`results/*.jsonl` is the durable SSoT; Phoenix is a
 replayable, opt-in view — see [eval-jsonl-replay](eval-jsonl-replay.md).)
 
+## Boundary Enrichment Rule (`--enrich-from-index`)
+
+The same heavy-read principle governs span-content enrichment. `cli.py` builds a
+`{doc.id: doc.text}` corpus map **once** at the CLI boundary via `read_corpus(CORPUS_PATH)`
+and passes a plain `Mapping[str, str]` (`doc_lookup`) into `replay_jsonl`. The pure mapper
+(`attributes.py`) consumes no new imports and keeps its `build_span_attrs(record)` signature
+unchanged; `exporter.py` post-processes `span_attrs["retriever"]` after the mapper returns.
+No new Protocol is needed — stdlib `Mapping` is sufficient (Approach B, DEFINE OQ-5).
+This path is opt-in (`--enrich-from-index`, default off); the default export is byte-identical
+to the pre-Phase-16 behavior.
+
 ## The Data / Render Split (testability seam)
 
 ```

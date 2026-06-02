@@ -7,11 +7,12 @@
 | Span Name              | OI `span_kind` | Parent | Key Attributes                                                                          |
 | ---------------------- | -------------- | ------ | --------------------------------------------------------------------------------------- |
 | `{question_id}` (root) | `"chain"`      | —      | `question_id`, `category`, `run_id`, `k`, `gen_ai.*`, `cost_usd_total`\*                |
-| `"retriever"`          | `"retriever"`  | chain  | `retrieval.documents.{i}.document.id`, `.rank`                                          |
+| `"retriever"`          | `"retriever"`  | chain  | `retrieval.documents.{i}.document.id`, `.rank`; `.content`\*\* (opt-in)                 |
 | `"generation"`         | `"llm"`        | chain  | `gen_ai.request.model`, `gen_ai.usage.{input,output}_tokens`, `cost_usd`\*, `latency_s` |
 | `"judge"`              | `"llm"`        | chain  | same shape as generation                                                                |
 
 \*Only written when value is non-None.
+\*\*`.content` hydrated at exporter boundary when `--enrich-from-index` is passed; pure mapper writes `.id`/`.rank` only.
 
 ## Score Metrics → Span Alignment
 
@@ -42,12 +43,14 @@
 
 ## CLI Flags
 
-| Command             | Key Flags                              | Effect                                     |
-| ------------------- | -------------------------------------- | ------------------------------------------ |
-| `rag-export-traces` | `--results`, `--endpoint`, `--project` | Replay JSONL → Phoenix                     |
-| `rag-export-traces` | `--dry-run`                            | Validate JSONL only; no Phoenix connection |
-| `rag-classify`      | `--results`, `--output`                | Classify + write tagged JSONL              |
-| `rag-classify`      | `--dry-run`                            | Print distribution; no file write          |
+| Command             | Key Flags                              | Effect                                                                  |
+| ------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| `rag-export-traces` | `--results`, `--endpoint`, `--project` | Replay JSONL → Phoenix                                                  |
+| `rag-export-traces` | `--dry-run`                            | Validate JSONL only; no Phoenix connection                              |
+| `rag-export-traces` | `--enrich-from-index`                  | Hydrate `.content` on retriever spans from `corpus.jsonl` (opt-in)      |
+| `rag-export-traces` | `--corpus PATH`                        | Override corpus path for `--enrich-from-index` (default: `CORPUS_PATH`) |
+| `rag-classify`      | `--results`, `--output`                | Classify + write tagged JSONL                                           |
+| `rag-classify`      | `--dry-run`                            | Print distribution; no file write                                       |
 
 ## Endpoint Normalization
 
