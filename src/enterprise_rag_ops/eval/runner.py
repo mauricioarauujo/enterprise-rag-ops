@@ -240,6 +240,8 @@ def run_evaluation(
                     fact_recall=verdict.fact_recall,
                     fact_precision=verdict.fact_precision,
                     faithfulness_ratio=verdict.faithfulness_ratio,
+                    per_fact=verdict.per_fact,
+                    per_citation=verdict.per_citation,
                     retrieval_ranked_ids=retrieval_ranked_ids,
                     did_abstain_retrieval=did_abstain_retrieval,
                     did_abstain_e2e=did_abstain_e2e,

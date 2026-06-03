@@ -14,8 +14,8 @@ from enterprise_rag_ops.eval.records import (
 )
 
 
-def test_eval_record_roundtrip_and_exclusions():
-    """AC-1: EvalRecord serializes and round-trips; excludes per_fact/per_citation."""
+def test_eval_record_roundtrip_and_presence():
+    """AC-1: EvalRecord serializes and round-trips; includes per_fact/per_citation."""
     record_dict = {
         "question_id": "q1",
         "category": "legal",
@@ -63,13 +63,136 @@ def test_eval_record_roundtrip_and_exclusions():
     roundtripped = EvalRecord.model_validate_json(json_data)
     assert roundtripped.run_id == "run_test_123"
 
-    # Assert exclusion of per_fact and per_citation
-    assert "per_fact" not in EvalRecord.model_fields
-    assert "per_citation" not in EvalRecord.model_fields
+    # Assert presence of per_fact and per_citation
+    assert "per_fact" in EvalRecord.model_fields
+    assert "per_citation" in EvalRecord.model_fields
 
     schema = EvalRecord.model_json_schema()
-    assert "per_fact" not in schema["properties"]
-    assert "per_citation" not in schema["properties"]
+    assert "per_fact" in schema["properties"]
+    assert "per_citation" in schema["properties"]
+
+
+def test_eval_record_schema_ac1():
+    """AC-1: model_fields['per_fact']/['per_citation'] exist, default None, annotated list[FactVerdict] | None / list[CitationVerdict] | None; FactVerdict/CitationVerdict imported from eval.schema, no new model in records.py."""
+    from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict
+
+    assert "per_fact" in EvalRecord.model_fields
+    assert "per_citation" in EvalRecord.model_fields
+
+    assert EvalRecord.model_fields["per_fact"].default is None
+    assert EvalRecord.model_fields["per_citation"].default is None
+
+    assert EvalRecord.model_fields["per_fact"].annotation == list[FactVerdict] | None
+    assert EvalRecord.model_fields["per_citation"].annotation == list[CitationVerdict] | None
+
+
+def test_eval_record_lossless_roundtrip_ac2():
+    """AC-2: build EvalRecord with per_fact=[FactVerdict(fact='X', verdict='present')] and per_citation=[CitationVerdict(doc_id='d1', verdict='supported')]; assert EvalRecord.model_validate_json(rec.model_dump_json()) == rec and JSON contains the keys + label values."""
+    from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict
+
+    rec = EvalRecord(
+        question_id="q_test",
+        category="general",
+        run_id="run_1",
+        gen_ai={
+            "request": {"model": "test-gen"},
+            "system": "openai",
+        },
+        generation=CallStats(
+            input_tokens=10, output_tokens=5, latency_s=0.1, model="test-gen", system="openai"
+        ),
+        judge=CallStats(
+            input_tokens=20, output_tokens=10, latency_s=0.2, model="test-judge", system="openai"
+        ),
+        answer="Hello",
+        sources=["doc_a"],
+        fact_recall=1.0,
+        fact_precision=1.0,
+        faithfulness_ratio=1.0,
+        retrieval_ranked_ids=["doc_a"],
+        did_abstain_retrieval=False,
+        did_abstain_e2e=False,
+        per_fact=[FactVerdict(fact="X", verdict="present")],
+        per_citation=[CitationVerdict(doc_id="d1", verdict="supported")],
+    )
+
+    # Lossless round-trip
+    dumped_json = rec.model_dump_json()
+    parsed = EvalRecord.model_validate_json(dumped_json)
+    assert parsed == rec
+
+    # Assert JSON contains keys + label values
+    import json
+
+    parsed_json = json.loads(dumped_json)
+    assert "per_fact" in parsed_json
+    assert "per_citation" in parsed_json
+    assert parsed_json["per_fact"] == [{"fact": "X", "verdict": "present"}]
+    assert parsed_json["per_citation"] == [{"doc_id": "d1", "verdict": "supported"}]
+
+
+def test_eval_record_backward_compat_ac3(tmp_path):
+    """AC-3: a record dict with NO per_fact/per_citation keys parses via model_validate/model_validate_json with both == None, no ValidationError. Also tests a representative reader path (load_run_records)."""
+    from enterprise_rag_ops.dashboard.data import load_run_records
+
+    record_dict = {
+        "question_id": "q1",
+        "category": "legal",
+        "run_id": "run_test_123",
+        "gen_ai": {
+            "request": {"model": "gpt-5-nano-2025-08-07"},
+            "system": "openai",
+            "operation": {"name": "chat"},
+        },
+        "generation": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "latency_s": 1.2,
+            "model": "gpt-5-nano-2025-08-07",
+            "system": "openai",
+            "cost_usd": 0.000025,
+        },
+        "judge": {
+            "input_tokens": 200,
+            "output_tokens": 10,
+            "latency_s": 0.8,
+            "model": "gpt-5-nano-2025-08-07",
+            "system": "openai",
+            "cost_usd": 0.000014,
+        },
+        "answer": "Yes, Paris is the capital.",
+        "sources": ["doc_1"],
+        "fact_recall": 1.0,
+        "fact_precision": 0.8,
+        "faithfulness_ratio": None,
+        "retrieval_ranked_ids": ["doc_1", "doc_2"],
+        "did_abstain_retrieval": False,
+        "did_abstain_e2e": False,
+    }
+
+    # model_validate
+    rec = EvalRecord.model_validate(record_dict)
+    assert rec.per_fact is None
+    assert rec.per_citation is None
+
+    # model_validate_json
+    import json
+
+    dumped = json.dumps(record_dict)
+    rec_json = EvalRecord.model_validate_json(dumped)
+    assert rec_json.per_fact is None
+    assert rec_json.per_citation is None
+
+    # Test representative reader path (load_run_records)
+    temp_file = tmp_path / "test_run.jsonl"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        f.write(dumped + "\n")
+
+    loaded_records = load_run_records([temp_file])
+    assert len(loaded_records) == 1
+    assert loaded_records[0].question_id == "q1"
+    assert loaded_records[0].per_fact is None
+    assert loaded_records[0].per_citation is None
 
 
 def test_call_stats_fields():

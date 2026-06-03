@@ -100,3 +100,4 @@ These rates are coded in `configs/baseline.yaml`.
 - **Safe Cost Calculation**: Reports distinguish clearly between zero cost (e.g., stubs) and missing price information (rendered as `"N/A"`).
 - **Flexible Sweeps**: Pricing changes can be handled completely inside the YAML configuration files without requiring codebase modifications.
 - **Failure Taxonomy**: See [ADR 0008](0008-failure-taxonomy.md) for the additive `failure_mode` field and rule-based failure classification.
+- **Verdict-list persistence (scoped amendment):** See [ADR 0010](0010-persist-judge-reasoning-bronze-gold.md), which narrows the verdict-checklist exclusion above to admit the small discrete `per_fact` / `per_citation` lists into gold (bulky prompt + raw payload stay out → bronze).

@@ -386,3 +386,87 @@ def test_runner_factory_dispatch_google():
     assert _GENERATOR_FACTORY["google"] is GeminiGenerator
     assert _GENERATOR_FACTORY["openai"] is OpenAIGenerator
     assert _GENERATOR_FACTORY["anthropic"] is AnthropicGenerator
+
+
+def test_runner_populates_verdicts_ac4(monkeypatch, tmp_path, run_config):
+    """AC-4: run run_evaluation, read the written JSONL record, assert record['per_fact'] and record['per_citation'] are correctly populated. Assert no extra calls (exactly 1 gen, 1 judge)."""
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.eval.questions import Question
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+    from enterprise_rag_ops.retrieval import pipeline
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+
+    monkeypatch.setattr(pipeline, "load_retriever", lambda: MockRetriever())
+
+    # Instrument Generator/Judge to count calls
+    gen_call_count = 0
+    judge_call_count = 0
+
+    class InstrumentedGenerator(StubGenerator):
+        def generate_with_stats(self, context_chunks, question):
+            nonlocal gen_call_count
+            gen_call_count += 1
+            return super().generate_with_stats(context_chunks, question)
+
+    class InstrumentedJudge(StubJudge):
+        def judge_with_stats(self, question, answer_with_sources, answer_facts, retrieved_docs):
+            nonlocal judge_call_count
+            judge_call_count += 1
+            return super().judge_with_stats(
+                question, answer_with_sources, answer_facts, retrieved_docs
+            )
+
+    monkeypatch.setattr(
+        runner,
+        "load_questions",
+        lambda limit: [
+            Question(
+                question_id="q_test",
+                question="Test question?",
+                answer_facts=["Fact A", "Fact B"],
+                expected_doc_ids=["doc_1"],
+                category="general",
+            )
+        ],
+    )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # 1 model: model-a (openai)
+
+    output_path = run_evaluation(
+        run_config,
+        generator_classes={"openai": InstrumentedGenerator},
+        judge_class=InstrumentedJudge,
+    )
+
+    assert output_path.exists()
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 1
+
+    record = json.loads(lines[0])
+
+    # Assert counts: exactly 1 generator call and 1 judge call
+    assert gen_call_count == 1
+    assert judge_call_count == 1
+
+    # Assert per_fact carries verdict labels for those facts
+    assert "per_fact" in record
+    assert record["per_fact"] is not None
+    assert len(record["per_fact"]) == 2
+    assert record["per_fact"][0]["fact"] == "Fact A"
+    assert record["per_fact"][0]["verdict"] == "present"
+    assert record["per_fact"][1]["fact"] == "Fact B"
+    assert record["per_fact"][1]["verdict"] == "present"
+
+    # Assert per_citation matches
+    assert "per_citation" in record
+    assert record["per_citation"] is not None
+    assert len(record["per_citation"]) == 1
+    assert record["per_citation"][0]["doc_id"] == "doc_1"
+    assert record["per_citation"][0]["verdict"] == "supported"

@@ -9,6 +9,8 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict
+
 logger = logging.getLogger("enterprise_rag_ops.eval.records")
 
 
@@ -73,8 +75,8 @@ class GenAiFields(BaseModel):
 class EvalRecord(BaseModel):
     """One record persisted per question per model (FR-1, AC-1).
 
-    Excludes raw verdict check-lists (per_fact, per_citation) to limit storage footprint
-    and clone overhead, embedding only Python-derived aggregates.
+    Verdict lists (per_fact, per_citation) are persisted in gold per ADR-0010.
+    Only the bulky generation prompt and raw payload remain excluded (-> bronze).
     """
 
     question_id: str
@@ -93,3 +95,5 @@ class EvalRecord(BaseModel):
     did_abstain_retrieval: bool
     did_abstain_e2e: bool
     failure_mode: str | None = None
+    per_fact: list[FactVerdict] | None = None
+    per_citation: list[CitationVerdict] | None = None
