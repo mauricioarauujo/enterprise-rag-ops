@@ -53,10 +53,12 @@ We distinguish between the offline testing and production evaluation layers:
 
 ### 6. B2-Gold-Only Fallback
 
-If the Phase 19 bronze writer implementation exceeds time or complexity budgets, we fallback to a B2-gold-only option: verdicts are persisted in gold, no bronze writer is built, and the bulky generation input prompt is simply not persisted this sprint.
+If the Phase 19 bronze writer implementation exceeds time or complexity budgets, we fall back to a B2-gold-only option: verdicts are persisted in gold, no bronze writer is built, and the bulky generation input prompt is simply not persisted this sprint.
 
 ## Consequences
 
 - The `EvalRecord` schema now persists `per_fact` and `per_citation` fields.
 - Backward compatibility is maintained because the new fields are optional and default to `None`.
 - Phase 19 can build the bronze writer matching this specification exactly.
+- **Phase 19 obligations before activating the writer:** add an explicit `data/raw_eval/` line to `.gitignore` (the path is not covered by the existing `data/raw/` / `results/*` entries), and sanitize/validate `run_id` so it cannot contain path separators (the key scheme `data/raw_eval/{run_id}/...` would otherwise create unintended nested directories).
+- The `rag-eval` KB (`eval-record-schema`) refresh for the new fields is deferred to after this ADR, per the sprint-wide knowledge plan — until then the ADR-0007 §1 schema table remains the historical record, narrowed by this ADR's pointer.

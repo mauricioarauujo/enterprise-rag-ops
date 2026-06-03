@@ -23,7 +23,7 @@ Phoenix, and does not build the bronze writer's wiring.
 DESIGNED in ADR-0010 (key scheme, idempotency, thread-safety, privacy, cassette-overlap call,
 `.gitignore` entry) but NOT built here** — it is built and wired into the sweep in Phase 19,
 where the raw response objects are already in memory and the re-run is being paid for anyway.
-Rationale: the ~5h/week budget makes a new thread-safe write path + its tests pure scope creep
+Rationale: a new thread-safe write path + its tests is pure scope creep
 in a phase whose deliverable is a decision (the ADR). Building bronze now would also mean a
 **dead** module (nothing calls it until Phase 19's re-run) — it cannot even be integration-
 tested without the re-run it depends on. The gold verdicts are the higher-value, near-zero-cost
@@ -287,8 +287,8 @@ Open Questions 1–6. None changes the MUST surface; the highest-leverage one to
   **Resolved: design bronze fully in ADR-0010; build + wire it in Phase 19's re-run.** The
   planning note's own cost argument is "capture is cheap _during_ the re-run" — so the writer's
   natural home is the re-run. Building it here yields a dead, un-integration-testable module
-  (nothing writes bronze until the sweep) and burns the ~5h/week budget on scope creep in a
-  decision phase. Encoded as FR-5/FR-6 + AC-7. **✅ Ratified by the user (2026-06-02): design
+  (nothing writes bronze until the sweep) — pure scope creep in a decision phase. Encoded as
+  FR-5/FR-6 + AC-7. **✅ Ratified by the user (2026-06-02): design
   bronze in ADR-0010, build + wire it in Phase 19.** This is the settled scope contract for
   `/design` — the gold schema change + ADR are the phase; no bronze writer, no `.gitignore` edit.
 - **RQ-4 Bronze idempotency — overwrite-by-key (BRAINSTORM Q4).** **Resolved: overwrite-by-key**
