@@ -69,6 +69,14 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         "gen_ai.usage.output_tokens": record.judge.output_tokens,
         "latency_s": record.judge.latency_s,
     }
+    # Build verdict lines for hydration onto the judge span (FR-10, RQ-2)
+    lines = [f"fact: {fv.fact} -> {fv.verdict}" for fv in (record.per_fact or [])] + [
+        f"citation: {cv.doc_id} -> {cv.verdict}" for cv in (record.per_citation or [])
+    ]
+    if lines:
+        judge_attrs["output.value"] = "\n".join(lines)
+        judge_attrs["output.mime_type"] = "text/plain"
+
     # Cost rule (Q3 / FR-3): Omit cost_usd if it is None (never write 0)
     if record.judge.cost_usd is not None:
         judge_attrs["cost_usd"] = record.judge.cost_usd

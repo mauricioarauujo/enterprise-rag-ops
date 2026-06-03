@@ -12,6 +12,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from enterprise_rag_ops.eval.bronze import BronzeWriter
 from enterprise_rag_ops.eval.config import RunConfig
 from enterprise_rag_ops.eval.openai_judge import OpenAIJudge
 from enterprise_rag_ops.eval.questions import Question, load_questions
@@ -127,6 +128,7 @@ def run_evaluation(
     # encodes abort the process. Serialize the (fast) encode under this lock — the slow
     # LLM calls still run concurrently, which is where --concurrency actually pays off.
     retrieve_lock = threading.Lock()
+    bronze_writer = BronzeWriter(run_id=config.run_id) if config.persist_bronze else None
 
     # Load questions (limit flows straight through - FR-5)
     questions = list(load_questions(limit=config.limit))
@@ -179,12 +181,15 @@ def run_evaluation(
                         cost_usd=0.0,
                     )
                     ctx_chunks = []
+                    gen_raw = None
                 else:
                     ctx_chunks = ContextAssembler(store).assemble(chunk_hits)
-                    answer, gen_stats = generator.generate_with_stats(ctx_chunks, q.question)
+                    answer, gen_stats, gen_raw = generator.generate_with_stats(
+                        ctx_chunks, q.question
+                    )
 
                 # 3. Judge the response
-                verdict, judge_stats = judge.judge_with_stats(
+                verdict, judge_stats, judge_raw = judge.judge_with_stats(
                     question=q.question,
                     answer_with_sources=answer,
                     answer_facts=q.answer_facts,
@@ -249,6 +254,44 @@ def run_evaluation(
 
                 # 6. Flush record to JSONL (crash-safe checkpoint, Decision 3-C / AC-2)
                 if should_write:
+                    if bronze_writer is not None:
+                        if gen_raw is not None:
+                            bronze_writer.write(
+                                q.question_id,
+                                model.model_id,
+                                "gen",
+                                {
+                                    "schema_version": 1,
+                                    "meta": {
+                                        "run_id": config.run_id,
+                                        "question_id": q.question_id,
+                                        "model": model.model_id,
+                                        "system": model.system,
+                                        "call_type": "gen",
+                                    },
+                                    "request": gen_raw.request,
+                                    "response": gen_raw.response,
+                                },
+                            )
+                        if judge_raw is not None:
+                            bronze_writer.write(
+                                q.question_id,
+                                model.model_id,
+                                "judge",
+                                {
+                                    "schema_version": 1,
+                                    "meta": {
+                                        "run_id": config.run_id,
+                                        "question_id": q.question_id,
+                                        "model": model.model_id,
+                                        "system": "openai",
+                                        "call_type": "judge",
+                                    },
+                                    "request": judge_raw.request,
+                                    "response": judge_raw.response,
+                                },
+                            )
+
                     with write_lock:
                         f.write(record.model_dump_json() + "\n")
                         f.flush()

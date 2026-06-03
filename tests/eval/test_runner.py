@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 import pytest
 
@@ -239,14 +240,19 @@ def test_runner_cost_ceiling_overrun(monkeypatch, tmp_path, run_config):
     # Stub generator that reports high token usage
     class ExpensiveGenerator(StubGenerator):
         def generate_with_stats(self, chunks, question):
+            from enterprise_rag_ops.eval.raw_call import RawCall
             from enterprise_rag_ops.eval.records import CallStats
 
-            return self.generate(chunks, question), CallStats(
-                input_tokens=10_000_000,  # Very high usage
-                output_tokens=1_000_000,
-                latency_s=0.5,
-                model="expensive",
-                system="openai",
+            return (
+                self.generate(chunks, question),
+                CallStats(
+                    input_tokens=10_000_000,  # Very high usage
+                    output_tokens=1_000_000,
+                    latency_s=0.5,
+                    model="expensive",
+                    system="openai",
+                ),
+                RawCall(request={"model": "expensive"}, response={}),
             )
 
     from enterprise_rag_ops.eval import runner
@@ -470,3 +476,107 @@ def test_runner_populates_verdicts_ac4(monkeypatch, tmp_path, run_config):
     assert len(record["per_citation"]) == 1
     assert record["per_citation"][0]["doc_id"] == "doc_1"
     assert record["per_citation"][0]["verdict"] == "supported"
+
+
+def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
+    """AC-8: persist_bronze writes gen and judge bronze files, matches JSONL outputs."""
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+    from enterprise_rag_ops.retrieval import pipeline
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+    monkeypatch.setattr(pipeline, "load_retriever", lambda: MockRetriever())
+
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.eval.questions import Question
+
+    # Simple loader mock
+    monkeypatch.setattr(
+        runner,
+        "load_questions",
+        lambda limit: [
+            Question(
+                question_id="q_test",
+                question="Test question?",
+                answer_facts=["Fact A"],
+                expected_doc_ids=["doc_1"],
+                category="general",
+            )
+        ],
+    )
+
+    # 1. Run with persist_bronze = False
+    run_config.output_dir = str(tmp_path / "results_no_bronze")
+    run_config.run_id = "test_run_no_bronze"
+    run_config.persist_bronze = False
+    run_config.models = [run_config.models[0]]  # openai only
+
+    output_path_no_bronze = run_evaluation(
+        run_config,
+        generator_classes={"openai": StubGenerator},
+        judge_class=StubJudge,
+    )
+    assert output_path_no_bronze.exists()
+    jsonl_no_bronze = output_path_no_bronze.read_text()
+
+    # Verify no bronze files were written
+    bronze_dir = Path("data/raw_eval") / "test_run_no_bronze"
+    assert not bronze_dir.exists()
+
+    # 2. Run with persist_bronze = True
+    # Monkeypatch the default root of BronzeWriter to be inside tmp_path
+    from enterprise_rag_ops.eval.bronze import BronzeWriter
+
+    orig_init = BronzeWriter.__init__
+
+    def patched_init(self, run_id, root=tmp_path / "raw_eval"):
+        orig_init(self, run_id, root=root)
+
+    monkeypatch.setattr(BronzeWriter, "__init__", patched_init)
+
+    run_config.output_dir = str(tmp_path / "results_with_bronze")
+    run_config.run_id = "test_run_with_bronze"
+    run_config.persist_bronze = True
+
+    output_path_with_bronze = run_evaluation(
+        run_config,
+        generator_classes={"openai": StubGenerator},
+        judge_class=StubJudge,
+    )
+    assert output_path_with_bronze.exists()
+    jsonl_with_bronze = output_path_with_bronze.read_text()
+
+    rec_no_bronze = json.loads(jsonl_no_bronze.strip())
+    rec_with_bronze = json.loads(jsonl_with_bronze.strip())
+    rec_no_bronze["run_id"] = "test_run"
+    rec_with_bronze["run_id"] = "test_run"
+    assert rec_no_bronze == rec_with_bronze
+
+    # Assert bronze files were written
+    bronze_dir_with = tmp_path / "raw_eval" / "test_run_with_bronze"
+    assert bronze_dir_with.exists()
+    gen_file = bronze_dir_with / "q_test__model-a__gen.json"
+    judge_file = bronze_dir_with / "q_test__model-a__judge.json"
+
+    assert gen_file.exists()
+    assert judge_file.exists()
+
+    with open(gen_file) as f:
+        gen_data = json.load(f)
+    assert gen_data["schema_version"] == 1
+    assert gen_data["meta"]["run_id"] == "test_run_with_bronze"
+    assert gen_data["meta"]["call_type"] == "gen"
+    assert "request" in gen_data
+    assert "response" in gen_data
+
+    with open(judge_file) as f:
+        judge_data = json.load(f)
+    assert judge_data["schema_version"] == 1
+    assert judge_data["meta"]["run_id"] == "test_run_with_bronze"
+    assert judge_data["meta"]["call_type"] == "judge"
+    assert "request" in judge_data
+    assert "response" in judge_data

@@ -67,13 +67,23 @@ def test_offline_injected_client():
     generator = GeminiGenerator(model="gemini-test", client=fake_client)
 
     chunks = [Chunk(chunk_id="doc_123::0", doc_id="doc_123", text="Ref text")]
-    result, stats = generator.generate_with_stats(chunks, "Question?")
+    import json
+
+    from enterprise_rag_ops.eval.raw_call import RawCall
+
+    result, stats, raw = generator.generate_with_stats(chunks, "Question?")
 
     assert result.answer == "Gemini generated answer."
     assert result.sources == ["doc_123"]
     assert stats.system == "google"
     assert stats.model == "gemini-test"
     assert stats.latency_s > 0.0
+
+    assert isinstance(raw, RawCall)
+    assert raw.request["model"] == "gemini-test"
+    assert "contents" in raw.request
+    assert json.dumps(raw.response)
+    assert raw.response["text"] == happy_json
 
     # Ensure native JSON config was sent correctly (FR-2)
     assert len(fake_client.calls) == 1
@@ -113,7 +123,7 @@ def test_token_mapping():
     )
     fake_client = FakeGeminiClient(response_text=happy_json, usage_metadata=usage)
     generator = GeminiGenerator(client=fake_client)
-    _, stats = generator.generate_with_stats(chunks, "Q")
+    _, stats, _ = generator.generate_with_stats(chunks, "Q")
     assert stats.input_tokens == 10
     assert stats.output_tokens == 25
 
@@ -125,14 +135,14 @@ def test_token_mapping():
     )
     fake_client = FakeGeminiClient(response_text=happy_json, usage_metadata=usage_no_thoughts)
     generator = GeminiGenerator(client=fake_client)
-    _, stats = generator.generate_with_stats(chunks, "Q")
+    _, stats, _ = generator.generate_with_stats(chunks, "Q")
     assert stats.input_tokens == 12
     assert stats.output_tokens == 18
 
     # Case 3: usage_metadata missing completely (None)
     fake_client_no_usage = FakeGeminiClient(response_text=happy_json, usage_metadata=None)
     generator = GeminiGenerator(client=fake_client_no_usage)
-    _, stats = generator.generate_with_stats(chunks, "Q")
+    _, stats, _ = generator.generate_with_stats(chunks, "Q")
     assert stats.input_tokens == 0
     assert stats.output_tokens == 0
 
@@ -144,7 +154,7 @@ def test_token_mapping():
         response_text=happy_json, usage_metadata=EmptyUsageMetadata()
     )
     generator = GeminiGenerator(client=fake_client_empty)
-    _, stats = generator.generate_with_stats(chunks, "Q")
+    _, stats, _ = generator.generate_with_stats(chunks, "Q")
     assert stats.input_tokens == 0
     assert stats.output_tokens == 0
 
@@ -226,7 +236,7 @@ def test_live_replay(vcr_record, monkeypatch):
     question = "What is the default port for HTTP traffic?"
 
     with vcr_record.use_cassette("gemini_generator.yaml"):
-        result, stats = generator.generate_with_stats(chunks, question)
+        result, stats, raw = generator.generate_with_stats(chunks, question)
 
     assert "80" in result.answer
     assert result.sources == ["test_doc"]
@@ -235,3 +245,6 @@ def test_live_replay(vcr_record, monkeypatch):
     assert stats.latency_s > 0.0
     assert stats.system == "google"
     assert stats.model == "gemini-2.5-flash-lite"
+    assert raw.request["model"] == generator._model
+    assert "contents" in raw.request
+    assert "text" in raw.response

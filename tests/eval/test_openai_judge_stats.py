@@ -52,7 +52,11 @@ def test_openai_judge_judge_with_stats():
     answer = AnswerWithSources(answer="Paris is the capital.", sources=["doc_1"])
     chunks = [Chunk(chunk_id="doc_1::0", doc_id="doc_1", text="Paris is the capital of France.")]
 
-    result, stats = judge.judge_with_stats(
+    import json
+
+    from enterprise_rag_ops.eval.raw_call import RawCall
+
+    result, stats, raw = judge.judge_with_stats(
         question="What is the capital of France?",
         answer_with_sources=answer,
         answer_facts=["Paris is the capital of France."],
@@ -67,6 +71,12 @@ def test_openai_judge_judge_with_stats():
     assert stats.latency_s > 0.0
     assert stats.model == "gpt-5-nano-test"
     assert stats.system == "openai"
+
+    assert isinstance(raw, RawCall)
+    assert raw.request["model"] == "gpt-5-nano-test"
+    assert "messages" in raw.request
+    assert json.dumps(raw.response)
+    assert raw.response["choices"][0]["message"]["content"] == llm_payload
 
     # Assert judge protocol is untouched
     assert issubclass(OpenAIJudge, Judge)

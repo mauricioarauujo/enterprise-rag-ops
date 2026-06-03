@@ -54,7 +54,11 @@ def test_anthropic_generator_offline_tool_use():
     generator = AnthropicGenerator(model="claude-3-5-haiku-test", client=fake_client)
 
     chunks = [Chunk(chunk_id="doc_abc::0", doc_id="doc_abc", text="Some reference text.")]
-    result, stats = generator.generate_with_stats(chunks, "Test question?")
+    import json
+
+    from enterprise_rag_ops.eval.raw_call import RawCall
+
+    result, stats, raw = generator.generate_with_stats(chunks, "Test question?")
 
     assert result.answer == "Haiku generated answer."
     assert result.sources == ["doc_abc"]
@@ -64,6 +68,13 @@ def test_anthropic_generator_offline_tool_use():
     assert stats.latency_s > 0.0
     assert stats.model == "claude-3-5-haiku-test"
     assert stats.system == "anthropic"
+
+    assert isinstance(raw, RawCall)
+    assert raw.request["model"] == "claude-3-5-haiku-test"
+    assert "messages" in raw.request
+    assert raw.request["max_tokens"] == 4096
+    assert json.dumps(raw.response)
+    assert raw.response["content"][0]["type"] == "tool_use"
 
     # Assert forced tool use parameters are sent
     assert len(fake_client.calls) == 1
@@ -104,10 +115,13 @@ def test_anthropic_generator_live_replay(vcr_record, monkeypatch):
     question = "What is the default port for HTTP traffic?"
 
     with vcr_record.use_cassette("anthropic_generator.yaml"):
-        result, stats = generator.generate_with_stats(chunks, question)
+        result, stats, raw = generator.generate_with_stats(chunks, question)
 
     assert "80" in result.answer
     assert result.sources == ["test_doc"]
     assert stats.input_tokens > 0
     assert stats.output_tokens > 0
     assert stats.system == "anthropic"
+    assert raw.request["model"] == generator._model
+    assert "messages" in raw.request
+    assert "content" in raw.response

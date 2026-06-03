@@ -9,9 +9,11 @@ from __future__ import annotations
 import logging
 import os
 import time
+from typing import Any
 
 from anthropic import Anthropic
 
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.generation.prompt import build_system_prompt, build_user_prompt
 from enterprise_rag_ops.generation.schema import AnswerWithSources
@@ -20,6 +22,66 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 logger = logging.getLogger("enterprise_rag_ops.generation")
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _serialize_response(response: Any) -> dict[str, Any]:
+    try:
+        if isinstance(response, (int, str, float, bool, list, dict)):
+            raise TypeError(f"Invalid response type: {type(response)}")
+
+        try:
+            if hasattr(response, "model_dump"):
+                return response.model_dump(mode="json")
+        except Exception:
+            pass
+
+        res: dict[str, Any] = {}
+
+        # model
+        model = getattr(response, "model", None)
+        if model is not None:
+            res["model"] = model
+
+        # stop_reason
+        stop_reason = getattr(response, "stop_reason", None)
+        if stop_reason is not None:
+            res["stop_reason"] = stop_reason
+
+        # content
+        content = getattr(response, "content", None)
+        if content is not None:
+            serialized_content = []
+            for block in content:
+                block_dict = {}
+                b_type = getattr(block, "type", None)
+                if b_type is not None:
+                    block_dict["type"] = b_type
+                b_name = getattr(block, "name", None)
+                if b_name is not None:
+                    block_dict["name"] = b_name
+                b_input = getattr(block, "input", None)
+                if b_input is not None:
+                    block_dict["input"] = b_input
+                b_text = getattr(block, "text", None)
+                if b_text is not None:
+                    block_dict["text"] = b_text
+                serialized_content.append(block_dict)
+            res["content"] = serialized_content
+
+        # usage
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            usage_dict = {}
+            for f in ["input_tokens", "output_tokens"]:
+                val = getattr(usage, f, None)
+                if val is not None:
+                    usage_dict[f] = val
+            if usage_dict:
+                res["usage"] = usage_dict
+
+        return res
+    except Exception as e:
+        return {"_serialization_error": type(e).__name__}
 
 
 class AnthropicGenerator:
@@ -48,15 +110,16 @@ class AnthropicGenerator:
 
     def generate(self, context_chunks: list[Chunk], question: str) -> AnswerWithSources:
         """Call Anthropic and return a validated `AnswerWithSources`."""
-        result, _ = self.generate_with_stats(context_chunks, question)
+        result, _, _ = self.generate_with_stats(context_chunks, question)
         return result
 
     def generate_with_stats(
         self,
         context_chunks: list[Chunk],
         question: str,
-    ) -> tuple[AnswerWithSources, CallStats]:
-        """Call Anthropic and return a validated `AnswerWithSources` along with `CallStats`."""
+    ) -> tuple[AnswerWithSources, CallStats, RawCall]:
+        """Call Anthropic and return a validated `AnswerWithSources` along with `CallStats` and `RawCall`."""
+
         system_prompt = build_system_prompt()
         user_prompt = build_user_prompt(context_chunks, question)
 
@@ -109,6 +172,17 @@ class AnthropicGenerator:
             system="anthropic",
         )
 
+        request = {
+            "model": self._model,
+            "max_tokens": 4096,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_prompt}],
+            "tools": tools,
+            "tool_choice": {"type": "tool", "name": "emit_answer"},
+        }
+        serialized_response = _serialize_response(response)
+        raw_call = RawCall(request=request, response=serialized_response)
+
         logger.info(
             "generation.anthropic sources=%s context_doc_ids=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             result.sources,
@@ -117,4 +191,4 @@ class AnthropicGenerator:
             output_tokens,
             latency,
         )
-        return result, stats
+        return result, stats, raw_call

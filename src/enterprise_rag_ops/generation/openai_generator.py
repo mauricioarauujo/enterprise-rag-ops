@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from openai import OpenAI
 
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.generation.prompt import build_system_prompt, build_user_prompt
 from enterprise_rag_ops.generation.schema import AnswerWithSources
@@ -22,6 +24,69 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 logger = logging.getLogger("enterprise_rag_ops.generation")
 
 DEFAULT_MODEL = "gpt-5-nano-2025-08-07"
+
+
+def _serialize_response(response: Any) -> dict[str, Any]:
+    try:
+        if isinstance(response, (int, str, float, bool, list, dict)):
+            raise TypeError(f"Invalid response type: {type(response)}")
+
+        try:
+            if hasattr(response, "model_dump"):
+                return response.model_dump(mode="json")
+        except Exception:
+            pass
+
+        # Fallback manual extraction
+        res: dict[str, Any] = {}
+
+        # model
+        model = getattr(response, "model", None)
+        if model is not None:
+            res["model"] = model
+
+        # system_fingerprint
+        sys_fp = getattr(response, "system_fingerprint", None)
+        if sys_fp is not None:
+            res["system_fingerprint"] = sys_fp
+
+        # choices
+        choices = getattr(response, "choices", None)
+        if choices:
+            res_choices = []
+            for choice in choices:
+                choice_dict = {}
+                finish_reason = getattr(choice, "finish_reason", None)
+                if finish_reason is not None:
+                    choice_dict["finish_reason"] = finish_reason
+
+                msg = getattr(choice, "message", None)
+                if msg is not None:
+                    msg_dict = {}
+                    content = getattr(msg, "content", None)
+                    if content is not None:
+                        msg_dict["content"] = content
+                    refusal = getattr(msg, "refusal", None)
+                    if refusal is not None:
+                        msg_dict["refusal"] = refusal
+                    choice_dict["message"] = msg_dict
+                res_choices.append(choice_dict)
+            res["choices"] = res_choices
+
+        # usage
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            usage_dict = {}
+            for f in ["prompt_tokens", "completion_tokens", "total_tokens"]:
+                val = getattr(usage, f, None)
+                if val is not None:
+                    usage_dict[f] = val
+            if usage_dict:
+                res["usage"] = usage_dict
+
+        return res
+    except Exception as e:
+        return {"_serialization_error": type(e).__name__}
 
 
 class OpenAIGenerator:
@@ -55,15 +120,15 @@ class OpenAIGenerator:
 
     def generate(self, context_chunks: list[Chunk], question: str) -> AnswerWithSources:
         """Call OpenAI and return a validated `AnswerWithSources`."""
-        result, _ = self.generate_with_stats(context_chunks, question)
+        result, _, _ = self.generate_with_stats(context_chunks, question)
         return result
 
     def generate_with_stats(
         self,
         context_chunks: list[Chunk],
         question: str,
-    ) -> tuple[AnswerWithSources, CallStats]:
-        """Call OpenAI and return a validated `AnswerWithSources` along with `CallStats`."""
+    ) -> tuple[AnswerWithSources, CallStats, RawCall]:
+        """Call OpenAI and return a validated `AnswerWithSources` along with `CallStats` and `RawCall`."""
         import time
 
         system_prompt = build_system_prompt()
@@ -76,14 +141,17 @@ class OpenAIGenerator:
             "strict": True,
         }
 
+        messages_sent = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        response_format = {"type": "json_schema", "json_schema": json_schema}
+
         start_time = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self._model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_schema", "json_schema": json_schema},
+            messages=messages_sent,
+            response_format=response_format,
         )
         latency = time.perf_counter() - start_time
 
@@ -103,6 +171,14 @@ class OpenAIGenerator:
             system="openai",
         )
 
+        request = {
+            "model": self._model,
+            "messages": messages_sent,
+            "response_format": response_format,
+        }
+        serialized_response = _serialize_response(response)
+        raw_call = RawCall(request=request, response=serialized_response)
+
         logger.info(
             "generation.openai sources=%s context_doc_ids=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             result.sources,
@@ -111,4 +187,4 @@ class OpenAIGenerator:
             output_tokens,
             latency,
         )
-        return result, stats
+        return result, stats, raw_call

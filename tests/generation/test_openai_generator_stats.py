@@ -38,7 +38,11 @@ def test_openai_generator_generate_with_stats():
     generator = OpenAIGenerator(model="gpt-5-nano-test", client=fake_client)
     chunks = [Chunk(chunk_id="doc_1::0", doc_id="doc_1", text="Paris is the capital of France.")]
 
-    result, stats = generator.generate_with_stats(chunks, "What is the capital of France?")
+    import json
+
+    from enterprise_rag_ops.eval.raw_call import RawCall
+
+    result, stats, raw = generator.generate_with_stats(chunks, "What is the capital of France?")
 
     assert result.answer == "Paris is the capital."
     assert result.sources == ["doc_1"]
@@ -48,6 +52,13 @@ def test_openai_generator_generate_with_stats():
     assert stats.latency_s > 0.0
     assert stats.model == "gpt-5-nano-test"
     assert stats.system == "openai"
+
+    assert isinstance(raw, RawCall)
+    assert raw.request["model"] == "gpt-5-nano-test"
+    assert "messages" in raw.request
+    assert json.dumps(raw.response)  # Assert it is JSON-able
+    # Ensure manual fallback works (FakeOpenAIClient returns SimpleNamespace, not Pydantic)
+    assert raw.response["choices"][0]["message"]["content"] == canned_payload
 
     # Assert generator protocol is untouched: only generate method is in Protocol methods
     assert issubclass(OpenAIGenerator, Generator)
