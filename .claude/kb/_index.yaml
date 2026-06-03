@@ -48,7 +48,7 @@ domains:
       JSONL, frozen TriageReport/TriageCluster, SCHEMA_VERSION cross-phase contract,
       deterministic representative + sort), and triage-to-issues (grounded GitHub Issue
       drafts, body-marker fingerprint idempotency, GitHubClient Protocol seam, dry-run
-      default, schema gate). ADRs: 0001, 0006, 0007, 0009.
+      default, schema gate). ADRs: 0001, 0006, 0007, 0009, 0010.
     path: rag-eval/
     status: draft
     last_updated: "2026-06-02"
@@ -78,7 +78,7 @@ domains:
         confidence: 0.95
       - name: eval-record-schema
         path: concepts/eval-record-schema.md
-        confidence: 0.95
+        confidence: 0.97
       - name: cost-accounting
         path: concepts/cost-accounting.md
         confidence: 0.95

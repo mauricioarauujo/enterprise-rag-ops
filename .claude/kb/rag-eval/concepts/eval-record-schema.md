@@ -1,10 +1,10 @@
 # EvalRecord Schema and JSONL Persistence
 
 > **Purpose**: The shape of one persisted evaluation record (one question x one model),
-> its OTEL alignment, what it deliberately excludes, and the key-per-record fields
-> added in Phase 6.
-> **Confidence**: HIGH (codebase — `eval/records.py`, ADR-0007)
-> **ADR**: `docs/adr/0007-eval-record-schema.md`
+> its OTEL alignment, the bronze/gold exclusion boundary, and the key-per-record fields
+> added in Phase 6 and Phase 18.
+> **Confidence**: HIGH (codebase — `eval/records.py`, ADR-0007, ADR-0010)
+> **ADRs**: `docs/adr/0007-eval-record-schema.md`, `docs/adr/0010-persist-judge-reasoning-bronze-gold.md`
 
 ## What One Record Captures
 
@@ -27,6 +27,11 @@ retrieval_ranked_ids — deduplicated doc-level IDs (retrieval metric input)
 did_abstain_retrieval / did_abstain_e2e — bool flags
 failure_mode  — str|None: failure-taxonomy tag, written by `rag-classify` post-hoc
                 (None until classified). Backward-compatible (added Sprint 3 / Phase 8).
+per_fact      — list[FactVerdict]|None: the judge's per-fact verdict list, sourced
+                from the in-memory JudgeVerdict at zero extra API cost (ADR-0010).
+                Defaults to None; old results/*.jsonl load cleanly (backward-compat).
+per_citation  — list[CitationVerdict]|None: the judge's per-citation verdict list,
+                same provenance and backward-compatibility as per_fact (ADR-0010).
 ```
 
 The `failure_mode` field is persisted here but **owned by the observability domain** —
@@ -34,15 +39,32 @@ its vocabulary, cascade, and thresholds live in
 [observability/failure-taxonomy](../../observability/concepts/failure-taxonomy.md). This
 concept only records that the field exists on the schema.
 
-## What the Record Deliberately Excludes
+## Bronze / Gold Exclusion Boundary (ADR-0010)
 
-`per_fact` and `per_citation` verdict lists are **not persisted**. They are produced by
-the judge and used on-the-fly to compute the three aggregates, then discarded. This
-limits the JSONL footprint and avoids storing the raw LLM judge output verbatim.
+ADR-0007 originally excluded all verdict checklists from gold to limit JSONL footprint.
+ADR-0010 (sprint-6/phase-18) narrowed that exclusion with a two-layer split:
 
-The three floats (`fact_recall`, `fact_precision`, `faithfulness_ratio`) are the
-Python-derived aggregates stored in the record — the LLM never emits them directly
+**Gold (built, on main):** `per_fact` and `per_citation` ARE now persisted in
+`EvalRecord`. They are small discrete label lists (same scale as `sources` /
+`retrieval_ranked_ids`), already computed in memory by the judge — so adding them to
+gold costs zero extra LLM API calls. The runner populates them directly from the
+`JudgeVerdict` returned by `judge_with_stats` (`runner.py`: `per_fact=verdict.per_fact,
+per_citation=verdict.per_citation`). Both fields are `list[...] | None = None`
+(optional + defaulted), so old `results/*.jsonl` load without migration.
+
+**Bronze (designed in ADR-0010, built in phase-19):** The bulky generation input prompt
+(embeds k=10 context chunks) and the raw LLM API response payloads remain excluded from
+gold. They are designed for a gitignored bronze archive at
+`data/raw_eval/{run_id}/{question_id}__{model}__{gen|judge}.json` with overwrite-by-key
+idempotency and an opt-in `persist_bronze` flag (default `False`). The bronze writer
+is **not yet built** — phase-19 builds and wires it.
+
+The three floats (`fact_recall`, `fact_precision`, `faithfulness_ratio`) are still
+Python-derived aggregates — the LLM never emits them directly
 (see `concepts/schema-as-ssot.md`).
+
+**Import:** `records.py` imports `FactVerdict` and `CitationVerdict` directly from the
+existing closed `eval/schema.py` models — no new model was introduced.
 
 ## OTEL GenAI Alignment
 
@@ -73,6 +95,9 @@ report's per-category retrieval aggregation consumes this field directly.
 ## Related
 
 - `eval/records.py` — `EvalRecord`, `CallStats`, `Price`, `compute_cost_usd`
-- `docs/adr/0007-eval-record-schema.md`
+- `eval/schema.py` — `FactVerdict`, `CitationVerdict` (reused by `EvalRecord`)
+- `eval/runner.py` — EvalRecord build site (`per_fact=verdict.per_fact`, `per_citation=verdict.per_citation`)
+- `docs/adr/0007-eval-record-schema.md` — original schema; Consequences now points to ADR-0010
+- `docs/adr/0010-persist-judge-reasoning-bronze-gold.md` — scoped amendment: per_fact/per_citation into gold; bronze design
 - [cost-accounting.md](cost-accounting.md)
 - [../patterns/multi-model-runner.md](../patterns/multi-model-runner.md)
