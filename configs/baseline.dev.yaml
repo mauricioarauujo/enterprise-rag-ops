@@ -1,0 +1,50 @@
+# Capped dev sweep — same matrix as baseline.yaml, limited to 20 questions.
+# Cheap enough to re-run; catches model-EOL and index misconfiguration early before
+# committing to the full 500-question run. See
+# .claude/kb/rag-eval/patterns/concurrent-eval-sweep.md § Practical Sweep Checklist.
+
+models:
+  - model_id: "gpt-5-nano-2025-08-07"
+    system: "openai"
+  - model_id: "claude-haiku-4-5-20251001"
+    system: "anthropic"
+  - model_id: "gemini-2.5-flash-lite"
+    system: "google"
+
+# The judge model to evaluate answers
+judge_model: "gpt-5-nano-2025-08-07"
+
+# Capped for a cheap dev sweep (full run uses null = all 500 in baseline.yaml)
+limit: 20
+
+# Retrieval k-cutoff
+k: 10
+
+# Output results location
+output_dir: "results"
+
+# Unique run identifier (→ results/dev.jsonl)
+run_id: "dev"
+
+# Cost-overrun guard ceiling in USD
+cost_ceiling_usd: 5.0
+
+# Price table: in_usd_per_1m and out_usd_per_1m
+prices:
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40
+  gpt-4o-mini:
+    input_usd_per_1m: 0.15
+    output_usd_per_1m: 0.60
+  # claude-haiku-4-5 price verified against Anthropic's official pricing page (AC-15).
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
+  claude-3-5-sonnet-20241022:
+    input_usd_per_1m: 3.00
+    output_usd_per_1m: 15.00
+  # gemini-2.5-flash-lite price verified against Google's official Gemini API pricing (AC-8).
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40

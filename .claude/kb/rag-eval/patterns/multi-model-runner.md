@@ -98,4 +98,4 @@ appears to succeed with a short JSONL.
 - [../concepts/eval-record-schema.md](../concepts/eval-record-schema.md)
 - [../concepts/cost-accounting.md](../concepts/cost-accounting.md)
 - [concurrent-eval-sweep.md](concurrent-eval-sweep.md)
-- [report-render.md](report-render.md)
+- [eval-report-render.md](eval-report-render.md)
