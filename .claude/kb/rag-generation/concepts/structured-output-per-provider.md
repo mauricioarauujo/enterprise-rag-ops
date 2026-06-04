@@ -1,8 +1,8 @@
 # structured-output-per-provider
 
-> **Purpose**: The three divergent mechanisms that force `AnswerWithSources`-shaped JSON from OpenAI, Anthropic, and Google Gemini — and the single client-side invariant that unifies all three.
-> **Confidence**: HIGH (codebase-grounded + ADR-0005 amendment + Context7 / google-genai SDK docs confirmed)
-> **MCP Validated**: 2026-06-01
+> **Purpose**: The three divergent mechanisms that force `AnswerWithSources`-shaped JSON from OpenAI, Anthropic, and Google Gemini — and the single client-side invariant that unifies all three. Includes Gemini-only verbalized-confidence pattern (ADR-0011).
+> **Confidence**: HIGH (codebase-grounded + ADR-0005 + ADR-0011 + Context7 / google-genai SDK docs confirmed)
+> **MCP Validated**: 2026-06-01 | **Last updated**: 2026-06-04
 
 ## Overview
 
@@ -85,7 +85,21 @@ response = client.models.generate_content(
 result = AnswerWithSources.model_validate_json(response.text)  # closed enforcement our side
 ```
 
-The `_GeminiResponseSchema` fields mirror `AnswerWithSources` exactly (verified by the test: `set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields)`). If a future field is added to `AnswerWithSources` but not to the mirror, the test fails — preventing a silent schema drift in live calls.
+The `_GeminiResponseSchema` fields mirror `AnswerWithSources` exactly for `answer`/`sources`, and adds one Gemini-only field: `confidence: float`. That extra field is **stripped before `AnswerWithSources` validation** so the shared closed-schema contract is untouched.
+
+### Gemini-only: verbalized confidence + strip pattern (ADR-0011)
+
+Gemini 2.5 has **no token logprobs** (the API returns `400 INVALID_ARGUMENT: "Logprobs is not enabled"` on any `response_logprobs` / `logprobs` flag — do not set them). The escalation signal is therefore verbalized: a `confidence` field appended to `_GeminiResponseSchema` and requested via `_CONFIDENCE_ADDENDUM` on the system prompt. After JSON parsing:
+
+```python
+# gemini_generator.py
+if isinstance(data, dict):
+    confidence_score = _parse_confidence(data)               # clamp to [0,1], never raises
+    answer_data = {k: v for k, v in data.items() if k != "confidence"}
+    result = AnswerWithSources.model_validate(answer_data)   # confidence stripped
+```
+
+`confidence_score` rides `CallStats.confidence_score` (optional `float | None`). The public `Generator` Protocol (`generate`) is unchanged.
 
 ## The Unifying Invariant
 
@@ -101,7 +115,7 @@ This means `extra="forbid"` is enforced our side for all three — a Gemini resp
 
 ## Common Mistakes
 
-**Wrong (Gemini):**
+**Wrong (Gemini — schema):**
 
 ```python
 # Passes AnswerWithSources directly — causes 400 INVALID_ARGUMENT
@@ -111,13 +125,22 @@ config=types.GenerateContentConfig(response_schema=AnswerWithSources)
 **Correct:**
 
 ```python
-# Open mirror to Gemini; closed enforcement via model_validate_json our side
+# Open mirror to Gemini; closed enforcement via model_validate our side (confidence stripped)
 config=types.GenerateContentConfig(response_schema=_GeminiResponseSchema)
-result = AnswerWithSources.model_validate_json(response.text)
 ```
+
+**Wrong (Gemini — logprobs):**
+
+```python
+# Gemini 2.5 Flash / Flash-Lite return 400 INVALID_ARGUMENT on this
+config=types.GenerateContentConfig(response_logprobs=True, logprobs=5, ...)
+```
+
+Gemini 2.5 Flash and Flash-Lite have no logprobs endpoint. Older logprob-capable models (1.5-flash, 2.0-flash) are retired (404). **Never set `response_logprobs` or `logprobs` on a Gemini 2.5 `GenerateContentConfig`.** If a confidence signal is needed, use the verbalized-confidence pattern above.
 
 ## Related
 
 - [concepts/generator-seam.md](generator-seam.md) — Protocol and dispatch
 - [patterns/add-a-generator.md](../patterns/add-a-generator.md) — step-by-step recipe for a new provider
-- ADR-0005 amendment (`docs/adr/0005-llm-provider-matrix.md`) — schema-dialect note
+- ADR-0005 (`docs/adr/0005-llm-provider-matrix.md`) — schema-dialect note
+- ADR-0011 (`docs/adr/0011-escalation-signal.md`) — logprob infeasibility + verbalized confidence decision
