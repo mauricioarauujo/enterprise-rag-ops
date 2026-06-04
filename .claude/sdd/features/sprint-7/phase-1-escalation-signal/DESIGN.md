@@ -1,5 +1,18 @@
 # DESIGN: sprint-7/phase-1-escalation-signal — Inference-Time Escalation Signal
 
+> **⚠️ PIVOT AMENDMENT (2026-06-04, post-spike).** The RISK-1 phase-0 spike found that
+> `gemini-2.5-flash-lite` (and the whole Gemini 2.5 family) returns `400 "Logprobs is not
+enabled"` — token logprobs AND `avg_logprobs` are unavailable on the cheap model, so the
+> logprob/first-token-margin signal that the body of this DESIGN describes is **infeasible**.
+> Per the user's decision (Option 1), the signal pivoted to the cheap model's **verbalized
+> confidence** (a `confidence` 0.0–1.0 field in the Gemini structured output, riding the same
+> `CallStats.confidence_score`), to be validated on the 500 alongside **abstention** and
+> **retrieval RRF score**. The seam wiring is implemented and committed (`c66ecf9`); the
+> sections below are retained for provenance — read `_compute_confidence`/logprob references
+> as superseded by `_parse_confidence` (verbalized confidence). The live validation (Gemini
+> sweep + AUROC analysis + ADR-0011) is **paused on Gemini billing top-up** (credits depleted).
+> The authoritative record will be ADR-0011.
+
 **Sprint/Phase:** sprint-7/phase-1-escalation-signal | **Date:** 2026-06-04
 
 ## Architecture
