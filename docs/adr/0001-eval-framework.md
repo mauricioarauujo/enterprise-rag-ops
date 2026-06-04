@@ -138,7 +138,7 @@ None`; `|present|+|contradicted| == 0` → `fact_precision = None`; empty `per_c
 
 ## References
 
-- `.claude/sdd/features/sprint-2/phase-4-perfact-judge/` — BRAINSTORM, DEFINE, DESIGN.
+- `.claude/sdd/archive/sprint-2/phase-4-perfact-judge/` — BRAINSTORM, DEFINE, DESIGN.
 - ADR-0002 — retrieval architecture (`Chunk`, the `Retriever`/`VectorStore` seams the
   judge reuses).
 - ADR-0003 — generation layer (`AnswerWithSources`, the judge's answer-input contract;

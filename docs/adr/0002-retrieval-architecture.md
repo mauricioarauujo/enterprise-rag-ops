@@ -110,5 +110,5 @@ which our engineering guidance rejects.
 ## References
 
 - `.claude/kb/rag-retrieval/` — concepts and patterns this decision draws on.
-- `.claude/sdd/features/sprint-1/phase-2-retrieval/` — BRAINSTORM, DEFINE, DESIGN.
+- `.claude/sdd/archive/sprint-1/phase-2-retrieval/` — BRAINSTORM, DEFINE, DESIGN.
 - ADR-0001 — eval framework (deferred to Sprint 2).

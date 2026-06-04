@@ -190,7 +190,7 @@ most recent), so the renumber is a no-op for the public `docs/adr/` index.
 
 ## References
 
-- `.claude/sdd/features/sprint-1/phase-3-generation/` — BRAINSTORM, DEFINE, DESIGN.
+- `.claude/sdd/archive/sprint-1/phase-3-generation/` — BRAINSTORM, DEFINE, DESIGN.
 - ADR-0002 — retrieval architecture; defines the `Retriever` / `VectorStore`
   / `Embedder` Protocols this ADR extends.
 - `.claude/kb/rag-retrieval/` — KB domain that grounds the upstream contract.
