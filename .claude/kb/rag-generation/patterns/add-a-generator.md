@@ -36,7 +36,7 @@ class <Provider>Generator:
         self._model = model or os.environ.get("RAG_GEN_MODEL_<PROVIDER>", DEFAULT_MODEL)
 
     def generate(self, context_chunks, question) -> AnswerWithSources:
-        result, _ = self.generate_with_stats(context_chunks, question)
+        result, _, _ = self.generate_with_stats(context_chunks, question)
         return result
 
     def generate_with_stats(self, context_chunks, question):
@@ -62,7 +62,16 @@ class <Provider>Generator:
             model=self._model,
             system="<provider_key>",   # must match the _GENERATOR_FACTORY key
         )
-        return result, stats
+
+        # Raw payload capture — build request from local vars (never from client),
+        # serialize response with _serialize_response (see concepts/).
+        request = {
+            "model": self._model,
+            "<messages_key>": <local_messages_var>,
+            # include only params actually sent to the SDK call
+        }
+        raw_call = RawCall(request=request, response=_serialize_response(response))
+        return result, stats, raw_call
 ```
 
 **Structured-output guidance by mechanism:**
@@ -147,5 +156,6 @@ See `rag-eval` → `patterns/cassette-replay-eval.md` for the full cassette work
 - [concepts/generator-seam.md](../concepts/generator-seam.md) — the Protocol and what "localized swap" means
 - [concepts/structured-output-per-provider.md](../concepts/structured-output-per-provider.md) — structured-output mechanism options
 - [concepts/per-provider-token-accounting.md](../concepts/per-provider-token-accounting.md) — token-field mapping reference
+- [concepts/raw-payload-serialization.md](../concepts/raw-payload-serialization.md) — RawCall model, \_serialize_response algorithm, privacy guarantee
 - `rag-eval` → `patterns/cassette-replay-eval.md` — cassette recording workflow
 - ADR-0003 (`docs/adr/0003-generation.md`) — seam design and swap scope

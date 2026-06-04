@@ -54,6 +54,21 @@ The span tree is a **projection** of one `EvalRecord`:
 - Each span carries attributes built by `build_span_attrs(record)` in `attributes.py`.
 - Score annotations are built by `build_score_rows(record, span_ids)` in `attributes.py`.
 
+## Info Tab Rendering (Phoenix)
+
+Phoenix's **Info tab** displays span content when `input.value` / `output.value` are
+present. The harness hydrates all four I/O slots across the tree:
+
+| Span       | `input.value`                                  | `output.value`                                                         |
+| ---------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
+| chain      | gold question text (opt-in, exporter boundary) | —                                                                      |
+| retriever  | —                                              | —                                                                      |
+| generation | —                                              | `record.answer` (always-on, mapper)                                    |
+| judge      | —                                              | verdict lines per-fact+per-citation (always-on when non-empty, mapper) |
+
+This makes a failed trace self-explanatory end-to-end: question (chain) → retrieved doc
+IDs → generated answer (generation) → judge verdicts (judge).
+
 ## Invariants
 
 - Span children are opened and closed in order: retriever → generation → judge. Each
@@ -65,6 +80,8 @@ The span tree is a **projection** of one `EvalRecord`:
   `doc_lookup` is non-None, `exporter.py` post-processes `span_attrs["retriever"]` after
   `build_span_attrs` returns to hydrate `.content` from `corpus.jsonl`. A missing `doc_id` is
   omitted + warned, never a crash. `.score` is still out — not persisted in `EvalRecord`.
+- `output.value`/`output.mime_type` on the judge span are omitted when both `per_fact`
+  and `per_citation` are None or empty — the same guard pattern as `cost_usd`.
 
 ## Sources
 

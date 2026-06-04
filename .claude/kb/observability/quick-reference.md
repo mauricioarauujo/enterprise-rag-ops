@@ -4,15 +4,16 @@
 
 ## Span Tree Structure
 
-| Span Name              | OI `span_kind` | Parent | Key Attributes                                                                          |
-| ---------------------- | -------------- | ------ | --------------------------------------------------------------------------------------- |
-| `{question_id}` (root) | `"chain"`      | —      | `question_id`, `category`, `run_id`, `k`, `gen_ai.*`, `cost_usd_total`\*                |
-| `"retriever"`          | `"retriever"`  | chain  | `retrieval.documents.{i}.document.id`, `.rank`; `.content`\*\* (opt-in)                 |
-| `"generation"`         | `"llm"`        | chain  | `gen_ai.request.model`, `gen_ai.usage.{input,output}_tokens`, `cost_usd`\*, `latency_s` |
-| `"judge"`              | `"llm"`        | chain  | same shape as generation                                                                |
+| Span Name              | OI `span_kind` | Parent | Key Attributes                                                                                                      |
+| ---------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `{question_id}` (root) | `"chain"`      | —      | `question_id`, `category`, `run_id`, `k`, `gen_ai.*`, `cost_usd_total`\*; `input.value`\*\* (opt-in)                |
+| `"retriever"`          | `"retriever"`  | chain  | `retrieval.documents.{i}.document.id`, `.rank`; `.content`\*\*\* (opt-in)                                           |
+| `"generation"`         | `"llm"`        | chain  | `gen_ai.request.model`, `gen_ai.usage.{input,output}_tokens`, `cost_usd`\*, `latency_s`, `output.value` (always-on) |
+| `"judge"`              | `"llm"`        | chain  | same gen_ai shape as generation; `output.value` (always-on when verdicts non-empty), `cost_usd`\*                   |
 
 \*Only written when value is non-None.
-\*\*`.content` hydrated at exporter boundary when `--enrich-from-index` is passed; pure mapper writes `.id`/`.rank` only.
+\*\*`input.value`/`input.mime_type` hydrated at exporter boundary when `--enrich-from-questions` is passed; pure mapper does not set these.
+\*\*\*`.content` hydrated at exporter boundary when `--enrich-from-index` is passed; pure mapper writes `.id`/`.rank` only.
 
 ## Score Metrics → Span Alignment
 
@@ -43,14 +44,16 @@
 
 ## CLI Flags
 
-| Command             | Key Flags                              | Effect                                                                  |
-| ------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
-| `rag-export-traces` | `--results`, `--endpoint`, `--project` | Replay JSONL → Phoenix                                                  |
-| `rag-export-traces` | `--dry-run`                            | Validate JSONL only; no Phoenix connection                              |
-| `rag-export-traces` | `--enrich-from-index`                  | Hydrate `.content` on retriever spans from `corpus.jsonl` (opt-in)      |
-| `rag-export-traces` | `--corpus PATH`                        | Override corpus path for `--enrich-from-index` (default: `CORPUS_PATH`) |
-| `rag-classify`      | `--results`, `--output`                | Classify + write tagged JSONL                                           |
-| `rag-classify`      | `--dry-run`                            | Print distribution; no file write                                       |
+| Command             | Key Flags                              | Effect                                                                   |
+| ------------------- | -------------------------------------- | ------------------------------------------------------------------------ |
+| `rag-export-traces` | `--results`, `--endpoint`, `--project` | Replay JSONL → Phoenix                                                   |
+| `rag-export-traces` | `--dry-run`                            | Validate JSONL only; no Phoenix connection                               |
+| `rag-export-traces` | `--enrich-from-index`                  | Hydrate `.content` on retriever spans from `corpus.jsonl` (opt-in)       |
+| `rag-export-traces` | `--corpus PATH`                        | Override corpus path for `--enrich-from-index` (default: `CORPUS_PATH`)  |
+| `rag-export-traces` | `--enrich-from-questions`              | Hydrate `input.value` on chain spans with gold question text (opt-in)    |
+| `rag-export-traces` | `--questions-revision SHA`             | Dataset revision SHA for gold question map (default: `DATASET_REVISION`) |
+| `rag-classify`      | `--results`, `--output`                | Classify + write tagged JSONL                                            |
+| `rag-classify`      | `--dry-run`                            | Print distribution; no file write                                        |
 
 ## Endpoint Normalization
 

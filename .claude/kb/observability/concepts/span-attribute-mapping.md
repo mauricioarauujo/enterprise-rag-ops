@@ -11,16 +11,25 @@ Attributes follow **OTel GenAI semantic conventions** (`gen_ai.*`) for LLM spans
 
 ## Chain Span (root)
 
-| Attribute               | Source field                   | Convention                     |
-| ----------------------- | ------------------------------ | ------------------------------ |
-| `question_id`           | `record.question_id`           | custom                         |
-| `category`              | `record.category`              | custom                         |
-| `run_id`                | `record.run_id`                | custom                         |
-| `k`                     | `record.k`                     | custom                         |
-| `gen_ai.request.model`  | `record.gen_ai.request.model`  | OTel GenAI                     |
-| `gen_ai.system`         | `record.gen_ai.system`         | OTel GenAI                     |
-| `gen_ai.operation.name` | `record.gen_ai.operation.name` | OTel GenAI                     |
-| `cost_usd_total`        | derived (gen+judge)            | custom — only if both non-None |
+| Attribute               | Source field                   | Convention                       | When                        |
+| ----------------------- | ------------------------------ | -------------------------------- | --------------------------- |
+| `question_id`           | `record.question_id`           | custom                           | always                      |
+| `category`              | `record.category`              | custom                           | always                      |
+| `run_id`                | `record.run_id`                | custom                           | always                      |
+| `k`                     | `record.k`                     | custom                           | always                      |
+| `gen_ai.request.model`  | `record.gen_ai.request.model`  | OTel GenAI                       | always                      |
+| `gen_ai.system`         | `record.gen_ai.system`         | OTel GenAI                       | always                      |
+| `gen_ai.operation.name` | `record.gen_ai.operation.name` | OTel GenAI                       | always                      |
+| `cost_usd_total`        | derived (gen+judge)            | custom                           | only if both non-None       |
+| `input.value`           | `question_lookup[question_id]` | OpenInference — Phoenix Info tab | opt-in at exporter boundary |
+| `input.mime_type`       | `"text/plain"` (literal)       | OpenInference                    | opt-in, paired with above   |
+
+`input.value` / `input.mime_type` are set by `exporter.py` **after** `build_span_attrs` returns,
+not inside the pure mapper (`attributes.py`). They are hydrated only when
+`question_lookup` is non-None, which requires the `--enrich-from-questions` CLI flag.
+A missing `question_id` is logged as a warning and both keys are omitted for that
+record — never a crash. The boundary-enrichment discipline matches Phase 16
+(`--enrich-from-index`): the pure mapper stays import-light (NFR-1).
 
 ## Retriever Span
 
@@ -41,17 +50,52 @@ crash (FR-5). `.document.score` is still out: scores are not persisted in `EvalR
 `Document.id` in `corpus.jsonl`. If chunking ever makes these IDs diverge, every lookup misses
 and warns per record.
 
-## Generation and Judge Spans (identical shape)
+## Generation Span
 
-| Attribute                    | Source field        | Convention            |
-| ---------------------------- | ------------------- | --------------------- | ------------------------- |
-| `gen_ai.request.model`       | `record.{generation | judge}.model`         | OTel GenAI                |
-| `gen_ai.system`              | `record.{generation | judge}.system`        | OTel GenAI                |
-| `gen_ai.operation.name`      | `"chat"` (literal)  | OTel GenAI            |
-| `gen_ai.usage.input_tokens`  | `record.{generation | judge}.input_tokens`  | OTel GenAI                |
-| `gen_ai.usage.output_tokens` | `record.{generation | judge}.output_tokens` | OTel GenAI                |
-| `latency_s`                  | `record.{generation | judge}.latency_s`     | custom                    |
-| `cost_usd`                   | `record.{generation | judge}.cost_usd`      | custom — only if non-None |
+| Attribute                    | Source field                      | Convention                       | When             |
+| ---------------------------- | --------------------------------- | -------------------------------- | ---------------- |
+| `gen_ai.request.model`       | `record.generation.model`         | OTel GenAI                       | always           |
+| `gen_ai.system`              | `record.generation.system`        | OTel GenAI                       | always           |
+| `gen_ai.operation.name`      | `"chat"` (literal)                | OTel GenAI                       | always           |
+| `gen_ai.usage.input_tokens`  | `record.generation.input_tokens`  | OTel GenAI                       | always           |
+| `gen_ai.usage.output_tokens` | `record.generation.output_tokens` | OTel GenAI                       | always           |
+| `latency_s`                  | `record.generation.latency_s`     | custom                           | always           |
+| `output.value`               | `record.answer`                   | OpenInference — Phoenix Info tab | always           |
+| `output.mime_type`           | `"text/plain"` (literal)          | OpenInference                    | always           |
+| `cost_usd`                   | `record.generation.cost_usd`      | custom                           | only if non-None |
+
+`output.value` is **always-on** (Phase 17): `record.answer` is an in-record field — no
+external read needed — so the pure mapper sets it directly. This makes Phoenix's Info tab
+render the generated answer for every trace.
+
+## Judge Span
+
+| Attribute                    | Source field                 | Convention                       | When                  |
+| ---------------------------- | ---------------------------- | -------------------------------- | --------------------- |
+| `gen_ai.request.model`       | `record.judge.model`         | OTel GenAI                       | always                |
+| `gen_ai.system`              | `record.judge.system`        | OTel GenAI                       | always                |
+| `gen_ai.operation.name`      | `"chat"` (literal)           | OTel GenAI                       | always                |
+| `gen_ai.usage.input_tokens`  | `record.judge.input_tokens`  | OTel GenAI                       | always                |
+| `gen_ai.usage.output_tokens` | `record.judge.output_tokens` | OTel GenAI                       | always                |
+| `latency_s`                  | `record.judge.latency_s`     | custom                           | always                |
+| `output.value`               | verdict lines (see below)    | OpenInference — Phoenix Info tab | if verdicts non-empty |
+| `output.mime_type`           | `"text/plain"` (literal)     | OpenInference                    | if verdicts non-empty |
+| `cost_usd`                   | `record.judge.cost_usd`      | custom                           | only if non-None      |
+
+`output.value` on the judge span is a `text/plain` block rendered from
+`record.per_fact` and `record.per_citation` (Phase 19):
+
+```
+fact: <fact text> -> <verdict>
+fact: <fact text> -> <verdict>
+citation: <doc_id> -> <verdict>
+```
+
+Built with `str.join` from `record.per_fact` (if non-None/non-empty) then
+`record.per_citation` (if non-None/non-empty). When **both** lists are None or empty,
+both `output.value` and `output.mime_type` are omitted (mirrors the `cost_usd` omit
+guard). Always-on when verdicts exist — no new flag, no new import — mapper purity
+(NFR-1) preserved.
 
 ## Cost Rule
 
@@ -73,8 +117,22 @@ Score-to-span routing:
 - `faithfulness_ratio` → generation span
 - `fact_recall`, `fact_precision` → judge span
 
+## Known Display Artifacts in Phoenix
+
+- **Native cost widget shows $0**: Phoenix reads `llm.token_count.*` for its cost widget,
+  but the harness emits `gen_ai.usage.*` (OTel GenAI) + a custom `cost_usd` attribute.
+  The real cost is present on the span's Attributes tab; the widget simply doesn't read it.
+- **Trace latency is replay duration**: Phoenix displays the span start/end delta, which
+  reflects when `exporter.py` opened/closed the context manager — not the real
+  `latency_s` attribute stored in the record. Both values are correct for their purpose;
+  they measure different things.
+
+These are known/acceptable display artifacts, not bugs.
+
 ## Sources
 
-- `src/enterprise_rag_ops/observability/attributes.py` — full attribute builders
-- Research (pillar 3): OTel GenAI semconv table, OpenInference retrieval conventions
+- `src/enterprise_rag_ops/observability/attributes.py` — full attribute builders (Phases 16, 17, 19)
+- `src/enterprise_rag_ops/observability/exporter.py` — exporter boundary enrichment
+- `src/enterprise_rag_ops/observability/cli.py` — `--enrich-from-questions` CLI flag
+- OpenInference spec (`/arize-ai/openinference`): `input.value`, `output.value`, `input.mime_type`, `output.mime_type` confirmed as standard OpenInference keys (Pillar 2)
 - `docs/adr/0004-observability-tool.md` — attribute field alignment rationale

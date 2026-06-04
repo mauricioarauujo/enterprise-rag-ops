@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-06-01"
+last_updated: "2026-06-03"
 
 limits:
   quick_reference: 100
@@ -48,10 +48,13 @@ domains:
       JSONL, frozen TriageReport/TriageCluster, SCHEMA_VERSION cross-phase contract,
       deterministic representative + sort), and triage-to-issues (grounded GitHub Issue
       drafts, body-marker fingerprint idempotency, GitHubClient Protocol seam, dry-run
-      default, schema gate). ADRs: 0001, 0006, 0007, 0009, 0010.
+      default, schema gate), bronze raw-archive (BronzeWriter — opt-in persist_bronze,
+      run_id-keyed JSON-per-call under data/raw_eval/, own-lock/flush/overwrite-idempotency,
+      run_id path-sanitization; RawCall 3rd-return transport, off-Protocol + off-gold, ADR-0010).
+      ADRs: 0001, 0006, 0007, 0009, 0010.
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-02"
+    last_updated: "2026-06-03"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -87,6 +90,9 @@ domains:
         confidence: 0.95
       - name: failure-triage
         path: concepts/failure-triage.md
+        confidence: 0.95
+      - name: bronze-raw-archive
+        path: concepts/bronze-raw-archive.md
         confidence: 0.95
     patterns:
       - name: per-fact-judge-call
@@ -125,11 +131,15 @@ domains:
       and the rule-based failure-mode taxonomy
       (5-label first-match cascade over EvalRecord aggregates + gold Questions,
       HALLUCINATION_FAITHFULNESS_THRESHOLD=0.5, INCOMPLETE_RECALL_THRESHOLD=0.5).
+      Sprint 6 — LLM-span I/O hydration for Phoenix Info-tab legibility: chain input.value
+      (gold question, opt-in at the exporter boundary via --enrich-from-questions), generation
+      output.value (answer, always-on), judge output.value (per-fact/per-citation verdict as
+      text/plain, always-on, omit-guarded when no verdicts).
       ADRs: 0004 (tool — Phoenix deployed, Langfuse rejected on 8 GB hardware),
       0008 (taxonomy), 0007 (schema).
     path: observability/
     status: draft
-    last_updated: "2026-06-02"
+    last_updated: "2026-06-03"
     agents: [kb-architect]
     pillars_used: [codebase, deep-research]
     research_source: _research/archive/observability-2026-05-25.md
@@ -182,10 +192,13 @@ domains:
       candidates). Retry hardening born from real sweep throttling (Anthropic max_retries=8;
       Gemini HttpRetryOptions attempts=8). Cassette key-scrub headers per provider.
       ADRs: 0003 (Generator seam + structured outputs + abstention), 0005 (three-provider matrix
-      + Gemini schema-dialect amendment).
+      + Gemini schema-dialect amendment). Raw-payload serialization (phase-19): *_with_stats
+      returns a 3rd RawCall(request, response) built by a defensive per-provider _serialize_response
+      (pydantic model_dump(mode="json") fast path → manual getattr fallback → never raises);
+      off-Protocol, off-gold, shared OpenAI serializer between generator and judge.
     path: rag-generation/
     status: draft
-    last_updated: "2026-06-01"
+    last_updated: "2026-06-03"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -200,6 +213,9 @@ domains:
         confidence: 0.95
       - name: per-provider-token-accounting
         path: concepts/per-provider-token-accounting.md
+        confidence: 0.95
+      - name: raw-payload-serialization
+        path: concepts/raw-payload-serialization.md
         confidence: 0.95
     patterns:
       - name: add-a-generator

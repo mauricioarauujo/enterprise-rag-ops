@@ -76,6 +76,19 @@ Symptom if throttling without retries: `RateLimitError` after a burst. With
 enough to re-run, catches model-EOL and index misconfiguration early (live findings
 #9, #10).
 
+## Bronze Writer in Concurrent Sweeps
+
+When `persist_bronze=True`, one `BronzeWriter` is constructed once outside the
+per-question loop and shared across workers. Its own `threading.Lock` serializes
+the `mkdir + open` sequence; because each call writes a distinct file path
+(`{question_id}__{model}__{call_type}.json`), actual file-level contention is
+negligible. Bronze writes happen **outside** the JSONL `write_lock` — a bronze
+failure does not block or corrupt the JSONL flush.
+
+Pass `--persist-bronze` on the CLI, or set `persist_bronze: true` in the YAML
+config. See [bronze-raw-archive.md](../concepts/bronze-raw-archive.md) for the
+full design (key scheme, idempotency, privacy).
+
 ## Known Gap: FR-10 Guard Does Not Verify Gold Awareness
 
 The runner checks that index directories exist, not that they are the gold-aware
