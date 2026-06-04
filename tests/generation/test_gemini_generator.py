@@ -30,61 +30,16 @@ class FakeUsageMetadata:
             self.thoughts_token_count = thoughts_token_count
 
 
-class FakeTokenCandidate:
-    def __init__(self, log_probability: float | None = None, token: str | None = None) -> None:
-        if log_probability is not None:
-            self.log_probability = log_probability
-        if token is not None:
-            self.token = token
-
-
-class FakeTopCandidatesEntry:
-    def __init__(self, candidates: list[FakeTokenCandidate] | None = None) -> None:
-        if candidates is not None:
-            self.candidates = candidates
-
-
-class FakeLogprobsResult:
-    def __init__(self, top_candidates: list[FakeTopCandidatesEntry] | None = None) -> None:
-        if top_candidates is not None:
-            self.top_candidates = top_candidates
-
-
-class FakeCandidate:
-    def __init__(
-        self,
-        avg_logprobs: float | None = None,
-        logprobs_result: FakeLogprobsResult | None = None,
-    ) -> None:
-        if avg_logprobs is not None:
-            self.avg_logprobs = avg_logprobs
-        if logprobs_result is not None:
-            self.logprobs_result = logprobs_result
-
-
 class FakeResponse:
-    def __init__(
-        self,
-        text: str,
-        usage_metadata: FakeUsageMetadata | None = None,
-        candidates: list[FakeCandidate] | None = None,
-    ) -> None:
+    def __init__(self, text: str, usage_metadata: FakeUsageMetadata | None = None) -> None:
         self.text = text
         self.usage_metadata = usage_metadata
-        if candidates is not None:
-            self.candidates = candidates
 
 
 class FakeGeminiClient:
-    def __init__(
-        self,
-        response_text: str,
-        usage_metadata: FakeUsageMetadata | None = None,
-        candidates: list[FakeCandidate] | None = None,
-    ) -> None:
+    def __init__(self, response_text: str, usage_metadata: FakeUsageMetadata | None = None) -> None:
         self.response_text = response_text
         self.usage_metadata = usage_metadata
-        self.candidates = candidates
         self.calls: list[dict] = []
 
         class Models:
@@ -96,7 +51,7 @@ class FakeGeminiClient:
                         "config": config,
                     }
                 )
-                return FakeResponse(self.response_text, self.usage_metadata, self.candidates)
+                return FakeResponse(self.response_text, self.usage_metadata)
 
         self.models = Models()
 
@@ -139,10 +94,13 @@ def test_offline_injected_client():
     # rejects the `additionalProperties` that AnswerWithSources(extra="forbid") emits
     # (regression guard for the live 400 "Unknown name additional_properties").
     assert "additionalProperties" not in config.response_schema.model_json_schema()
-    # Field sets must match AnswerWithSources EXACTLY — machine-checks the open mirror
-    # against the real schema in both directions, so a future field added to
-    # AnswerWithSources fails here instead of silently in a live Gemini call.
-    assert set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields)
+    # The open mirror = AnswerWithSources fields PLUS the Gemini-only `confidence` signal
+    # (verbalized escalation signal, ADR-0011 — stripped before AnswerWithSources
+    # validation). Machine-checks the mirror so a future field added to AnswerWithSources
+    # fails here instead of silently in a live Gemini call.
+    assert set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields) | {
+        "confidence"
+    }
 
     # Extra field path
     extra_field_json = (
@@ -295,48 +253,45 @@ def test_live_replay(vcr_record, monkeypatch):
     assert "text" in raw.response
 
 
-def test_offline_confidence_score_scenarios():
-    """Verify confidence score calculations under various response payloads."""
+def test_verbalized_confidence_scenarios():
+    """Verbalized confidence is parsed off the response onto CallStats.confidence_score,
+    and stripped before AnswerWithSources validation (gemini-2.5-flash-lite has no logprobs
+    — see ADR-0011). Covers: present, clamped out-of-range, absent, and non-numeric."""
     chunks = [Chunk(chunk_id="doc_123::0", doc_id="doc_123", text="Ref text")]
-    happy_json = '{"answer": "Gemini generated answer.", "sources": ["doc_123"]}'
 
-    # Scenario A: payload with >=2 top-candidates
-    top_cands = [
-        FakeTokenCandidate(log_probability=-0.1, token="A"),
-        FakeTokenCandidate(log_probability=-1.5, token="B"),
-    ]
-    lr = FakeLogprobsResult(top_candidates=[FakeTopCandidatesEntry(candidates=top_cands)])
-    candidates_a = [FakeCandidate(avg_logprobs=-0.5, logprobs_result=lr)]
+    # A: confidence present and in-range -> rides confidence_score; stripped from the answer.
+    with_conf = '{"answer": "Grounded answer.", "sources": ["doc_123"], "confidence": 0.82}'
+    _r, stats, _ = GeminiGenerator(client=FakeGeminiClient(with_conf)).generate_with_stats(
+        chunks, "Q?"
+    )
+    assert stats.confidence_score == pytest.approx(0.82)
+    assert _r.answer == "Grounded answer." and _r.sources == ["doc_123"]
+    assert not hasattr(_r, "confidence")  # confidence never enters the shared schema
 
-    fake_client_a = FakeGeminiClient(response_text=happy_json, candidates=candidates_a)
-    generator_a = GeminiGenerator(client=fake_client_a)
-    _result, stats, raw = generator_a.generate_with_stats(chunks, "Question?")
-    assert stats.confidence_score is not None
-    # Margin: -0.1 - (-1.5) = 1.4
-    assert stats.confidence_score == pytest.approx(1.4)
-    # Check RawCall serialization
-    assert raw.response["candidates"][0]["avg_logprobs"] == -0.5
-    assert "logprobs_result" in raw.response["candidates"][0]
+    # B: out-of-range confidence is clamped to [0.0, 1.0].
+    hi = '{"answer": "A", "sources": [], "confidence": 1.7}'
+    _, stats_hi, _ = GeminiGenerator(client=FakeGeminiClient(hi)).generate_with_stats(chunks, "Q?")
+    assert stats_hi.confidence_score == 1.0
+    lo = '{"answer": "A", "sources": [], "confidence": -0.3}'
+    _, stats_lo, _ = GeminiGenerator(client=FakeGeminiClient(lo)).generate_with_stats(chunks, "Q?")
+    assert stats_lo.confidence_score == 0.0
 
-    # Scenario B: payload with only avg_logprobs (no usable top_candidates)
-    candidates_b = [FakeCandidate(avg_logprobs=-0.75, logprobs_result=None)]
-    fake_client_b = FakeGeminiClient(response_text=happy_json, candidates=candidates_b)
-    generator_b = GeminiGenerator(client=fake_client_b)
-    _, stats_b, raw_b = generator_b.generate_with_stats(chunks, "Question?")
-    assert stats_b.confidence_score is not None
-    assert stats_b.confidence_score == pytest.approx(-0.75)
-    assert raw_b.response["candidates"][0]["avg_logprobs"] == -0.75
-    assert "logprobs_result" not in raw_b.response["candidates"][0]
-
-    # Scenario C: NO logprob payload (no candidates or logprobs)
-    fake_client_c = FakeGeminiClient(response_text=happy_json, candidates=None)
-    generator_c = GeminiGenerator(client=fake_client_c)
-    _, stats_c, _ = generator_c.generate_with_stats(chunks, "Question?")
+    # C: confidence absent -> None, no crash, answer still parses.
+    no_conf = '{"answer": "Plain answer.", "sources": ["doc_123"]}'
+    res_c, stats_c, _ = GeminiGenerator(client=FakeGeminiClient(no_conf)).generate_with_stats(
+        chunks, "Q?"
+    )
     assert stats_c.confidence_score is None
+    assert res_c.answer == "Plain answer."
 
-    # Scenario D: generate() still returns a bare AnswerWithSources
-    fake_client_d = FakeGeminiClient(response_text=happy_json, candidates=candidates_a)
-    generator_d = GeminiGenerator(client=fake_client_d)
-    bare_res = generator_d.generate(chunks, "Question?")
-    assert isinstance(bare_res, AnswerWithSources)
-    assert bare_res.answer == "Gemini generated answer."
+    # D: non-numeric confidence -> None (defensive), answer still parses.
+    bad = '{"answer": "A", "sources": [], "confidence": "high"}'
+    _, stats_bad, _ = GeminiGenerator(client=FakeGeminiClient(bad)).generate_with_stats(
+        chunks, "Q?"
+    )
+    assert stats_bad.confidence_score is None
+
+    # E: generate() still returns a bare AnswerWithSources (no confidence on it).
+    bare = GeminiGenerator(client=FakeGeminiClient(with_conf)).generate(chunks, "Q?")
+    assert isinstance(bare, AnswerWithSources)
+    assert bare.answer == "Grounded answer."

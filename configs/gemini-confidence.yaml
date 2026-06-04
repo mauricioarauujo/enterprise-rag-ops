@@ -12,7 +12,7 @@ judge_model: "gpt-5-nano-2025-08-07"
 limit: null
 k: 10
 output_dir: "results"
-run_id: "gemini-logprobs"
+run_id: "gemini-confidence"
 
 cost_ceiling_usd: 5.0
 

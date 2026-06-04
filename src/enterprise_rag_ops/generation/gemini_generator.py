@@ -13,6 +13,7 @@ stay cost-accurate. Mirrors `anthropic_generator.py` / `openai_generator.py` str
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -33,78 +34,36 @@ logger = logging.getLogger("enterprise_rag_ops.generation")
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 
-def _serialize_logprobs_result(lr: Any) -> Any:
+# Gemini-only verbalized-confidence addendum. Appended to the shared system prompt for
+# the Gemini path ONLY. The cheap model (gemini-2.5-flash-lite) exposes NO token logprobs
+# (the API 400s on response_logprobs — see ADR-0011), so the escalation signal is the
+# model's own self-reported confidence instead. The field is parsed off the response and
+# rides CallStats.confidence_score; it is stripped before AnswerWithSources validation so
+# the shared output contract (answer + sources, extra="forbid") is unchanged.
+_CONFIDENCE_ADDENDUM = (
+    "\n\nAlso include a numeric field `confidence` between 0.0 and 1.0 expressing how "
+    "confident you are that your `answer` is fully correct and entirely grounded in the "
+    "provided context. Use 1.0 only when the context unambiguously supports every claim, "
+    "and low values when you are unsure or the context is thin."
+)
+
+
+def _parse_confidence(data: dict[str, Any]) -> float | None:
+    """Extract the verbalized `confidence` from the parsed response dict (defensive).
+
+    Returns a float clamped to [0.0, 1.0], or None if absent/non-numeric — never raises.
+    """
     try:
-        if hasattr(lr, "model_dump"):
-            return lr.model_dump(mode="json")
-    except Exception:
-        pass
-
-    try:
-        res: dict[str, Any] = {}
-        top_candidates = getattr(lr, "top_candidates", None)
-        if top_candidates is not None:
-            serialized_top = []
-            for entry in top_candidates:
-                entry_dict = {}
-                token_cands = getattr(entry, "candidates", None)
-                if token_cands is not None:
-                    serialized_tc = []
-                    for tc in token_cands:
-                        tc_dict = {}
-                        log_prob = getattr(tc, "log_probability", None)
-                        if log_prob is not None:
-                            tc_dict["log_probability"] = log_prob
-                        token = getattr(tc, "token", None)
-                        if token is not None:
-                            tc_dict["token"] = token
-                        serialized_tc.append(tc_dict)
-                    entry_dict["candidates"] = serialized_tc
-                serialized_top.append(entry_dict)
-            res["top_candidates"] = serialized_top
-
-        chosen_candidates = getattr(lr, "chosen_candidates", None)
-        if chosen_candidates is not None:
-            serialized_chosen = []
-            for cc in chosen_candidates:
-                cc_dict = {}
-                log_prob = getattr(cc, "log_probability", None)
-                if log_prob is not None:
-                    cc_dict["log_probability"] = log_prob
-                token = getattr(cc, "token", None)
-                if token is not None:
-                    cc_dict["token"] = token
-                serialized_chosen.append(cc_dict)
-            res["chosen_candidates"] = serialized_chosen
-        return res
-    except Exception:
-        return None
-
-
-def _compute_confidence(response: Any) -> float | None:
-    try:
-        candidates = getattr(response, "candidates", None)
-        if not candidates:
+        raw = data.get("confidence")
+        if raw is None:
             return None
-        cand = candidates[0]
-
-        lr = getattr(cand, "logprobs_result", None)
-        if lr is not None:
-            top_candidates = getattr(lr, "top_candidates", None)
-            if top_candidates:
-                first_token_entry = top_candidates[0]
-                token_cands = getattr(first_token_entry, "candidates", None)
-                if token_cands and len(token_cands) >= 2:
-                    p0 = getattr(token_cands[0], "log_probability", None)
-                    p1 = getattr(token_cands[1], "log_probability", None)
-                    if p0 is not None and p1 is not None:
-                        return float(p0) - float(p1)
-
-        avg = getattr(cand, "avg_logprobs", None)
-        if avg is not None:
-            return float(avg)
-        return None
-    except (AttributeError, IndexError, TypeError):
+        val = float(raw)
+        if val < 0.0:
+            return 0.0
+        if val > 1.0:
+            return 1.0
+        return val
+    except (TypeError, ValueError):
         return None
 
 
@@ -165,16 +124,6 @@ def _serialize_response(response: Any) -> dict[str, Any]:
                         content_dict["parts"] = serialized_parts
                     cand_dict["content"] = content_dict
 
-                avg_logprobs = getattr(candidate, "avg_logprobs", None)
-                if avg_logprobs is not None:
-                    cand_dict["avg_logprobs"] = avg_logprobs
-
-                logprobs_result = getattr(candidate, "logprobs_result", None)
-                if logprobs_result is not None:
-                    serialized_lr = _serialize_logprobs_result(logprobs_result)
-                    if serialized_lr is not None:
-                        cand_dict["logprobs_result"] = serialized_lr
-
                 serialized_candidates.append(cand_dict)
             res["candidates"] = serialized_candidates
 
@@ -202,11 +151,14 @@ class _GeminiResponseSchema(BaseModel):
     yields a 400 `Unknown name "additional_properties"`). So the schema handed to the SDK
     is this open variant; the real *closed*-schema contract is still enforced our side by
     `AnswerWithSources.model_validate_json(resp.text)` (FR-3), so a Gemini response with an
-    extra field still raises. Fields mirror `AnswerWithSources` exactly.
+    unexpected field still raises. `answer`/`sources` mirror `AnswerWithSources`; the extra
+    `confidence` field is the Gemini-only verbalized-escalation signal (ADR-0011) and is
+    stripped before `AnswerWithSources` validation.
     """
 
     answer: str
     sources: list[str]
+    confidence: float
 
 
 class GeminiGenerator:
@@ -253,7 +205,7 @@ class GeminiGenerator:
         question: str,
     ) -> tuple[AnswerWithSources, CallStats, RawCall]:
         """Call Gemini and return a validated `AnswerWithSources` along with `CallStats` and `RawCall`."""
-        system_prompt = build_system_prompt()
+        system_prompt = build_system_prompt() + _CONFIDENCE_ADDENDUM
         user_prompt = build_user_prompt(context_chunks, question)
 
         start_time = time.perf_counter()
@@ -264,16 +216,30 @@ class GeminiGenerator:
                 response_mime_type="application/json",
                 # Open mirror — Gemini rejects the `additionalProperties` that
                 # AnswerWithSources(extra="forbid") emits. Closed-schema enforcement
-                # still happens our side via model_validate_json below (FR-3).
+                # still happens our side via model_validate below (FR-3). The mirror
+                # carries the extra `confidence` field; the cheap model exposes no token
+                # logprobs (ADR-0011), so verbalized confidence is the escalation signal.
                 response_schema=_GeminiResponseSchema,
-                response_logprobs=True,
-                logprobs=5,
                 system_instruction=system_prompt,
             ),
         )
         latency = time.perf_counter() - start_time
 
-        result = AnswerWithSources.model_validate_json(response.text)
+        # Parse once: extract the verbalized confidence, then validate answer/sources via
+        # the closed AnswerWithSources contract (confidence stripped — it never enters the
+        # shared output schema). Bad/odd JSON falls back to direct validation (conf=None).
+        try:
+            data = json.loads(response.text)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+
+        if isinstance(data, dict):
+            confidence_score = _parse_confidence(data)
+            answer_data = {k: v for k, v in data.items() if k != "confidence"}
+            result = AnswerWithSources.model_validate(answer_data)
+        else:
+            confidence_score = None
+            result = AnswerWithSources.model_validate_json(response.text)
 
         # Token accounting. Gemini 2.5 thinking tokens are billed as output but are NOT
         # in candidates_token_count, so output = candidates + thoughts (read defensively;
@@ -284,15 +250,13 @@ class GeminiGenerator:
         thoughts = getattr(usage, "thoughts_token_count", 0) or 0 if usage else 0
         output_tokens = candidates + thoughts
 
-        conf = _compute_confidence(response)
-
         stats = CallStats(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             latency_s=latency,
             model=self._model,
             system="google",
-            confidence_score=conf,
+            confidence_score=confidence_score,
         )
 
         request = {
