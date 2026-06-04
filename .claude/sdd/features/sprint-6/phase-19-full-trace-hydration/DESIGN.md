@@ -239,12 +239,21 @@ already anticipates). No Protocol change, no `records.py` change, no `exporter.p
 4. Verify: the fresh `results/*.jsonl` carries `per_fact`/`per_citation` (non-empty on scored
    questions); `data/raw_eval/{run_id}/` has a `__gen`/`__judge` JSON per processed
    question×call, each `json.load`-able, no secrets.
-5. Regenerate the published baseline: `uv run rag-eval report --results results/<run>.jsonl`
+5. **Classify failure modes** (REQUIRED — do not skip): `uv run rag-classify --results results/<run>.jsonl`.
+   The runner does **not** set `failure_mode`; it is populated by this separate, deterministic
+   `rag-classify` pass (no LLM cost — derives the mode from metrics already in each record; needs HF
+   only to load gold questions). **Skipping it leaves `failure_mode=None` on every record, which fails
+   the dashboard + inspect tests** (`tests/dashboard/test_data.py`, `tests/eval/test_inspect_cli.py`)
+   and drops the report's failure-mode breakdown. (This step was missed in the original phase-19 run
+   and turned `make lint test` red — see `REVIEW.md` I-1.)
+6. Regenerate the published baseline: `uv run rag-eval report --results results/<run>.jsonl`
    → re-publish `results/baseline.{html,md}`.
-6. `rag-export-traces` on the re-run JSONL, then open **one failed trace** in Phoenix and
-   confirm the Info tab reads question (chain) → retrieved-doc content (retriever) → answer
-   (generation) → judge verdict reasoning (judge). Record the screenshot/notes in `/review`
-   (AC-10, the sprint-close gate).
+7. Export + verify: `uv run rag-export-traces --results results/<run>.jsonl --enrich-from-questions --enrich-from-index`
+   (the two `--enrich-*` flags are **required** for the full chain — the question lands on the chain
+   span and the retrieved-doc content on the retriever span only when they are passed; `make export-traces`
+   does **not** pass them). Then open **one failed trace** in Phoenix and confirm the Info tab reads
+   question (chain) → retrieved-doc content (retriever) → answer (generation) → judge verdict reasoning
+   (judge). Record the screenshot/notes in `/review` (AC-10, the sprint-close gate).
 
 ## Test Plan (AC → check)
 

@@ -273,24 +273,25 @@ def run_evaluation(
                                     "response": gen_raw.response,
                                 },
                             )
-                        if judge_raw is not None:
-                            bronze_writer.write(
-                                q.question_id,
-                                model.model_id,
-                                "judge",
-                                {
-                                    "schema_version": 1,
-                                    "meta": {
-                                        "run_id": config.run_id,
-                                        "question_id": q.question_id,
-                                        "model": model.model_id,
-                                        "system": "openai",
-                                        "call_type": "judge",
-                                    },
-                                    "request": judge_raw.request,
-                                    "response": judge_raw.response,
+                        # The judge always runs (unlike generation, which is skipped on a
+                        # retrieval abstain), so judge_raw is never None here.
+                        bronze_writer.write(
+                            q.question_id,
+                            model.model_id,
+                            "judge",
+                            {
+                                "schema_version": 1,
+                                "meta": {
+                                    "run_id": config.run_id,
+                                    "question_id": q.question_id,
+                                    "model": model.model_id,
+                                    "system": "openai",
+                                    "call_type": "judge",
                                 },
-                            )
+                                "request": judge_raw.request,
+                                "response": judge_raw.response,
+                            },
+                        )
 
                     with write_lock:
                         f.write(record.model_dump_json() + "\n")

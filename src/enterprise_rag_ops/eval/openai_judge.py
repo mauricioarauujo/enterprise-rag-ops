@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
-from typing import Any
 
 from openai import OpenAI
 
@@ -23,75 +22,17 @@ from enterprise_rag_ops.eval.prompt import build_judge_system_prompt, build_judg
 from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.eval.schema import JudgeVerdict, _LLMJudgeVerdict
+
+# The judge and the generator both call OpenAI chat-completions and get the identical
+# ChatCompletion response shape, so reuse one serializer (single source of truth for
+# the shape) rather than maintaining a duplicate here.
+from enterprise_rag_ops.generation.openai_generator import _serialize_response
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
 
 logger = logging.getLogger("enterprise_rag_ops.eval")
 
 DEFAULT_MODEL = "gpt-5-nano-2025-08-07"
-
-
-def _serialize_response(response: Any) -> dict[str, Any]:
-    try:
-        if isinstance(response, (int, str, float, bool, list, dict)):
-            raise TypeError(f"Invalid response type: {type(response)}")
-
-        try:
-            if hasattr(response, "model_dump"):
-                return response.model_dump(mode="json")
-        except Exception:
-            pass
-
-        # Fallback manual extraction
-        res: dict[str, Any] = {}
-
-        # model
-        model = getattr(response, "model", None)
-        if model is not None:
-            res["model"] = model
-
-        # system_fingerprint
-        sys_fp = getattr(response, "system_fingerprint", None)
-        if sys_fp is not None:
-            res["system_fingerprint"] = sys_fp
-
-        # choices
-        choices = getattr(response, "choices", None)
-        if choices:
-            res_choices = []
-            for choice in choices:
-                choice_dict = {}
-                finish_reason = getattr(choice, "finish_reason", None)
-                if finish_reason is not None:
-                    choice_dict["finish_reason"] = finish_reason
-
-                msg = getattr(choice, "message", None)
-                if msg is not None:
-                    msg_dict = {}
-                    content = getattr(msg, "content", None)
-                    if content is not None:
-                        msg_dict["content"] = content
-                    refusal = getattr(msg, "refusal", None)
-                    if refusal is not None:
-                        msg_dict["refusal"] = refusal
-                    choice_dict["message"] = msg_dict
-                res_choices.append(choice_dict)
-            res["choices"] = res_choices
-
-        # usage
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            usage_dict = {}
-            for f in ["prompt_tokens", "completion_tokens", "total_tokens"]:
-                val = getattr(usage, f, None)
-                if val is not None:
-                    usage_dict[f] = val
-            if usage_dict:
-                res["usage"] = usage_dict
-
-        return res
-    except Exception as e:
-        return {"_serialization_error": type(e).__name__}
 
 
 class OpenAIJudge:

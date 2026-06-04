@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
 
@@ -509,26 +508,27 @@ def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
         ],
     )
 
-    # 1. Run with persist_bronze = False
-    run_config.output_dir = str(tmp_path / "results_no_bronze")
-    run_config.run_id = "test_run_no_bronze"
-    run_config.persist_bronze = False
-    run_config.models = [run_config.models[0]]  # openai only
+    # Instrument the stubs to count calls (AC-8: no extra gen/judge call per question).
+    gen_calls = 0
+    judge_calls = 0
 
-    output_path_no_bronze = run_evaluation(
-        run_config,
-        generator_classes={"openai": StubGenerator},
-        judge_class=StubJudge,
-    )
-    assert output_path_no_bronze.exists()
-    jsonl_no_bronze = output_path_no_bronze.read_text()
+    class CountingGenerator(StubGenerator):
+        def generate_with_stats(self, context_chunks, question):
+            nonlocal gen_calls
+            gen_calls += 1
+            return super().generate_with_stats(context_chunks, question)
 
-    # Verify no bronze files were written
-    bronze_dir = Path("data/raw_eval") / "test_run_no_bronze"
-    assert not bronze_dir.exists()
+    class CountingJudge(StubJudge):
+        def judge_with_stats(self, question, answer_with_sources, answer_facts, retrieved_docs):
+            nonlocal judge_calls
+            judge_calls += 1
+            return super().judge_with_stats(
+                question, answer_with_sources, answer_facts, retrieved_docs
+            )
 
-    # 2. Run with persist_bronze = True
-    # Monkeypatch the default root of BronzeWriter to be inside tmp_path
+    # Redirect BronzeWriter's root into tmp_path for BOTH runs, so the no-bronze
+    # assertion below inspects the exact location a leaking writer would write to
+    # (the writer's default root is the CWD-relative `data/raw_eval`, not tmp_path).
     from enterprise_rag_ops.eval.bronze import BronzeWriter
 
     orig_init = BronzeWriter.__init__
@@ -538,14 +538,37 @@ def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
 
     monkeypatch.setattr(BronzeWriter, "__init__", patched_init)
 
+    # 1. Run with persist_bronze = False
+    run_config.output_dir = str(tmp_path / "results_no_bronze")
+    run_config.run_id = "test_run_no_bronze"
+    run_config.persist_bronze = False
+    run_config.models = [run_config.models[0]]  # openai only
+
+    output_path_no_bronze = run_evaluation(
+        run_config,
+        generator_classes={"openai": CountingGenerator},
+        judge_class=CountingJudge,
+    )
+    assert output_path_no_bronze.exists()
+    jsonl_no_bronze = output_path_no_bronze.read_text()
+
+    # Verify no bronze files were written — check the tmp_path root the writer is
+    # redirected to (symmetric with the persist=True assertion below).
+    assert not (tmp_path / "raw_eval" / "test_run_no_bronze").exists()
+
+    # 2. Run with persist_bronze = True. Reset counters so the assertion measures
+    # only this run (AC-8: exactly one gen + one judge call per question).
+    gen_calls = 0
+    judge_calls = 0
+
     run_config.output_dir = str(tmp_path / "results_with_bronze")
     run_config.run_id = "test_run_with_bronze"
     run_config.persist_bronze = True
 
     output_path_with_bronze = run_evaluation(
         run_config,
-        generator_classes={"openai": StubGenerator},
-        judge_class=StubJudge,
+        generator_classes={"openai": CountingGenerator},
+        judge_class=CountingJudge,
     )
     assert output_path_with_bronze.exists()
     jsonl_with_bronze = output_path_with_bronze.read_text()
@@ -580,3 +603,7 @@ def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
     assert judge_data["meta"]["call_type"] == "judge"
     assert "request" in judge_data
     assert "response" in judge_data
+
+    # AC-8: exactly one generator + one judge call this run — bronze adds no extra call.
+    assert gen_calls == 1
+    assert judge_calls == 1
