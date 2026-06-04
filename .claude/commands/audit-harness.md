@@ -58,12 +58,25 @@ never flag them as missing rows (the private overlay in Step 7 audits them).
      `_index.yaml` domain has a dir. (Today: `rag-generation`, `rag-eval`, `rag-retrieval`,
      `observability`.)
 
-2. **Cross-reference integrity** (the broken-link class) — for `CLAUDE.md`, `AGENTS.md`, and
-   every `*.md` under `.claude/` and `docs/`, extract repo-relative paths (backtick paths and
-   `](...)` links that look like files) and verify each resolves on disk. Report every
-   dangling reference as `file → missing-path`. Skip links into gitignored areas (e.g.
-   `docs/planning/backlog/…`) — note them as "private target (not flagged)". Also confirm
-   `CLAUDE.md` contains `@AGENTS.md` and that `AGENTS.md` exists.
+2. **Cross-reference integrity** (the broken-link class) — verify that the links _meant to
+   resolve_ aren't broken. **Scope tightly or this floods false positives** (a naive run
+   flagged ~1650 → ~3 real). Check only **Markdown links `](path)`** and **backtick paths
+   rooted at a repo dir** (`src/`, `docs/`, `tests/`, `.claude/`, `configs/`, `results/`,
+   `infra/`, `.github/`), **outside fenced code blocks**, in **live** files only. Exclude:
+   - **the whole `.claude/sdd/archive/` tree** — frozen historical records; they reference
+     pre-archive paths and planned-then-renamed files by design (auditing them for live
+     resolution is wrong by construction).
+   - **template placeholders** — `sprint-N`, `phase-M`, `{slug}`, `{domain}`, `<...>`,
+     `NNNN`, `00xx`.
+   - **code citations, not paths** — anything with a `:line`, `::test`, `…`/`...` ellipsis,
+     `=`, or whitespace.
+   - **gitignored / private targets** — `docs/planning/`, `.claude/worktrees/`,
+     `.claude/kb/_research/inbox/` → note "private target (not flagged)".
+
+   Report each surviving `file → missing-path`. Also confirm `CLAUDE.md` contains `@AGENTS.md`
+   and that `AGENTS.md` exists. **Known residual class (low severity):** a tracked file that
+   links to `.claude/sdd/features/sprint-N/...` after `/sprint-close` archived that phase →
+   recommend updating the link to `archive/` (or accept it as a historical pointer).
 
 3. **Agent structural integrity & KB binding** — for every agent file except
    `_specialist-template.md`:
