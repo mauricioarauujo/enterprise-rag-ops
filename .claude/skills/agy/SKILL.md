@@ -110,6 +110,25 @@ protects quality, so spend the tokens here:
   don't silently re-implement the whole phase.
 - Commit (Conventional Commits) only after review passes. Suggest next step → `/review {slug}`.
 
+## Research / web-search mode — disable Claude Code auto mode FIRST
+
+`agy` (Gemini) can also do **web search / research**, but the rules are the **opposite** of the
+implement flow above:
+
+- **Before delegating any research/web-search task to `agy`, remind the user to turn OFF
+  Claude Code "auto mode" first — and wait for confirmation before invoking.** With auto mode
+  on, `agy` runs autonomously and **ignores the research prompt entirely**: asked for a
+  literature survey (sprint-7 phase-1), it instead modified production files, wrote an ADR
+  marked "accepted" with non-reconciling numbers, and ran the test suite — all reverted.
+- **Do NOT pass `--dangerously-skip-permissions` for research.** That flag is exactly what
+  lets `agy` go autonomous and implement instead of research.
+- If auto mode can't be disabled, **fall back to parallel Sonnet sub-agents** here in Claude
+  Code (the Agent tool, `model: sonnet`) — that fallback delivered 6 cited micro-researches in
+  ~3 min when `agy` went rogue.
+
+`agy` is fundamentally an autonomous **implementer**; research is the off-label use that needs
+this guard. (Project memory: `agy-research-needs-auto-mode-off`.)
+
 ## When NOT to delegate
 
 Keep in Claude: the SDD planning stages, code review, and the judgment in Step 4. Delegation
