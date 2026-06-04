@@ -151,6 +151,35 @@ make classify
 make dash
 ```
 
+## How this was built
+
+This repository is two artifacts in one: a production-grade RAG eval + observability system, and a worked demonstration of **spec-driven, AI-assisted engineering**. The code was written with an AI coding agent (Claude Code); the engineering discipline around it — the gates, the seams, the decision records, the reviews — is the design contribution, and it is what the orchestration layer under [`.claude/`](.claude/README.md) makes legible.
+
+**The process.** Every non-trivial phase ran the same spec-driven pipeline before any code was written:
+
+```
+/brainstorm  →  /define  →  /design  →  /implement  →  /review
+ approaches    requirements  architecture   code        verification
+              + Clarity gate + file manifest           + knowledge loop
+```
+
+- **Decisions are recorded at decision time, not retrofitted.** Eight [ADRs](docs/adr/) capture the _why_ behind the eval framework, retrieval architecture, generator contract, and observability tool — each written while the trade-off was still live, which is the only time an ADR is honest.
+- **Stabilized knowledge is distilled into a knowledge base** ([`.claude/kb/`](.claude/kb/)) built on three pillars — the codebase, official docs, and deep research — so domain reasoning (retrieval, eval, observability) is captured once and reused, not re-derived each session.
+- **The harness improves itself.** Repeated reasoning becomes a KB entry; a repeated workflow becomes a command; a recurring specialist context becomes an agent — structure that grows from observed need, not speculation.
+
+**What the AI did, and what it didn't.** The agent produced code and prose under a human-authored spec and human-run quality gates (a ≥12/15 Clarity gate on requirements, `make lint test` in CI, a per-phase review). The architecture — the Protocol seams, the bronze/gold eval-record split, the abstention model, the failure taxonomy — is designed, not generated. The harness exists to keep that distinction auditable.
+
+**A guided tour (~30 min).**
+
+| To see…                                  | Read                                                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The product                              | [`src/enterprise_rag_ops/`](src/enterprise_rag_ops/) + [Architecture](#architecture)                                                                                               |
+| The reasoning behind one feature         | one exemplar phase — [`per-fact judge`](.claude/sdd/archive/sprint-2/phase-4-perfact-judge/) (`DEFINE → DESIGN → REVIEW`): the core eval signal, from requirements to verification |
+| The observability differentiator         | the [`failure-taxonomy`](.claude/sdd/archive/sprint-3/phase-8-failure-taxonomy/) phase artifacts                                                                                   |
+| The decisions                            | [`docs/adr/`](docs/adr/)                                                                                                                                                           |
+| The distilled domain knowledge           | [`.claude/kb/`](.claude/kb/)                                                                                                                                                       |
+| How the orchestration layer is organized | [`.claude/README.md`](.claude/README.md)                                                                                                                                           |
+
 ## Provenance Note
 
 The `results/baseline.jsonl` dataset (approx. 2.1 MB) represents the honest provenance of three merged baseline sweep runs (`baseline`, `baseline-anthropic`, and `gemini`). Run IDs and source parameters are preserved in their raw states to allow tracing accuracy audits down to individual model operations.

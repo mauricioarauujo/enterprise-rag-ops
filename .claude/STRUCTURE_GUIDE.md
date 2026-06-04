@@ -59,6 +59,7 @@ human-readable registries. Update them when you add an artifact — cache-safe.
 | `/update-kb`     | Refresh a KB domain against the 3 pillars                              |
 | `/new-agent`     | Scaffold a specialist agent                                            |
 | `/new-command`   | Scaffold a slash command                                               |
+| `/audit-harness` | Read-only health check — registries, dangling refs, flow-update wiring |
 | `/sprint-start`  | Open a sprint — `SPRINT.md` plan + sprint-wide KB scan                 |
 | `/brainstorm`    | SDD Stage 0 — explore approaches                                       |
 | `/define`        | SDD Stage 1 — requirements + Clarity gate (≥12/15)                     |

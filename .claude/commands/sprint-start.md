@@ -24,15 +24,23 @@ so each phase can later refine the "how".
    - `docs/architecture/`, `docs/dataset.md`, relevant `docs/adr/`.
    - `.claude/kb/_index.yaml` — existing KB domains.
    - The previous sprint's `SPRINT.md` in `.claude/sdd/archive/`, if any.
+   - `docs/planning/backlog/index.md` — the candidate pool (private). Items whose Target is
+     this sprint, plus any unscheduled P0/P1.
 
 2. **Distil the sprint goal** — the high-level problem the sprint solves, in 2–3
    sentences. System-level only.
 
-3. **Break into phases** — ~3 phases (4–5 if complex), each with a one-line intent and
-   a `phase-M-<slug>`. This is the planned breakdown, not a contract — phases refine on
-   `/brainstorm`.
+3. **Groom the backlog** — review `docs/planning/backlog/index.md`. Pull the items whose
+   Target is this sprint (or that the sprint goal implies) into scope; in each item file and
+   the index, flip Status `idea`/`groomed` → `scheduled` and set Target to this sprint.
+   Surface any unscheduled P0/P1 the user may want to fold in. The backlog is private
+   (gitignored) — its content informs the plan, but nothing private leaks into `SPRINT.md`.
 
-4. **Sprint-wide research & KB scan** (the sprint half of decision O4) — across all
+4. **Break into phases** — ~3 phases (4–5 if complex), each with a one-line intent and
+   a `phase-M-<slug>`, mapping the groomed backlog items onto phases where they fit. This is
+   the planned breakdown, not a contract — phases refine on `/brainstorm`.
+
+5. **Sprint-wide research & KB scan** (the sprint half of decision O4) — across all
    phases, classify each knowledge area the sprint will touch, and separate two kinds
    of pre-work, because they sit on opposite sides of a decision:
    - **Research — _before_ a phase's `/brainstorm` and ADR.** For an architecture the
@@ -47,12 +55,12 @@ so each phase can later refine the "how".
    Flag each item with its kind, the action (`/new-kb` / `/update-kb` /
    `--deep-research`), and its timing relative to the phase's brainstorm/ADR.
 
-5. **Write output** → `.claude/sdd/features/sprint-N/SPRINT.md`.
+6. **Write output** → `.claude/sdd/features/sprint-N/SPRINT.md`.
 
-6. **Stranger test** — `SPRINT.md` is git-tracked. It carries only system content: no
+7. **Stranger test** — `SPRINT.md` is git-tracked. It carries only system content: no
    budget, no career framing, no Carreira-repo references.
 
-7. **Suggest next step** → `/brainstorm sprint-N/phase-1-<slug>`.
+8. **Suggest next step** → `/brainstorm sprint-N/phase-1-<slug>`.
 
 ## Output
 

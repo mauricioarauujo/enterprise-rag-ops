@@ -35,22 +35,28 @@ After the last phase of a sprint has passed `/review`.
    - **ADR sweep** — list architectural decisions made during the sprint not yet
      recorded in `docs/adr/`.
 
-4. **Retrospective** — what worked, what slipped vs the `SPRINT.md` plan, scope changes.
+4. **Backlog harvest** — reconcile `docs/planning/backlog/index.md` with what the sprint did:
+   - **Capture** new ideas / deferred work surfaced in the phase `REVIEW.md` files (and the
+     retro) as new `B-NN-<slug>.md` items (Status `idea`), and add an index row each.
+   - **Close** any backlog item the sprint completed: flip Status → `done` and move its row to
+     the index's _Recently shipped_ table.
 
-5. **Write output** — append `## Retrospective` + `## Sprint Close` sections to
+5. **Retrospective** — what worked, what slipped vs the `SPRINT.md` plan, scope changes.
+
+6. **Write output** — append `## Retrospective` + `## Sprint Close` sections to
    `SPRINT.md`; flip its `Status:` to `closed`.
 
-6. **Archive** — move the whole sprint folder:
+7. **Archive** — move the whole sprint folder:
    `.claude/sdd/features/sprint-N/` → `.claude/sdd/archive/sprint-N/`.
 
-7. **Reminders**
+8. **Reminders**
    - Update the private sprint track in the Carreira repo (path in `CLAUDE.local.md`).
    - Run the recommended `/new-kb` / `/update-kb` / ADR work before the next sprint.
 
-8. **Hand off** — invoke the **`handoff`** skill to capture the sprint outcome and the
+9. **Hand off** — invoke the **`handoff`** skill to capture the sprint outcome and the
    entry point for the next sprint (the recommended KB/ADR work + the next sprint to open).
 
 ## Output
 
 Report: phases shipped vs planned, knowledge-capture actions, stale KB domains, ADRs to
-write, archive confirmation.
+write, backlog items harvested/closed, archive confirmation.
