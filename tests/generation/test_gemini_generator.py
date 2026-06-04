@@ -30,16 +30,61 @@ class FakeUsageMetadata:
             self.thoughts_token_count = thoughts_token_count
 
 
+class FakeTokenCandidate:
+    def __init__(self, log_probability: float | None = None, token: str | None = None) -> None:
+        if log_probability is not None:
+            self.log_probability = log_probability
+        if token is not None:
+            self.token = token
+
+
+class FakeTopCandidatesEntry:
+    def __init__(self, candidates: list[FakeTokenCandidate] | None = None) -> None:
+        if candidates is not None:
+            self.candidates = candidates
+
+
+class FakeLogprobsResult:
+    def __init__(self, top_candidates: list[FakeTopCandidatesEntry] | None = None) -> None:
+        if top_candidates is not None:
+            self.top_candidates = top_candidates
+
+
+class FakeCandidate:
+    def __init__(
+        self,
+        avg_logprobs: float | None = None,
+        logprobs_result: FakeLogprobsResult | None = None,
+    ) -> None:
+        if avg_logprobs is not None:
+            self.avg_logprobs = avg_logprobs
+        if logprobs_result is not None:
+            self.logprobs_result = logprobs_result
+
+
 class FakeResponse:
-    def __init__(self, text: str, usage_metadata: FakeUsageMetadata | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        usage_metadata: FakeUsageMetadata | None = None,
+        candidates: list[FakeCandidate] | None = None,
+    ) -> None:
         self.text = text
         self.usage_metadata = usage_metadata
+        if candidates is not None:
+            self.candidates = candidates
 
 
 class FakeGeminiClient:
-    def __init__(self, response_text: str, usage_metadata: FakeUsageMetadata | None = None) -> None:
+    def __init__(
+        self,
+        response_text: str,
+        usage_metadata: FakeUsageMetadata | None = None,
+        candidates: list[FakeCandidate] | None = None,
+    ) -> None:
         self.response_text = response_text
         self.usage_metadata = usage_metadata
+        self.candidates = candidates
         self.calls: list[dict] = []
 
         class Models:
@@ -51,7 +96,7 @@ class FakeGeminiClient:
                         "config": config,
                     }
                 )
-                return FakeResponse(self.response_text, self.usage_metadata)
+                return FakeResponse(self.response_text, self.usage_metadata, self.candidates)
 
         self.models = Models()
 
@@ -248,3 +293,50 @@ def test_live_replay(vcr_record, monkeypatch):
     assert raw.request["model"] == generator._model
     assert "contents" in raw.request
     assert "text" in raw.response
+
+
+def test_offline_confidence_score_scenarios():
+    """Verify confidence score calculations under various response payloads."""
+    chunks = [Chunk(chunk_id="doc_123::0", doc_id="doc_123", text="Ref text")]
+    happy_json = '{"answer": "Gemini generated answer.", "sources": ["doc_123"]}'
+
+    # Scenario A: payload with >=2 top-candidates
+    top_cands = [
+        FakeTokenCandidate(log_probability=-0.1, token="A"),
+        FakeTokenCandidate(log_probability=-1.5, token="B"),
+    ]
+    lr = FakeLogprobsResult(top_candidates=[FakeTopCandidatesEntry(candidates=top_cands)])
+    candidates_a = [FakeCandidate(avg_logprobs=-0.5, logprobs_result=lr)]
+
+    fake_client_a = FakeGeminiClient(response_text=happy_json, candidates=candidates_a)
+    generator_a = GeminiGenerator(client=fake_client_a)
+    _result, stats, raw = generator_a.generate_with_stats(chunks, "Question?")
+    assert stats.confidence_score is not None
+    # Margin: -0.1 - (-1.5) = 1.4
+    assert stats.confidence_score == pytest.approx(1.4)
+    # Check RawCall serialization
+    assert raw.response["candidates"][0]["avg_logprobs"] == -0.5
+    assert "logprobs_result" in raw.response["candidates"][0]
+
+    # Scenario B: payload with only avg_logprobs (no usable top_candidates)
+    candidates_b = [FakeCandidate(avg_logprobs=-0.75, logprobs_result=None)]
+    fake_client_b = FakeGeminiClient(response_text=happy_json, candidates=candidates_b)
+    generator_b = GeminiGenerator(client=fake_client_b)
+    _, stats_b, raw_b = generator_b.generate_with_stats(chunks, "Question?")
+    assert stats_b.confidence_score is not None
+    assert stats_b.confidence_score == pytest.approx(-0.75)
+    assert raw_b.response["candidates"][0]["avg_logprobs"] == -0.75
+    assert "logprobs_result" not in raw_b.response["candidates"][0]
+
+    # Scenario C: NO logprob payload (no candidates or logprobs)
+    fake_client_c = FakeGeminiClient(response_text=happy_json, candidates=None)
+    generator_c = GeminiGenerator(client=fake_client_c)
+    _, stats_c, _ = generator_c.generate_with_stats(chunks, "Question?")
+    assert stats_c.confidence_score is None
+
+    # Scenario D: generate() still returns a bare AnswerWithSources
+    fake_client_d = FakeGeminiClient(response_text=happy_json, candidates=candidates_a)
+    generator_d = GeminiGenerator(client=fake_client_d)
+    bare_res = generator_d.generate(chunks, "Question?")
+    assert isinstance(bare_res, AnswerWithSources)
+    assert bare_res.answer == "Gemini generated answer."

@@ -33,6 +33,81 @@ logger = logging.getLogger("enterprise_rag_ops.generation")
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 
+def _serialize_logprobs_result(lr: Any) -> Any:
+    try:
+        if hasattr(lr, "model_dump"):
+            return lr.model_dump(mode="json")
+    except Exception:
+        pass
+
+    try:
+        res: dict[str, Any] = {}
+        top_candidates = getattr(lr, "top_candidates", None)
+        if top_candidates is not None:
+            serialized_top = []
+            for entry in top_candidates:
+                entry_dict = {}
+                token_cands = getattr(entry, "candidates", None)
+                if token_cands is not None:
+                    serialized_tc = []
+                    for tc in token_cands:
+                        tc_dict = {}
+                        log_prob = getattr(tc, "log_probability", None)
+                        if log_prob is not None:
+                            tc_dict["log_probability"] = log_prob
+                        token = getattr(tc, "token", None)
+                        if token is not None:
+                            tc_dict["token"] = token
+                        serialized_tc.append(tc_dict)
+                    entry_dict["candidates"] = serialized_tc
+                serialized_top.append(entry_dict)
+            res["top_candidates"] = serialized_top
+
+        chosen_candidates = getattr(lr, "chosen_candidates", None)
+        if chosen_candidates is not None:
+            serialized_chosen = []
+            for cc in chosen_candidates:
+                cc_dict = {}
+                log_prob = getattr(cc, "log_probability", None)
+                if log_prob is not None:
+                    cc_dict["log_probability"] = log_prob
+                token = getattr(cc, "token", None)
+                if token is not None:
+                    cc_dict["token"] = token
+                serialized_chosen.append(cc_dict)
+            res["chosen_candidates"] = serialized_chosen
+        return res
+    except Exception:
+        return None
+
+
+def _compute_confidence(response: Any) -> float | None:
+    try:
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return None
+        cand = candidates[0]
+
+        lr = getattr(cand, "logprobs_result", None)
+        if lr is not None:
+            top_candidates = getattr(lr, "top_candidates", None)
+            if top_candidates:
+                first_token_entry = top_candidates[0]
+                token_cands = getattr(first_token_entry, "candidates", None)
+                if token_cands and len(token_cands) >= 2:
+                    p0 = getattr(token_cands[0], "log_probability", None)
+                    p1 = getattr(token_cands[1], "log_probability", None)
+                    if p0 is not None and p1 is not None:
+                        return float(p0) - float(p1)
+
+        avg = getattr(cand, "avg_logprobs", None)
+        if avg is not None:
+            return float(avg)
+        return None
+    except (AttributeError, IndexError, TypeError):
+        return None
+
+
 def _serialize_response(response: Any) -> dict[str, Any]:
     try:
         if isinstance(response, (int, str, float, bool, list, dict)):
@@ -89,6 +164,17 @@ def _serialize_response(response: Any) -> dict[str, Any]:
                             serialized_parts.append(part_dict)
                         content_dict["parts"] = serialized_parts
                     cand_dict["content"] = content_dict
+
+                avg_logprobs = getattr(candidate, "avg_logprobs", None)
+                if avg_logprobs is not None:
+                    cand_dict["avg_logprobs"] = avg_logprobs
+
+                logprobs_result = getattr(candidate, "logprobs_result", None)
+                if logprobs_result is not None:
+                    serialized_lr = _serialize_logprobs_result(logprobs_result)
+                    if serialized_lr is not None:
+                        cand_dict["logprobs_result"] = serialized_lr
+
                 serialized_candidates.append(cand_dict)
             res["candidates"] = serialized_candidates
 
@@ -180,6 +266,8 @@ class GeminiGenerator:
                 # AnswerWithSources(extra="forbid") emits. Closed-schema enforcement
                 # still happens our side via model_validate_json below (FR-3).
                 response_schema=_GeminiResponseSchema,
+                response_logprobs=True,
+                logprobs=5,
                 system_instruction=system_prompt,
             ),
         )
@@ -196,12 +284,15 @@ class GeminiGenerator:
         thoughts = getattr(usage, "thoughts_token_count", 0) or 0 if usage else 0
         output_tokens = candidates + thoughts
 
+        conf = _compute_confidence(response)
+
         stats = CallStats(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             latency_s=latency,
             model=self._model,
             system="google",
+            confidence_score=conf,
         )
 
         request = {

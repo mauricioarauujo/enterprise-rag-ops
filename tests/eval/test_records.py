@@ -267,3 +267,39 @@ def test_compute_cost_usd_gemini():
     cost = compute_cost_usd(stats, price)
     assert cost is not None
     assert cost == pytest.approx(0.03)
+
+
+def test_call_stats_confidence_score():
+    """Verify confidence_score field on CallStats: exists, defaulted, and round-trips correctly."""
+    # 1. Assert exists, is annotated float | None, default None
+    assert "confidence_score" in CallStats.model_fields
+    assert CallStats.model_fields["confidence_score"].annotation == float | None
+    assert CallStats.model_fields["confidence_score"].default is None
+
+    # 2. Built without confidence_score
+    stats_no_conf = CallStats(
+        input_tokens=100,
+        output_tokens=50,
+        latency_s=0.5,
+        model="gemini-2.5-flash-lite",
+        system="google",
+    )
+    assert stats_no_conf.confidence_score is None
+    dumped_no_conf = stats_no_conf.model_dump_json()
+    loaded_no_conf = CallStats.model_validate_json(dumped_no_conf)
+    assert loaded_no_conf.confidence_score is None
+
+    # 3. Built with confidence_score=0.42
+    stats_with_conf = CallStats(
+        input_tokens=100,
+        output_tokens=50,
+        latency_s=0.5,
+        model="gemini-2.5-flash-lite",
+        system="google",
+        confidence_score=0.42,
+    )
+    assert stats_with_conf.confidence_score == 0.42
+    dumped_with_conf = stats_with_conf.model_dump_json()
+    assert "confidence_score" in dumped_with_conf
+    loaded_with_conf = CallStats.model_validate_json(dumped_with_conf)
+    assert loaded_with_conf.confidence_score == 0.42
