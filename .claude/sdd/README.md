@@ -58,3 +58,17 @@ sdd/
 │           └── REVIEW.md
 └── archive/       ← /sprint-close moves the whole sprint-N/ folder here
 ```
+
+## Exemplar phases (start here)
+
+The `archive/` holds 18 shipped phases across 6 sprints. If you're reviewing the method
+rather than maintaining it, don't read all of them — read **one** end-to-end, then sample:
+
+- **[`sprint-2/phase-4-perfact-judge`](archive/sprint-2/phase-4-perfact-judge/)** — the core
+  eval signal (per-fact LLM-as-judge). Best single walk of `DEFINE → DESIGN → REVIEW`:
+  requirements gated, the judge contract designed, then verified.
+- **[`sprint-3/phase-8-failure-taxonomy`](archive/sprint-3/phase-8-failure-taxonomy/)** — the
+  observability differentiator (rule-based failure classifier). Shows a design with a clean
+  diagnostic taxonomy and a real consistency self-check.
+
+Both are linked from the [README guided tour](../../README.md#how-this-was-built).
