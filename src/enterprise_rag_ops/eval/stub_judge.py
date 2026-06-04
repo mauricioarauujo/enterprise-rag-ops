@@ -9,6 +9,7 @@ function — so the stub path also exercises true aggregation. Mirrors `StubGene
 from __future__ import annotations
 
 from enterprise_rag_ops.eval.aggregate import aggregate
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict, JudgeVerdict
 from enterprise_rag_ops.generation.schema import AnswerWithSources
@@ -48,8 +49,9 @@ class StubJudge:
         answer_with_sources: AnswerWithSources,
         answer_facts: list[str],
         retrieved_docs: list[Chunk],
-    ) -> tuple[JudgeVerdict, CallStats]:
-        return self.judge(question, answer_with_sources, answer_facts, retrieved_docs), CallStats(
+    ) -> tuple[JudgeVerdict, CallStats, RawCall]:
+        verdict = self.judge(question, answer_with_sources, answer_facts, retrieved_docs)
+        stats = CallStats(
             input_tokens=0,
             output_tokens=0,
             latency_s=0.0,
@@ -57,3 +59,20 @@ class StubJudge:
             system="openai",
             cost_usd=0.0,
         )
+        serialized_per_fact = (
+            [fv.model_dump() for fv in verdict.per_fact] if verdict.per_fact else []
+        )
+        serialized_per_citation = (
+            [cv.model_dump() for cv in verdict.per_citation] if verdict.per_citation else []
+        )
+        raw_call = RawCall(
+            request={
+                "model": self._model,
+                "messages": [{"role": "user", "content": question}],
+            },
+            response={
+                "per_fact": serialized_per_fact,
+                "per_citation": serialized_per_citation,
+            },
+        )
+        return verdict, stats, raw_call

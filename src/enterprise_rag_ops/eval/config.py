@@ -55,6 +55,10 @@ class RunConfig(BaseModel):
         default=None,
         description="Maximum allowed sweep cost in USD (FR-13).",
     )
+    persist_bronze: bool = Field(
+        default=False,
+        description="Opt-in: write raw request+response bronze under data/raw_eval/ (ADR-0010). Default off.",
+    )
 
     @classmethod
     def load_from_yaml(cls, path: Path | str) -> RunConfig:

@@ -46,6 +46,18 @@ Configured once in `tests/conftest.py` via `vcr.VCR(filter_headers=..., filter_q
 | Anthropic | `RAG_GEN_MODEL_ANTHROPIC` | `claude-haiku-4-5-20251001` |
 | Google    | `RAG_GEN_MODEL_GOOGLE`    | `gemini-2.5-flash-lite`     |
 
+## RawCall / Bronze Capture
+
+| Item                       | Detail                                                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport model            | `eval/raw_call.py` — `RawCall(request: dict, response: dict)`, `extra="forbid"`                                                                            |
+| Where returned             | 3rd element of `generate_with_stats` / `judge_with_stats` (off-Protocol)                                                                                   |
+| Persisted                  | Bronze tier only (ADR-0010); **not** in gold `EvalRecord`                                                                                                  |
+| Serializer                 | `_serialize_response(response)` in each provider module; fast path `model_dump(mode="json")`; manual fallback; catch-all `{"_serialization_error": "..."}` |
+| Request privacy            | Built from local vars (model, messages, params); never introspects client object                                                                           |
+| Gemini `sdk_http_response` | Fast path emits response headers only (`body: null`); no secrets                                                                                           |
+| Shared serializer          | `openai_judge` imports `_serialize_response` from `openai_generator` (same ChatCompletion shape)                                                           |
+
 ## Common Pitfalls
 
 | Don't                                                         | Do                                                                                  |
@@ -54,6 +66,8 @@ Configured once in `tests/conftest.py` via `vcr.VCR(filter_headers=..., filter_q
 | Count only `candidates_token_count` for Gemini cost           | Add `thoughts_token_count` (thinking tokens billed separately)                      |
 | Forget to `getattr(..., 0)` on usage fields                   | All three providers use defensive reads — missing metadata returns 0, never crashes |
 | Add a provider without updating `_GENERATOR_FACTORY`          | One-line dict entry in `eval/runner.py` is the wiring point                         |
+| Build `RawCall.request` from `client` object introspection    | Build from local vars; auth headers are structurally absent                         |
+| Expect `generate_with_stats` to return 2 values               | It returns `(AnswerWithSources, CallStats, RawCall)` — 3-tuple since Phase-19       |
 
 ## Related Documentation
 
@@ -63,4 +77,5 @@ Configured once in `tests/conftest.py` via `vcr.VCR(filter_headers=..., filter_q
 | Generator seam + dispatch          | `concepts/generator-seam.md`                 |
 | Add-a-generator recipe             | `patterns/add-a-generator.md`                |
 | Token accounting detail            | `concepts/per-provider-token-accounting.md`  |
+| Raw-payload serialization          | `concepts/raw-payload-serialization.md`      |
 | Full Index                         | `index.md`                                   |

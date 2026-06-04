@@ -5,7 +5,7 @@
 > Phoenix replay exporter (reset-and-replay idempotency), span-attribute mapping, cost/token
 > economics on spans, offline score write-back, and the rule-based failure-mode taxonomy
 > (5-label first-match cascade over EvalRecord aggregates + gold). ADRs: 0004, 0007, 0008.
-> **Sprint 3 / Phases 7–8 shipped** (2026-05-28–30).
+> **Sprint 3 / Phases 7–8 shipped.** **Sprint 6 / Phases 17 + 19 shipped** (2026-06-03): I/O hydration for Phoenix Info tab.
 > **MCP Validated**: 2026-06-01
 
 ## Quick Navigation
@@ -54,3 +54,4 @@
 - Span kind strings: `"chain"`, `"retriever"`, `"llm"` (generation and judge both use `"llm"`).
 - Failure taxonomy classifies on aggregate metrics only; per-fact detail is excluded from `EvalRecord`.
 - `failure_mode: str | None = None` — backward-compatible; older records parse cleanly.
+- **Info tab legibility (Sprint 6):** generation `output.value` = answer (always-on); judge `output.value` = verdict lines when non-empty (always-on); chain `input.value` = gold question (opt-in, `--enrich-from-questions`). See `concepts/span-attribute-mapping.md`.

@@ -16,11 +16,13 @@ from __future__ import annotations
 import logging
 import os
 import time
+from typing import Any
 
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.generation.prompt import build_system_prompt, build_user_prompt
 from enterprise_rag_ops.generation.schema import AnswerWithSources
@@ -29,6 +31,81 @@ from enterprise_rag_ops.retrieval.schema import Chunk
 logger = logging.getLogger("enterprise_rag_ops.generation")
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
+
+
+def _serialize_response(response: Any) -> dict[str, Any]:
+    try:
+        if isinstance(response, (int, str, float, bool, list, dict)):
+            raise TypeError(f"Invalid response type: {type(response)}")
+
+        try:
+            if hasattr(response, "model_dump"):
+                res = response.model_dump(mode="json")
+                if hasattr(response, "text") and "text" not in res:
+                    import contextlib
+
+                    with contextlib.suppress(Exception):
+                        res["text"] = response.text
+                return res
+        except Exception:
+            pass
+
+        res: dict[str, Any] = {}
+
+        # text
+        text = getattr(response, "text", None)
+        if text is not None:
+            res["text"] = text
+
+        # model_version
+        model_version = getattr(response, "model_version", None)
+        if model_version is not None:
+            res["model_version"] = model_version
+
+        # candidates
+        candidates = getattr(response, "candidates", None)
+        if candidates is not None:
+            serialized_candidates = []
+            for candidate in candidates:
+                cand_dict = {}
+                finish_reason = getattr(candidate, "finish_reason", None)
+                if finish_reason is not None:
+                    cand_dict["finish_reason"] = finish_reason
+
+                content = getattr(candidate, "content", None)
+                if content is not None:
+                    content_dict = {}
+                    role = getattr(content, "role", None)
+                    if role is not None:
+                        content_dict["role"] = role
+                    parts = getattr(content, "parts", None)
+                    if parts is not None:
+                        serialized_parts = []
+                        for part in parts:
+                            part_dict = {}
+                            part_text = getattr(part, "text", None)
+                            if part_text is not None:
+                                part_dict["text"] = part_text
+                            serialized_parts.append(part_dict)
+                        content_dict["parts"] = serialized_parts
+                    cand_dict["content"] = content_dict
+                serialized_candidates.append(cand_dict)
+            res["candidates"] = serialized_candidates
+
+        # usage_metadata
+        usage = getattr(response, "usage_metadata", None)
+        if usage is not None:
+            usage_dict = {}
+            for f in ["prompt_token_count", "candidates_token_count", "thoughts_token_count"]:
+                val = getattr(usage, f, None)
+                if val is not None:
+                    usage_dict[f] = val
+            if usage_dict:
+                res["usage_metadata"] = usage_dict
+
+        return res
+    except Exception as e:
+        return {"_serialization_error": type(e).__name__}
 
 
 class _GeminiResponseSchema(BaseModel):
@@ -65,7 +142,7 @@ class GeminiGenerator:
                 )
             # Harden retries for a full sweep: the SDK default is 5 attempts, which a
             # transient `503 UNAVAILABLE` ("high demand") spike can exhaust mid-sweep.
-            # Mirror the Anthropic generator (max_retries=8, timeout=120): retry 429/5xx
+            # Mirror the Anthropic generator (max_retries=8, timeout=120: retry 429/5xx
             # with backoff, and bound a single call so a dead socket fails fast.
             client = genai.Client(
                 http_options=types.HttpOptions(
@@ -81,15 +158,15 @@ class GeminiGenerator:
 
     def generate(self, context_chunks: list[Chunk], question: str) -> AnswerWithSources:
         """Call Gemini and return a validated `AnswerWithSources`."""
-        result, _ = self.generate_with_stats(context_chunks, question)
+        result, _, _ = self.generate_with_stats(context_chunks, question)
         return result
 
     def generate_with_stats(
         self,
         context_chunks: list[Chunk],
         question: str,
-    ) -> tuple[AnswerWithSources, CallStats]:
-        """Call Gemini and return a validated `AnswerWithSources` along with `CallStats`."""
+    ) -> tuple[AnswerWithSources, CallStats, RawCall]:
+        """Call Gemini and return a validated `AnswerWithSources` along with `CallStats` and `RawCall`."""
         system_prompt = build_system_prompt()
         user_prompt = build_user_prompt(context_chunks, question)
 
@@ -127,6 +204,15 @@ class GeminiGenerator:
             system="google",
         )
 
+        request = {
+            "model": self._model,
+            "contents": user_prompt,
+            "system_instruction": system_prompt,
+            "response_mime_type": "application/json",
+        }
+        serialized_response = _serialize_response(response)
+        raw_call = RawCall(request=request, response=serialized_response)
+
         logger.info(
             "generation.google sources=%s context_doc_ids=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             result.sources,
@@ -135,4 +221,4 @@ class GeminiGenerator:
             output_tokens,
             latency,
         )
-        return result, stats
+        return result, stats, raw_call

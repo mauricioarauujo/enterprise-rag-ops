@@ -5,13 +5,15 @@
 > empty-denominator/abstention convention, structured-output judge prompting, judge
 > determinism, retrieval metric aggregation, abstention scoring, cassette/replay testing,
 > multi-model sweep runner, cost accounting, HTML+MD report rendering, the
-> stats-capture seam (`generate_with_stats` / `judge_with_stats`), failure-mode triage
-> clustering (`rag-triage`), and triage-to-issues (`rag-issues`).
+> stats-capture seam (`generate_with_stats` / `judge_with_stats` returning a 3-tuple
+> with `RawCall`), bronze raw-payload archive (`BronzeWriter`, ADR-0010), failure-mode
+> triage clustering (`rag-triage`), and triage-to-issues (`rag-issues`).
 > **Phase 4 + Phase 5 + Phase 6 shipped** (Sprint 2, 2026-05-23–26).
 > **Phase 14 + Phase 15 shipped** (Sprint 5, 2026-06-02).
+> **Phase 19 shipped** (Sprint 6, 2026-06-03) — bronze writer + RawCall extension.
 > ADRs: `docs/adr/0001-eval-framework.md`, `docs/adr/0007-eval-record-schema.md`,
-> `docs/adr/0009-triage-to-issues.md`.
-> **Last updated**: 2026-06-02
+> `docs/adr/0009-triage-to-issues.md`, `docs/adr/0010-persist-judge-reasoning-bronze-gold.md`.
+> **Last updated**: 2026-06-03
 
 ## Quick Navigation
 
@@ -27,7 +29,8 @@
 | [concepts/abstention-scoring.md](concepts/abstention-scoring.md)                     | Empty-gold predicate, two-layer abstention, gate-rarely-fires insight     |
 | [concepts/eval-record-schema.md](concepts/eval-record-schema.md)                     | `EvalRecord` shape, OTEL alignment, `k` field, what is excluded (Phase 6) |
 | [concepts/cost-accounting.md](concepts/cost-accounting.md)                           | Price table in config, None on missing price, ceiling guard (Phase 6)     |
-| [concepts/stats-capture-seam.md](concepts/stats-capture-seam.md)                     | `generate_with_stats`/`judge_with_stats` — seam on implementations only   |
+| [concepts/stats-capture-seam.md](concepts/stats-capture-seam.md)                     | `generate_with_stats`/`judge_with_stats` — 3-tuple with `RawCall`         |
+| [concepts/bronze-raw-archive.md](concepts/bronze-raw-archive.md)                     | `BronzeWriter`: key scheme, thread model, idempotency, opt-in (ADR-0010)  |
 | [concepts/failure-triage.md](concepts/failure-triage.md)                             | Groupby-aggregate over classified JSONL → ranked `TriageReport` clusters  |
 
 ### Patterns
@@ -79,3 +82,6 @@
 - `TriageReport.schema_version = "1.0"` is the cross-phase contract; `rag-issues` hard-rejects any other value.
 - `rag-issues` is dry-run by default — no GitHub call without `--create`; `GhCliClient` is never instantiated in tests.
 - Body-marker fingerprint idempotency is best-effort (GitHub search propagation delay); may create a duplicate, never crashes.
+- `RawCall` is off-Protocol and off-gold — it rides the `*_with_stats` 3-tuple to the runner only; never written to `EvalRecord`.
+- `persist_bronze` defaults to `False`; bronze writes are fully skipped unless opted in. Bronze failure does not corrupt the gold JSONL.
+- `BronzeWriter` rejects `run_id` containing `/`, `os.sep`, or `..` at construction — path traversal guard.

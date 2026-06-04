@@ -39,6 +39,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=1,
         help="Concurrency level (default: 1).",
     )
+    run_parser.add_argument(
+        "--persist-bronze",
+        action="store_true",
+        help="Write raw request+response bronze files to data/raw_eval/.",
+    )
 
     # Sub-command 'report'
     report_parser = subparsers.add_parser(
@@ -69,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             config_path = Path(args.config)
             config = RunConfig.load_from_yaml(config_path)
+            if args.persist_bronze:
+                config.persist_bronze = True
 
             logger.info("Starting evaluation sweep with configuration: %s", config_path)
             jsonl_path = run_evaluation(config, concurrency=args.concurrency)

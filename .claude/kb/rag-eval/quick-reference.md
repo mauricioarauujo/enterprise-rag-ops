@@ -97,3 +97,4 @@ Phase 4/5: `eval/schema.py` · `eval/aggregate.py` · `eval/interfaces.py` · `e
 Phase 6: `eval/records.py` · `eval/config.py` · `eval/runner.py` · `eval/report.py`
 · `generation/openai_generator.py` · `generation/anthropic_generator.py` · `tests/conftest.py`
 Phase 14+15: `eval/triage.py` · `eval/triage_cli.py` · `eval/issues.py` · `eval/github.py` · `eval/issues_cli.py`
+Phase 19: `eval/raw_call.py` (RawCall) · `eval/bronze.py` (BronzeWriter) — bronze archive, opt-in via `RunConfig.persist_bronze`

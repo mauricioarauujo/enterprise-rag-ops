@@ -25,15 +25,15 @@ Every concrete implementation (`OpenAIGenerator`, `AnthropicGenerator`, `GeminiG
 
 ```python
 def generate(self, context_chunks, question) -> AnswerWithSources:
-    result, _ = self.generate_with_stats(context_chunks, question)
+    result, _, _ = self.generate_with_stats(context_chunks, question)
     return result
 
 def generate_with_stats(
     self, context_chunks, question
-) -> tuple[AnswerWithSources, CallStats]: ...
+) -> tuple[AnswerWithSources, CallStats, RawCall]: ...
 ```
 
-`generate_with_stats` is the stats-capture variant used by the eval runner. See `rag-eval` → `concepts/stats-capture-seam.md` for the seam rationale.
+`generate_with_stats` returns a **3-tuple**: the validated answer, token/latency stats, and a `RawCall` transport holding the raw request and serialized response for bronze storage (ADR-0010). `generate_with_stats` is **off-Protocol** — the `Generator` Protocol exposes only `generate`. See `rag-eval` → `concepts/stats-capture-seam.md` for the seam rationale and `concepts/raw-payload-serialization.md` for the `RawCall` and `_serialize_response` algorithm.
 
 ## Output Contract: AnswerWithSources
 
@@ -89,6 +89,7 @@ ADR-0003 names the Generator Protocol as the fourth seam (alongside `Embedder`, 
 
 - [concepts/structured-output-per-provider.md](structured-output-per-provider.md) — how each provider forces the schema
 - [concepts/per-provider-token-accounting.md](per-provider-token-accounting.md) — CallStats field mapping
+- [concepts/raw-payload-serialization.md](raw-payload-serialization.md) — RawCall model, \_serialize_response algorithm, privacy guarantee
 - [patterns/add-a-generator.md](../patterns/add-a-generator.md) — full add-a-provider recipe
 - ADR-0003 (`docs/adr/0003-generation.md`) — seam decision + abstention design
 - ADR-0005 (`docs/adr/0005-llm-provider-matrix.md`) — three-provider matrix + Gemini amendment

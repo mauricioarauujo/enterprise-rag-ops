@@ -19,8 +19,14 @@ from openai import OpenAI
 
 from enterprise_rag_ops.eval.aggregate import aggregate
 from enterprise_rag_ops.eval.prompt import build_judge_system_prompt, build_judge_user_prompt
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.eval.schema import JudgeVerdict, _LLMJudgeVerdict
+
+# The judge and the generator both call OpenAI chat-completions and get the identical
+# ChatCompletion response shape, so reuse one serializer (single source of truth for
+# the shape) rather than maintaining a duplicate here.
+from enterprise_rag_ops.generation.openai_generator import _serialize_response
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
 
@@ -62,7 +68,7 @@ class OpenAIJudge:
         retrieved_docs: list[Chunk],
     ) -> JudgeVerdict:
         """Call OpenAI once and return a validated, aggregated `JudgeVerdict`."""
-        result, _ = self.judge_with_stats(
+        result, _, _ = self.judge_with_stats(
             question, answer_with_sources, answer_facts, retrieved_docs
         )
         return result
@@ -73,8 +79,8 @@ class OpenAIJudge:
         answer_with_sources: AnswerWithSources,
         answer_facts: list[str],
         retrieved_docs: list[Chunk],
-    ) -> tuple[JudgeVerdict, CallStats]:
-        """Call OpenAI once and return a validated, aggregated `JudgeVerdict` along with `CallStats`."""
+    ) -> tuple[JudgeVerdict, CallStats, RawCall]:
+        """Call OpenAI once and return a validated, aggregated `JudgeVerdict` along with `CallStats` and `RawCall`."""
         import time
 
         # Resolve each cited doc_id to its text (None if not in the retrieved set),
@@ -102,14 +108,17 @@ class OpenAIJudge:
             "strict": True,
         }
 
+        messages_sent = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        response_format = {"type": "json_schema", "json_schema": json_schema}
+
         start_time = time.perf_counter()
         response = self._client.chat.completions.create(
             model=self._model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_schema", "json_schema": json_schema},
+            messages=messages_sent,
+            response_format=response_format,
         )
         latency = time.perf_counter() - start_time
 
@@ -133,6 +142,14 @@ class OpenAIJudge:
             system="openai",
         )
 
+        request = {
+            "model": self._model,
+            "messages": messages_sent,
+            "response_format": response_format,
+        }
+        serialized_response = _serialize_response(response)
+        raw_call = RawCall(request=request, response=serialized_response)
+
         logger.info(
             "eval.openai_judge facts=%d citations=%d recall=%s precision=%s faithfulness=%s input_tokens=%d output_tokens=%d latency_s=%.3f",
             len(llm_verdict.per_fact),
@@ -151,4 +168,4 @@ class OpenAIJudge:
             fact_precision=fact_precision,
             faithfulness_ratio=faithfulness_ratio,
         )
-        return verdict, stats
+        return verdict, stats, raw_call

@@ -7,6 +7,7 @@ pipeline wiring through the `Generator` seam (NFR-2, AC-11). Same shape as
 
 from __future__ import annotations
 
+from enterprise_rag_ops.eval.raw_call import RawCall
 from enterprise_rag_ops.eval.records import CallStats
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval.schema import Chunk
@@ -28,8 +29,9 @@ class StubGenerator:
         self,
         context_chunks: list[Chunk],
         question: str,
-    ) -> tuple[AnswerWithSources, CallStats]:
-        return self.generate(context_chunks, question), CallStats(
+    ) -> tuple[AnswerWithSources, CallStats, RawCall]:
+        ans = self.generate(context_chunks, question)
+        stats = CallStats(
             input_tokens=0,
             output_tokens=0,
             latency_s=0.0,
@@ -37,3 +39,14 @@ class StubGenerator:
             system="openai",
             cost_usd=0.0,
         )
+        raw_call = RawCall(
+            request={
+                "model": self._model,
+                "messages": [{"role": "user", "content": question}],
+            },
+            response={
+                "answer": ans.answer,
+                "sources": ans.sources,
+            },
+        )
+        return ans, stats, raw_call
