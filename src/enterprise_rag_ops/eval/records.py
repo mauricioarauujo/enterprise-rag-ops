@@ -30,6 +30,7 @@ class CallStats(BaseModel):
     model: str
     system: str
     cost_usd: float | None = None
+    confidence_score: float | None = None
 
 
 def compute_cost_usd(stats: CallStats, price: Price | None) -> float | None:

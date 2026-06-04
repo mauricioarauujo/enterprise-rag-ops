@@ -50,11 +50,13 @@ domains:
       drafts, body-marker fingerprint idempotency, GitHubClient Protocol seam, dry-run
       default, schema gate), bronze raw-archive (BronzeWriter — opt-in persist_bronze,
       run_id-keyed JSON-per-call under data/raw_eval/, own-lock/flush/overwrite-idempotency,
-      run_id path-sanitization; RawCall 3rd-return transport, off-Protocol + off-gold, ADR-0010).
-      ADRs: 0001, 0006, 0007, 0009, 0010.
+      run_id path-sanitization; RawCall 3rd-return transport, off-Protocol + off-gold, ADR-0010),
+      and CallStats.confidence_score (float|None=None, Gemini-only verbalized confidence
+      in [0,1], same optional-default pattern as cost_usd, escalation signal, ADR-0011).
+      ADRs: 0001, 0006, 0007, 0009, 0010, 0011.
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-03"
+    last_updated: "2026-06-04"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -196,9 +198,15 @@ domains:
       returns a 3rd RawCall(request, response) built by a defensive per-provider _serialize_response
       (pydantic model_dump(mode="json") fast path → manual getattr fallback → never raises);
       off-Protocol, off-gold, shared OpenAI serializer between generator and judge.
+      Gemini 2.5 operational limits (ADR-0011): no token logprobs on Flash/Flash-Lite (400
+      INVALID_ARGUMENT on response_logprobs — never set it); older logprob models retired (404).
+      Verbalized-confidence pattern: _GeminiResponseSchema adds confidence:float + _CONFIDENCE_ADDENDUM
+      on system prompt; _parse_confidence extracts+clamps to [0,1] defensively; field stripped
+      before AnswerWithSources.model_validate so shared closed schema is unchanged; signal rides
+      CallStats.confidence_score (float|None=None, Gemini-only).
     path: rag-generation/
     status: draft
-    last_updated: "2026-06-03"
+    last_updated: "2026-06-04"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:

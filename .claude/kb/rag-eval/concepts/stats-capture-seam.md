@@ -61,12 +61,20 @@ class CallStats(BaseModel):
     latency_s: float
     model: str         # the model string sent to the API
     system: str        # "openai" | "anthropic" | "google"
-    cost_usd: float | None = None   # filled in by runner after the call
+    cost_usd: float | None = None          # filled in by runner after the call
+    confidence_score: float | None = None  # Gemini-only: verbalized confidence ∈ [0,1];
+                                           # all other generators leave it None (ADR-0011)
 ```
 
 `cost_usd` is intentionally `None` at capture time — the runner looks up the price
 table and calls `compute_cost_usd(stats, price)` after the fact. This keeps
 `CallStats` free of config dependency.
+
+`confidence_score` follows the same optional-default pattern as `cost_usd` — backward-
+compatible (prior `results/*.jsonl` load unchanged; Pydantic supplies `None`). It is
+populated only by `GeminiGenerator._parse_confidence` before `CallStats` is returned;
+it rides `EvalRecord.generation` for forensics/replay without any `EvalRecord` schema
+change. Purpose: inference-time escalation signal for the sprint-7 cost-aware router.
 
 ## Token Extraction per Provider
 

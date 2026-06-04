@@ -49,11 +49,14 @@ class CallStats(BaseModel):
     output_tokens: int
     latency_s: float
     model: str
-    system: str           # "openai" | "anthropic" | "google"
+    system: str                          # "openai" | "anthropic" | "google"
     cost_usd: float | None = None
+    confidence_score: float | None = None  # Gemini-only verbalized confidence (ADR-0011)
 ```
 
-`cost_usd` is computed after the call by the runner via `compute_cost_usd(stats, price)` — not inside the generator. See `rag-eval` → `concepts/cost-accounting.md`.
+`cost_usd` is computed by the runner via `compute_cost_usd(stats, price)` — not inside the generator. See `rag-eval` → `concepts/cost-accounting.md`.
+
+`confidence_score` is populated only by `GeminiGenerator` (verbalized confidence field in the Gemini-only `_GeminiResponseSchema`). All other generators and the retrieval-abstain stub leave it `None`. See `rag-generation` → `concepts/structured-output-per-provider.md` § Gemini-only verbalized confidence.
 
 ## Common Mistakes
 

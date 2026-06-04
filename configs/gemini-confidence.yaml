@@ -1,0 +1,28 @@
+# Sprint-7/phase-1 escalation-signal validation run (ADR-0011) — sweep the cheap model
+# over the full 500 gold questions so each answer carries its verbalized `confidence`
+# (CallStats.confidence_score). run_id=gemini-confidence so it writes
+# results/gemini-confidence.jsonl without clobbering results/gemini.jsonl.
+# Judge stays OpenAI (gpt-5-nano) — independence preserved (Gemini never judges);
+# its verdicts feed `rag-classify` for the same-run correctness labels.
+
+models:
+  - model_id: "gemini-2.5-flash-lite"
+    system: "google"
+
+judge_model: "gpt-5-nano-2025-08-07"
+
+limit: null
+k: 10
+output_dir: "results"
+run_id: "gemini-confidence"
+
+cost_ceiling_usd: 5.0
+
+prices:
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40
+  # Judge price (gpt-5-nano) — needed for judge-call cost accounting.
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40

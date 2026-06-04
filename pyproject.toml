@@ -52,6 +52,9 @@ dev = [
     "pytest-cov>=5.0",
     "pre-commit>=4.6.0",
     "vcrpy>=6.0,<7.0",
+    # Analysis-only: the sprint-7 escalation-signal separation plot
+    # (scripts/signal_validation.py). Dev group, NOT a runtime dependency.
+    "matplotlib>=3.8,<4.0",
 ]
 
 [tool.ruff]

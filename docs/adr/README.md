@@ -21,6 +21,8 @@ Each ADR captures one significant decision: its context, the decision, and the c
 | 0007 | [Evaluation Record Schema and Cost-Accounting Model](0007-eval-record-schema.md)                              | accepted | 2026-05-25 |
 | 0008 | [Rule-Based Failure-Mode Taxonomy and Classifier](0008-failure-taxonomy.md)                                   | accepted | 2026-05-30 |
 | 0009 | [Triage to GitHub Issues — gh-CLI Client, Body-Marker Idempotency, Dry-Run Default](0009-triage-to-issues.md) | accepted | 2026-06-02 |
+| 0010 | [Persist Judge Reasoning in Gold and Design Bronze Archive](0010-persist-judge-reasoning-bronze-gold.md)      | accepted | 2026-06-02 |
+| 0011 | [Inference-Time Escalation Signal for the Cost-Aware Router](0011-escalation-signal.md)                       | accepted | 2026-06-04 |
 
 ADR-0004 is **proposed** (drafted in Sprint 2 / Phase 6 to constrain the eval-record schema;
 acceptance deferred to Sprint 3 / Phase 7 when the tool is wired). ADR-0007 (eval-record schema + cost-accounting model) is accepted.

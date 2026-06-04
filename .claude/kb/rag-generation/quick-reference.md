@@ -58,16 +58,26 @@ Configured once in `tests/conftest.py` via `vcr.VCR(filter_headers=..., filter_q
 | Gemini `sdk_http_response` | Fast path emits response headers only (`body: null`); no secrets                                                                                           |
 | Shared serializer          | `openai_judge` imports `_serialize_response` from `openai_generator` (same ChatCompletion shape)                                                           |
 
+## Gemini Operational Gotchas (ADR-0011)
+
+| Gotcha                       | Detail                                                                                                                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No logprobs on Gemini 2.5    | `response_logprobs=True` or `logprobs=N` → `400 INVALID_ARGUMENT: "Logprobs is not enabled"` on Flash and Flash-Lite                                                               |
+| Older logprob models retired | `gemini-1.5-flash`, `gemini-2.0-flash` → 404; no fallback available                                                                                                                |
+| Confidence signal workaround | Add `confidence: float` to `_GeminiResponseSchema` + `_CONFIDENCE_ADDENDUM` on system prompt; strip field before `AnswerWithSources` validation; ride `CallStats.confidence_score` |
+
 ## Common Pitfalls
 
-| Don't                                                         | Do                                                                                  |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Pass `AnswerWithSources` directly as Gemini `response_schema` | Use `_GeminiResponseSchema` (open mirror); enforce closed-schema our side           |
-| Count only `candidates_token_count` for Gemini cost           | Add `thoughts_token_count` (thinking tokens billed separately)                      |
-| Forget to `getattr(..., 0)` on usage fields                   | All three providers use defensive reads — missing metadata returns 0, never crashes |
-| Add a provider without updating `_GENERATOR_FACTORY`          | One-line dict entry in `eval/runner.py` is the wiring point                         |
-| Build `RawCall.request` from `client` object introspection    | Build from local vars; auth headers are structurally absent                         |
-| Expect `generate_with_stats` to return 2 values               | It returns `(AnswerWithSources, CallStats, RawCall)` — 3-tuple since Phase-19       |
+| Don't                                                           | Do                                                                                             |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Pass `AnswerWithSources` directly as Gemini `response_schema`   | Use `_GeminiResponseSchema` (open mirror); enforce closed-schema our side                      |
+| Set `response_logprobs` on a Gemini 2.5 `GenerateContentConfig` | Gemini 2.5 400s — use verbalized-confidence pattern instead                                    |
+| Leave extra provider fields in the dict before `model_validate` | Strip Gemini-only fields (e.g. `confidence`) before calling `AnswerWithSources.model_validate` |
+| Count only `candidates_token_count` for Gemini cost             | Add `thoughts_token_count` (thinking tokens billed separately)                                 |
+| Forget to `getattr(..., 0)` on usage fields                     | All three providers use defensive reads — missing metadata returns 0, never crashes            |
+| Add a provider without updating `_GENERATOR_FACTORY`            | One-line dict entry in `eval/runner.py` is the wiring point                                    |
+| Build `RawCall.request` from `client` object introspection      | Build from local vars; auth headers are structurally absent                                    |
+| Expect `generate_with_stats` to return 2 values                 | It returns `(AnswerWithSources, CallStats, RawCall)` — 3-tuple since Phase-19                  |
 
 ## Related Documentation
 

@@ -94,10 +94,13 @@ def test_offline_injected_client():
     # rejects the `additionalProperties` that AnswerWithSources(extra="forbid") emits
     # (regression guard for the live 400 "Unknown name additional_properties").
     assert "additionalProperties" not in config.response_schema.model_json_schema()
-    # Field sets must match AnswerWithSources EXACTLY — machine-checks the open mirror
-    # against the real schema in both directions, so a future field added to
-    # AnswerWithSources fails here instead of silently in a live Gemini call.
-    assert set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields)
+    # The open mirror = AnswerWithSources fields PLUS the Gemini-only `confidence` signal
+    # (verbalized escalation signal, ADR-0011 — stripped before AnswerWithSources
+    # validation). Machine-checks the mirror so a future field added to AnswerWithSources
+    # fails here instead of silently in a live Gemini call.
+    assert set(config.response_schema.model_fields) == set(AnswerWithSources.model_fields) | {
+        "confidence"
+    }
 
     # Extra field path
     extra_field_json = (
@@ -248,3 +251,47 @@ def test_live_replay(vcr_record, monkeypatch):
     assert raw.request["model"] == generator._model
     assert "contents" in raw.request
     assert "text" in raw.response
+
+
+def test_verbalized_confidence_scenarios():
+    """Verbalized confidence is parsed off the response onto CallStats.confidence_score,
+    and stripped before AnswerWithSources validation (gemini-2.5-flash-lite has no logprobs
+    — see ADR-0011). Covers: present, clamped out-of-range, absent, and non-numeric."""
+    chunks = [Chunk(chunk_id="doc_123::0", doc_id="doc_123", text="Ref text")]
+
+    # A: confidence present and in-range -> rides confidence_score; stripped from the answer.
+    with_conf = '{"answer": "Grounded answer.", "sources": ["doc_123"], "confidence": 0.82}'
+    _r, stats, _ = GeminiGenerator(client=FakeGeminiClient(with_conf)).generate_with_stats(
+        chunks, "Q?"
+    )
+    assert stats.confidence_score == pytest.approx(0.82)
+    assert _r.answer == "Grounded answer." and _r.sources == ["doc_123"]
+    assert not hasattr(_r, "confidence")  # confidence never enters the shared schema
+
+    # B: out-of-range confidence is clamped to [0.0, 1.0].
+    hi = '{"answer": "A", "sources": [], "confidence": 1.7}'
+    _, stats_hi, _ = GeminiGenerator(client=FakeGeminiClient(hi)).generate_with_stats(chunks, "Q?")
+    assert stats_hi.confidence_score == 1.0
+    lo = '{"answer": "A", "sources": [], "confidence": -0.3}'
+    _, stats_lo, _ = GeminiGenerator(client=FakeGeminiClient(lo)).generate_with_stats(chunks, "Q?")
+    assert stats_lo.confidence_score == 0.0
+
+    # C: confidence absent -> None, no crash, answer still parses.
+    no_conf = '{"answer": "Plain answer.", "sources": ["doc_123"]}'
+    res_c, stats_c, _ = GeminiGenerator(client=FakeGeminiClient(no_conf)).generate_with_stats(
+        chunks, "Q?"
+    )
+    assert stats_c.confidence_score is None
+    assert res_c.answer == "Plain answer."
+
+    # D: non-numeric confidence -> None (defensive), answer still parses.
+    bad = '{"answer": "A", "sources": [], "confidence": "high"}'
+    _, stats_bad, _ = GeminiGenerator(client=FakeGeminiClient(bad)).generate_with_stats(
+        chunks, "Q?"
+    )
+    assert stats_bad.confidence_score is None
+
+    # E: generate() still returns a bare AnswerWithSources (no confidence on it).
+    bare = GeminiGenerator(client=FakeGeminiClient(with_conf)).generate(chunks, "Q?")
+    assert isinstance(bare, AnswerWithSources)
+    assert bare.answer == "Grounded answer."
