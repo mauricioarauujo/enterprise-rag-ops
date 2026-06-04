@@ -82,13 +82,13 @@ generator.py` already carries a `@pytest.mark.vcr` `test_live_replay` against
 
 ## Users / Stakeholders
 
-- **Phase-2 `RouterGenerator` author (Mauricio)** — the direct downstream beneficiary. After this
+- **Phase-2 `RouterGenerator` author** — the direct downstream beneficiary. After this
   phase, the cheap-model call surfaces a real `confidence_score` on `CallStats` that the router's
   escalation logic reads off `generate_with_stats` — no second wiring decision, no seam change.
   Needs: the field populated only by Gemini (other generators `None`), the public `generate()`
   contract untouched, and the validation evidence (AUROC + separation plot) to make the phase-2
   go/no-go judgment call.
-- **The phase-2 go/no-go reviewer (Mauricio, at `/design` time)** — reads the phase-1 report and
+- **The phase-2 go/no-go reviewer (at `/design` time)** — reads the phase-1 report and
   ADR and decides, by **human judgment** (not a fixed threshold), whether the signal is
   discriminative enough to build the router on, or whether to pivot (e.g. abstention-only, or
   re-scope). The honest-NULL-result framing (SPRINT.md success criterion 4) means "the signal is
