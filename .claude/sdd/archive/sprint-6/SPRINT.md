@@ -1,6 +1,6 @@
 # SPRINT 6: Full Trace Legibility — A Failed Trace Explains Itself
 
-**Sprint:** sprint-6 | **Date:** 2026-06-02 | **Status:** active
+**Sprint:** sprint-6 | **Date:** 2026-06-02 | **Status:** closed
 
 ## Goal
 
@@ -76,3 +76,46 @@ brainstorm/ADR, KB work lands _after_ its ADR:
 - **Convention drift.** If the wrong OpenInference keys are used, Phoenix shows the data under
   Attributes but the Info tab stays empty (the exact symptom this sprint exists to fix). The Phase
   17 research item must nail the `input.value`/`output.value` (and/or message) keys before impl.
+
+## Retrospective
+
+**Shipped vs planned:** All three planned phases delivered and merged — 17 qa-legibility (#28),
+18 evalrecord-reasoning (#29, #30), 19 full-trace-hydration (#31, squash `a51305f`). The sprint
+goal is met: **a failed trace explains itself end-to-end**, verified in Phoenix on trace
+`qst_0498` (question → retrieved evidence → answer → judge verdict).
+
+**What worked**
+
+- **"Lead with the cheap win" ordering paid off.** Phase 17 (no re-run, no schema change) landed
+  most of the visible legibility and de-risked the sprint before the expensive Phase 19 sweep.
+- **The hard data boundary drove a clean split.** Identifying upfront what was already-available
+  (question + answer) vs not-persisted (judge reasoning) made the 17→18→19 decomposition obvious.
+- **ADR-0010 honored ADR-0007 instead of reversing it.** The bronze/gold split (verdicts → gold,
+  full raw payload → opt-in gitignored bronze) respected the clone-footprint decision rather than
+  silently re-adding everything to `EvalRecord`.
+
+**What slipped / scope changes**
+
+- **Phase 19's operational run missed `rag-classify`** → `failure_mode=None` on all 1500 records
+  reddened CI. Caught in `/review`, fixed (re-classify + report re-render), and the DESIGN runbook
+  patched so it can't recur. Root cause was a runbook gap, not a code bug — **the gate did its job.**
+- **The re-run grew 2 → 3 models** (Gemini added as a third generator-under-test, a former backlog
+  "closed-loop idea"), which finally exercises the dashboard's real multi-model comparison. Positive
+  scope creep, absorbed within the one budgeted sweep.
+
+**Decision recorded for the portfolio narrative:** the **3-layer separation** — aggregate dashboard
+→ per-trace Phoenix → ground truth in `rag-inspect` — was affirmed as deliberate. Gold stays out of
+traces because traces model runtime (production has no answer key). Surfaced when reviewing whether
+to hydrate `expected_doc_ids` onto spans; chosen not to.
+
+## Sprint Close
+
+- **Date closed:** 2026-06-04
+- **Phases:** 17 ✅ (#28) · 18 ✅ (#29, #30) · 19 ✅ (#31, `a51305f`). All `REVIEW.md` verdicts ✅ READY.
+- **ADRs:** ADR-0010 written + accepted (Phase 18, amends ADR-0007). None pending.
+- **KB (all Sprint-6 `/update-kb` done):** `rag-eval` `eval-record-schema` (#30); `observability`
+  `span-attribute-mapping` + `span-tree-shape`, `rag-generation` `raw-payload-serialization` (new),
+  `rag-eval` `bronze-raw-archive` (new) + `stats-capture-seam` (#31).
+- **Backlog generated:** resumable/cached eval sweep on the bronze substrate (own ADR/phase);
+  Phoenix native-widget cost/latency fidelity (LOW/cosmetic). Both in `docs/planning/roadmap.md`.
+- **Archived:** `.claude/sdd/features/sprint-6/` → `.claude/sdd/archive/sprint-6/`.
