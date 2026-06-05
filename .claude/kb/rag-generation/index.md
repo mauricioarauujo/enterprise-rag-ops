@@ -16,9 +16,10 @@
 
 ### Patterns
 
-| File                                                       | Purpose                                                   |
-| ---------------------------------------------------------- | --------------------------------------------------------- |
-| [patterns/add-a-generator.md](patterns/add-a-generator.md) | Recipe to add a fourth provider behind the Generator seam |
+| File                                                                         | Purpose                                                                                                                      |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [patterns/add-a-generator.md](patterns/add-a-generator.md)                   | Recipe to add a fourth provider behind the Generator seam                                                                    |
+| [patterns/router-cascade-composite.md](patterns/router-cascade-composite.md) | Cheap-default / escalate-on-low-trust cost router (LLM cascade); structural Generator, single-owner combined cost (ADR-0012) |
 
 ---
 
@@ -30,11 +31,12 @@
 
 ## Cross-Domain Links
 
-| Topic                                    | Owner                                                  |
-| ---------------------------------------- | ------------------------------------------------------ |
-| `generate_with_stats` stats-capture seam | `rag-eval` → `concepts/stats-capture-seam.md`          |
-| Bronze/gold split (ADR-0010)             | `rag-eval` → `concepts/eval-record-schema.md`          |
-| Cassette/replay testing (ADR-0006)       | `rag-eval` → `patterns/cassette-replay-eval.md`        |
-| Multi-model runner wiring                | `rag-eval` → `patterns/multi-model-runner.md`          |
-| Cost accounting (price table)            | `rag-eval` → `concepts/cost-accounting.md`             |
-| `gen_ai.system` span mapping             | `observability` → `concepts/span-attribute-mapping.md` |
+| Topic                                        | Owner                                                  |
+| -------------------------------------------- | ------------------------------------------------------ |
+| `generate_with_stats` stats-capture seam     | `rag-eval` → `concepts/stats-capture-seam.md`          |
+| Bronze/gold split (ADR-0010)                 | `rag-eval` → `concepts/eval-record-schema.md`          |
+| Cassette/replay testing (ADR-0006)           | `rag-eval` → `patterns/cassette-replay-eval.md`        |
+| Multi-model runner wiring                    | `rag-eval` → `patterns/multi-model-runner.md`          |
+| Cost accounting (price table)                | `rag-eval` → `concepts/cost-accounting.md`             |
+| Combined cost + runner cost-guard (ADR-0012) | `rag-eval` → `concepts/cost-accounting.md`             |
+| `gen_ai.system` span mapping                 | `observability` → `concepts/span-attribute-mapping.md` |

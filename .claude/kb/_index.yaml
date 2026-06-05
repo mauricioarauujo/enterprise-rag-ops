@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-06-03"
+last_updated: "2026-06-05"
 
 limits:
   quick_reference: 100
@@ -40,7 +40,12 @@ domains:
       scoring (empty-gold predicate, two-layer gate+generator, sentinel enforcement),
       cassette/replay testing with vcrpy (ADR-0006), multi-model sweep runner
       (single retriever, crash-safe JSONL flush, cost ceiling), cost accounting
-      (price-table-in-config, None on missing price), HTML+MD report rendering
+      (price-table-in-config, None on missing price; two-call combined cost — cheap always +
+      strong iff escalated, None→0.0, model/system="router" — manufactured by the router as the
+      single owner; the runner cost-guard invariant: recompute generator cost_usd only when None,
+      so a pre-set cost is owned not recomputed and the price-less "router" row survives,
+      backwards-compatible for the three concrete generators, ADR-0012; cost-per-correct-answer
+      metric deferred to phase-3), HTML+MD report rendering
       (string.Template, None->N/A, dynamic k), stats-capture seam
       (generate_with_stats / judge_with_stats on implementations), AnthropicGenerator
       (forced tool-use, max_retries=8, timeout=120), BGE-M3 encoder thread-safety
@@ -53,10 +58,10 @@ domains:
       run_id path-sanitization; RawCall 3rd-return transport, off-Protocol + off-gold, ADR-0010),
       and CallStats.confidence_score (float|None=None, Gemini-only verbalized confidence
       in [0,1], same optional-default pattern as cost_usd, escalation signal, ADR-0011).
-      ADRs: 0001, 0006, 0007, 0009, 0010, 0011.
+      ADRs: 0001, 0006, 0007, 0009, 0010, 0011, 0012.
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-04"
+    last_updated: "2026-06-05"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -204,9 +209,16 @@ domains:
       on system prompt; _parse_confidence extracts+clamps to [0,1] defensively; field stripped
       before AnswerWithSources.model_validate so shared closed schema is unchanged; signal rides
       CallStats.confidence_score (float|None=None, Gemini-only).
+      Router cascade composite (sprint-7/phase-2, ADR-0012): RouterGenerator composes two
+      injected Generators (cheap-default, escalate-on-low-trust) and conforms to the seam
+      STRUCTURALLY via generate (no inheritance, no _GENERATOR_FACTORY registration,
+      interfaces.py untouched); escalate unless confident-AND-not-abstaining (missing confidence
+      → escalate); single-owner combined cost (cheap always + strong iff escalated, None→0.0,
+      model="router"); gen_raw = the cheap call's RawCall. Pairs with the rag-eval runner
+      cost-guard invariant. ADRs: 0003, 0005, 0011, 0012.
     path: rag-generation/
     status: draft
-    last_updated: "2026-06-04"
+    last_updated: "2026-06-05"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -228,6 +240,9 @@ domains:
     patterns:
       - name: add-a-generator
         path: patterns/add-a-generator.md
+        confidence: 0.95
+      - name: router-cascade-composite
+        path: patterns/router-cascade-composite.md
         confidence: 0.95
 
   rag-retrieval:

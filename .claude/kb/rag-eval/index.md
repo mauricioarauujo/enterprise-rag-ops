@@ -11,27 +11,29 @@
 > **Phase 4 + Phase 5 + Phase 6 shipped** (Sprint 2, 2026-05-23–26).
 > **Phase 14 + Phase 15 shipped** (Sprint 5, 2026-06-02).
 > **Phase 19 shipped** (Sprint 6, 2026-06-03) — bronze writer + RawCall extension.
+> **Sprint 7 phase 2 shipped** (2026-06-05) — combined-cost + runner cost-guard invariant (ADR-0012).
 > ADRs: `docs/adr/0001-eval-framework.md`, `docs/adr/0007-eval-record-schema.md`,
-> `docs/adr/0009-triage-to-issues.md`, `docs/adr/0010-persist-judge-reasoning-bronze-gold.md`.
-> **Last updated**: 2026-06-03
+> `docs/adr/0009-triage-to-issues.md`, `docs/adr/0010-persist-judge-reasoning-bronze-gold.md`,
+> `docs/adr/0012-router-generator-composite.md`.
+> **Last updated**: 2026-06-05
 
 ## Quick Navigation
 
 ### Concepts
 
-| File                                                                                 | Purpose                                                                   |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| [concepts/per-doc-faithfulness.md](concepts/per-doc-faithfulness.md)                 | Why per-`doc_id` block isolation catches spurious citations               |
-| [concepts/none-empty-denominator.md](concepts/none-empty-denominator.md)             | `None` as N/A for empty-denominator eval ratios                           |
-| [concepts/schema-as-ssot.md](concepts/schema-as-ssot.md)                             | Private LLM-facing subset keeps floats out of strict schema               |
-| [concepts/judge-determinism.md](concepts/judge-determinism.md)                       | `strict: true` + closed Literal vocabulary vs. multi-sample               |
-| [concepts/retrieval-metric-aggregation.md](concepts/retrieval-metric-aggregation.md) | Per-category aggregation, None-skipping, dedup-before-metrics order       |
-| [concepts/abstention-scoring.md](concepts/abstention-scoring.md)                     | Empty-gold predicate, two-layer abstention, gate-rarely-fires insight     |
-| [concepts/eval-record-schema.md](concepts/eval-record-schema.md)                     | `EvalRecord` shape, OTEL alignment, `k` field, what is excluded (Phase 6) |
-| [concepts/cost-accounting.md](concepts/cost-accounting.md)                           | Price table in config, None on missing price, ceiling guard (Phase 6)     |
-| [concepts/stats-capture-seam.md](concepts/stats-capture-seam.md)                     | `generate_with_stats`/`judge_with_stats` — 3-tuple with `RawCall`         |
-| [concepts/bronze-raw-archive.md](concepts/bronze-raw-archive.md)                     | `BronzeWriter`: key scheme, thread model, idempotency, opt-in (ADR-0010)  |
-| [concepts/failure-triage.md](concepts/failure-triage.md)                             | Groupby-aggregate over classified JSONL → ranked `TriageReport` clusters  |
+| File                                                                                 | Purpose                                                                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| [concepts/per-doc-faithfulness.md](concepts/per-doc-faithfulness.md)                 | Why per-`doc_id` block isolation catches spurious citations                                                        |
+| [concepts/none-empty-denominator.md](concepts/none-empty-denominator.md)             | `None` as N/A for empty-denominator eval ratios                                                                    |
+| [concepts/schema-as-ssot.md](concepts/schema-as-ssot.md)                             | Private LLM-facing subset keeps floats out of strict schema                                                        |
+| [concepts/judge-determinism.md](concepts/judge-determinism.md)                       | `strict: true` + closed Literal vocabulary vs. multi-sample                                                        |
+| [concepts/retrieval-metric-aggregation.md](concepts/retrieval-metric-aggregation.md) | Per-category aggregation, None-skipping, dedup-before-metrics order                                                |
+| [concepts/abstention-scoring.md](concepts/abstention-scoring.md)                     | Empty-gold predicate, two-layer abstention, gate-rarely-fires insight                                              |
+| [concepts/eval-record-schema.md](concepts/eval-record-schema.md)                     | `EvalRecord` shape, OTEL alignment, `k` field, what is excluded (Phase 6)                                          |
+| [concepts/cost-accounting.md](concepts/cost-accounting.md)                           | Price table, None on missing price, ceiling guard; two-call combined cost + runner cost-guard invariant (ADR-0012) |
+| [concepts/stats-capture-seam.md](concepts/stats-capture-seam.md)                     | `generate_with_stats`/`judge_with_stats` — 3-tuple with `RawCall`                                                  |
+| [concepts/bronze-raw-archive.md](concepts/bronze-raw-archive.md)                     | `BronzeWriter`: key scheme, thread model, idempotency, opt-in (ADR-0010)                                           |
+| [concepts/failure-triage.md](concepts/failure-triage.md)                             | Groupby-aggregate over classified JSONL → ranked `TriageReport` clusters                                           |
 
 ### Patterns
 
@@ -74,6 +76,7 @@
 - vcrpy `record_mode="none"` by default — tests fail, never silently hit the network.
 - `vcr_record` fixture lives in root `tests/conftest.py`; it scrubs both request creds and account-identifying response headers via `before_record_response` (vcrpy 6 has no `filter_response_headers`).
 - `cost_usd` is `None` when the model is absent from the price table — never silent `0.0`.
+- **Cost-guard invariant (ADR-0012):** the runner recomputes generator `cost_usd` only when it is `None`; a generator that pre-sets it (the router's combined cost, the abstain stub's `0.0`) owns it. Backwards-compatible — the three concrete generators leave it `None`.
 - BGE-M3 encoder is not thread-safe; the runner serializes encode under `retrieve_lock`.
 - FR-10 guard checks index dir existence only, not gold-awareness — always run `make build-index-gold` before a sweep.
 - `EvalRecord` excludes `per_fact`/`per_citation` lists; only the three Python-derived aggregate floats are persisted.
