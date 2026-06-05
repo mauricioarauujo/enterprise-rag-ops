@@ -1,0 +1,37 @@
+# Sprint-7/phase-2 cost-router run (FR-11, ADR-0011). The `router:` block makes the sweep
+# include one synthetic "router" row: answer with the cheap gemini-2.5-flash-lite by
+# default, escalate to claude-haiku-4-5 when the cheap answer is not trustworthy
+# (confidence < threshold, missing confidence, or abstention — ADR-0011 §5). threshold=1.0
+# is the ADR-0011 operating point. `models` is empty: this config sweeps ONLY the router.
+# Judge stays OpenAI (gpt-5-nano) — independence preserved. The price table carries cheap,
+# strong, and judge entries: all three are needed for combined-cost accounting.
+
+models: []
+
+router:
+  cheap_model_id: "gemini-2.5-flash-lite"
+  strong_model_id: "claude-haiku-4-5-20251001"
+  threshold: 1.0
+
+judge_model: "gpt-5-nano-2025-08-07"
+
+limit: 20
+k: 10
+output_dir: "results"
+run_id: "router"
+
+cost_ceiling_usd: 5.0
+
+prices:
+  # Cheap model (always charged on every router call).
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40
+  # Strong model (charged only when the router escalates).
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
+  # Judge price (gpt-5-nano) — needed for judge-call cost accounting.
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40

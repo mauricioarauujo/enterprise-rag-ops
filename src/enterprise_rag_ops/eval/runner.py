@@ -11,6 +11,7 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NamedTuple
 
 from enterprise_rag_ops.eval.bronze import BronzeWriter
 from enterprise_rag_ops.eval.config import RunConfig
@@ -29,6 +30,7 @@ from enterprise_rag_ops.generation.cli import ABSTAIN_ANSWER
 from enterprise_rag_ops.generation.context import ContextAssembler
 from enterprise_rag_ops.generation.gemini_generator import GeminiGenerator
 from enterprise_rag_ops.generation.openai_generator import OpenAIGenerator
+from enterprise_rag_ops.generation.router_generator import RouterGenerator
 from enterprise_rag_ops.generation.schema import AnswerWithSources
 from enterprise_rag_ops.retrieval import config as retrieval_config
 from enterprise_rag_ops.retrieval import pipeline
@@ -42,6 +44,21 @@ _GENERATOR_FACTORY = {
     "anthropic": AnthropicGenerator,
     "google": GeminiGenerator,
 }
+
+
+class _SweepUnit(NamedTuple):
+    """One row in the sweep: a model identity + its constructed generator.
+
+    Generalises `ModelConfig` so the loop body is generator-source-agnostic. Real models
+    map 1:1 from `config.models`; the cost-router (FR-8) is appended as a synthetic
+    ``("router", "router")`` unit — it is NOT a `ModelConfig`, whose `system` Literal
+    excludes ``"router"``.
+    """
+
+    model_id: str
+    system: str
+    generator: object
+
 
 # FR-10: dirs existing is not enough — a *plain* index passes the existence check but
 # contains ≈none of the benchmark's gold docs, so retrieval recall is ~0% and every score
@@ -134,23 +151,56 @@ def run_evaluation(
     questions = list(load_questions(limit=config.limit))
     logger.info("Loaded %d questions for evaluation.", len(questions))
 
+    # Build the sweep: one _SweepUnit per real model, plus the synthetic router row (FR-8).
+    sweep_units: list[_SweepUnit] = []
+    for model in config.models:
+        generator_cls = gen_factory.get(model.system)
+        if not generator_cls:
+            raise ValueError(f"Unsupported system type: {model.system}")
+        sweep_units.append(
+            _SweepUnit(model.model_id, model.system, generator_cls(model=model.model_id))
+        )
+
+    # FR-8: append the cost-router as a synthetic ("router","router") row. Its cheap/strong
+    # sub-generators resolve through the SAME gen_factory seam the real models use — in
+    # production "google"->GeminiGenerator and "anthropic"->AnthropicGenerator (FR-8), while
+    # tests inject fakes through the same factory. The router is never a ModelConfig (C-2).
+    if config.router is not None:
+        router = config.router
+        cheap_cls = gen_factory.get("google")
+        strong_cls = gen_factory.get("anthropic")
+        if cheap_cls is None or strong_cls is None:
+            raise ValueError(
+                "RouterGenerator requires 'google' (cheap) and 'anthropic' (strong) "
+                "entries in the generator factory."
+            )
+        sweep_units.append(
+            _SweepUnit(
+                "router",
+                "router",
+                RouterGenerator(
+                    cheap=cheap_cls(model=router.cheap_model_id),
+                    strong=strong_cls(model=router.strong_model_id),
+                    prices=config.prices,
+                    cheap_model_id=router.cheap_model_id,
+                    strong_model_id=router.strong_model_id,
+                    threshold=router.threshold,
+                ),
+            )
+        )
+
     # Open file for writing
     with open(output_path, "w", encoding="utf-8") as f:
-        for model in config.models:
+        for unit in sweep_units:
             if halt_run:
                 break
 
-            generator_cls = gen_factory.get(model.system)
-            if not generator_cls:
-                raise ValueError(f"Unsupported system type: {model.system}")
+            logger.info("Starting evaluation for model: %s (%s)", unit.model_id, unit.system)
 
-            logger.info("Starting evaluation for model: %s (%s)", model.model_id, model.system)
-
-            # Instantiate generator and judge
-            generator = generator_cls(model=model.model_id)
+            # Instantiate the judge (the generator is already built into the sweep unit).
             judge = resolved_judge_class(model=config.judge_model)
 
-            def process_one(q: Question, model=model, generator=generator, judge=judge) -> None:
+            def process_one(q: Question, model=unit, generator=unit.generator, judge=judge) -> None:
                 nonlocal total_cost_usd, halt_run
 
                 # Read shared halt/ceiling state under the lock that owns it — bare reads
@@ -196,9 +246,14 @@ def run_evaluation(
                     retrieved_docs=ctx_chunks,
                 )
 
-                # 4. Cost accounting (FR-8)
-                gen_price = config.prices.get(gen_stats.model)
-                gen_stats.cost_usd = compute_cost_usd(gen_stats, gen_price)
+                # 4. Cost accounting (FR-8, FR-9). Guard: a generator that already set
+                # cost_usd owns its cost and the runner treats it as final — the router
+                # (FR-5) manufactures the true combined cheap+strong cost, and the
+                # retrieval-abstain stub pre-sets 0.0. Every single-model generator returns
+                # cost_usd=None, so the body runs exactly as before (NFR-4, AC-10).
+                if gen_stats.cost_usd is None:
+                    gen_price = config.prices.get(gen_stats.model)
+                    gen_stats.cost_usd = compute_cost_usd(gen_stats, gen_price)
 
                 judge_price = config.prices.get(judge_stats.model)
                 judge_stats.cost_usd = compute_cost_usd(judge_stats, judge_price)
