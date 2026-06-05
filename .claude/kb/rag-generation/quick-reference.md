@@ -66,6 +66,15 @@ Configured once in `tests/conftest.py` via `vcr.VCR(filter_headers=..., filter_q
 | Older logprob models retired | `gemini-1.5-flash`, `gemini-2.0-flash` → 404; no fallback available                                                                                                                |
 | Confidence signal workaround | Add `confidence: float` to `_GeminiResponseSchema` + `_CONFIDENCE_ADDENDUM` on system prompt; strip field before `AnswerWithSources` validation; ride `CallStats.confidence_score` |
 
+## Router Cascade Composite (ADR-0012)
+
+| Item            | Detail                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Conformance     | Structural `Generator` via `generate` — no inheritance, no `_GENERATOR_FACTORY`, `interfaces.py` untouched       |
+| Escalation rule | Escalate unless `confidence_score >= threshold` AND not `ABSTAIN_ANSWER`; missing confidence → escalate          |
+| Combined cost   | Single owner: cheap always + strong iff escalated, `None`→`0.0`; `model="router"`, conf/`gen_raw` = cheap's      |
+| Cost-guard pair | Runner skips recompute when `cost_usd` is pre-set → router's combined cost survives (`rag-eval` cost-accounting) |
+
 ## Common Pitfalls
 
 | Don't                                                           | Do                                                                                             |

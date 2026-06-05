@@ -16,7 +16,10 @@ issues, give every issue a `file:line` and a fix.
 
 ### 1. Gather context
 
-- `git diff origin/main...HEAD` — the full diff.
+- `git diff origin/main...HEAD` — the full diff. **If that range is empty** (the phase
+  reached `/review` before any commit — common in SDD), fall back to the working tree:
+  `git diff HEAD` for modified/staged files **plus** the untracked files listed by
+  `git status --short` (read each in full). Tell the code-reviewer which scope you used.
 - Read every changed file in full.
 - Load `DEFINE.md` / `DESIGN.md` from `.claude/sdd/features/{slug}/` if they exist.
 

@@ -24,7 +24,11 @@ model: sonnet
 
 ## Mandatory Reads
 
-1. `git diff origin/main...HEAD` — and every changed file in full.
+1. The change set in full. Use `git diff origin/main...HEAD` when the branch has commits;
+   when that range is empty (the phase reached review before any commit), review the
+   **working tree** instead — `git diff HEAD` plus the untracked files from
+   `git status --short`. The invoker tells you which scope applies; default to the
+   working-tree fallback if the committed range is empty.
 2. `.claude/sdd/features/{slug}/DEFINE.md` — acceptance criteria, if it exists.
 3. Relevant KB domains from `.claude/kb/_index.yaml`.
 

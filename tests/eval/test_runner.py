@@ -477,6 +477,138 @@ def test_runner_populates_verdicts_ac4(monkeypatch, tmp_path, run_config):
     assert record["per_citation"][0]["verdict"] == "supported"
 
 
+def _patch_gold_index(monkeypatch, tmp_path):
+    """Shared boilerplate: a gold-aware temp index + a single-question loader."""
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.eval.questions import Question
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+    from enterprise_rag_ops.retrieval import pipeline
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+    monkeypatch.setattr(pipeline, "load_retriever", lambda: MockRetriever())
+    monkeypatch.setattr(
+        runner,
+        "load_questions",
+        lambda limit: [Question("q1", "Q1", ["F1"], ["doc_1"], "cat")],
+    )
+
+
+def test_runner_router_row_cost_not_overwritten(monkeypatch, tmp_path, run_config):
+    """AC-9: a router sweep row writes gen_ai.system/model == 'router' and the runner cost
+    guard preserves the router-manufactured combined cost (does NOT recompute it).
+
+    Proof: a "router" model has no price entry, so the old *unconditional* recompute would
+    have set generation.cost_usd to null. It is instead the manufactured float, which only
+    holds if the `if cost_usd is None` guard skipped recomputation.
+    """
+    from enterprise_rag_ops.eval.config import RouterConfig
+    from enterprise_rag_ops.eval.raw_call import RawCall
+    from enterprise_rag_ops.eval.records import CallStats, Price
+
+    _patch_gold_index(monkeypatch, tmp_path)
+
+    # Cheap fake: confidence 0.0 (< threshold) -> escalate; non-zero tokens for a real cost.
+    class RouterCheap(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            return (
+                self.generate(chunks, question),
+                CallStats(
+                    input_tokens=100,
+                    output_tokens=50,
+                    latency_s=0.1,
+                    model=self._model,
+                    system="google",
+                    confidence_score=0.0,
+                ),
+                RawCall(request={"model": self._model}, response={}),
+            )
+
+    class RouterStrong(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            return (
+                self.generate(chunks, question),
+                CallStats(
+                    input_tokens=200,
+                    output_tokens=80,
+                    latency_s=0.3,
+                    model=self._model,
+                    system="anthropic",
+                ),
+                RawCall(request={"model": self._model}, response={}),
+            )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = []  # sweep ONLY the router row
+    run_config.router = RouterConfig(
+        cheap_model_id="cheap-x", strong_model_id="strong-x", threshold=1.0
+    )
+    run_config.prices = {
+        "cheap-x": Price(input_usd_per_1m=1.0, output_usd_per_1m=2.0),
+        "strong-x": Price(input_usd_per_1m=10.0, output_usd_per_1m=20.0),
+        "gpt-5-nano-test": Price(input_usd_per_1m=0.0, output_usd_per_1m=0.0),
+    }
+
+    output_path = run_evaluation(
+        run_config,
+        generator_classes={
+            "google": RouterCheap,
+            "anthropic": RouterStrong,
+            "openai": StubGenerator,
+        },
+        judge_class=StubJudge,
+    )
+
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert rec["gen_ai"]["system"] == "router"
+    assert rec["gen_ai"]["request"]["model"] == "router"
+    assert rec["generation"]["model"] == "router"
+    # cheap_cost = 100e-6*1 + 50e-6*2 = 0.0002 ; strong_cost = 200e-6*10 + 80e-6*20 = 0.0036
+    assert rec["generation"]["cost_usd"] == pytest.approx(0.0038)
+
+
+def test_runner_cost_guard_backwards_compat_single_model(monkeypatch, tmp_path, run_config):
+    """AC-10: for a single-model config whose generator returns cost_usd=None, the runner
+    still fills generation.cost_usd from the price table exactly as before the guard."""
+    from enterprise_rag_ops.eval.raw_call import RawCall
+    from enterprise_rag_ops.eval.records import CallStats
+
+    _patch_gold_index(monkeypatch, tmp_path)
+
+    class NoneCostGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            return (
+                self.generate(chunks, question),
+                CallStats(
+                    input_tokens=100,
+                    output_tokens=50,
+                    latency_s=0.1,
+                    model=self._model,
+                    system="openai",
+                ),  # cost_usd defaults to None — the runner must compute it
+                RawCall(request={"model": self._model}, response={}),
+            )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # model-a (openai), price in=0.1 out=0.2
+
+    output_path = run_evaluation(
+        run_config,
+        generator_classes={"openai": NoneCostGenerator},
+        judge_class=StubJudge,
+    )
+
+    rec = json.loads(output_path.read_text().splitlines()[0])
+    # 100e-6*0.1 + 50e-6*0.2 = 1e-5 + 1e-5 = 2e-5
+    assert rec["generation"]["cost_usd"] == pytest.approx(2e-5)
+
+
 def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
     """AC-8: persist_bronze writes gen and judge bronze files, matches JSONL outputs."""
     from enterprise_rag_ops.retrieval import config as retrieval_config

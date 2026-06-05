@@ -2,11 +2,11 @@
 
 ## Metric Formulas
 
-| Metric               | Formula | `None` when |
-| -------------------- | ------- | ----------- | --- | --------- | --- | ----------------------- | --- | --- | ------- | --- | ------------ | ----- |
-| `fact_recall`        | `       | present     | /   | facts     | `   | `per_fact` is empty     |
-| `fact_precision`     | `       | present     | / ( | present   | +   | contradicted            | )`  | `   | present | +   | contradicted | == 0` |
-| `faithfulness_ratio` | `       | supported   | /   | citations | `   | `per_citation` is empty |
+| Metric               | Formula                              | `None` when                   |
+| -------------------- | ------------------------------------ | ----------------------------- |
+| `fact_recall`        | `present / facts`                    | `per_fact` is empty           |
+| `fact_precision`     | `present / (present + contradicted)` | `present + contradicted == 0` |
+| `faithfulness_ratio` | `supported / citations`              | `per_citation` is empty       |
 
 Full abstention (no facts, no citations) → `(None, None, None)`.  
 Downstream averaging must **exclude** `None`, not coerce to `0`.
@@ -22,8 +22,7 @@ Downstream averaging must **exclude** `None`, not coerce to `0`.
 
 ## Judge call / Prompt
 
-`response_format`: `type=json_schema`, `name=JudgeVerdict`, `schema=_LLMJudgeVerdict.model_json_schema()`, `strict=True`.  
-Prompt: `System` = role+rubric+schema; `User` = QUESTION / ANSWER / GOLD FACTS (numbered) / CITED DOCUMENTS (one block per `doc_id`).
+`response_format`: `type=json_schema`, `name=JudgeVerdict`, `schema=_LLMJudgeVerdict.model_json_schema()`, `strict=True`. Prompt: `System` = role+rubric+schema; `User` = QUESTION / ANSWER / GOLD FACTS (numbered) / CITED DOCUMENTS (one block per `doc_id`).
 
 ## Env variables
 
@@ -35,18 +34,15 @@ Prompt: `System` = role+rubric+schema; `User` = QUESTION / ANSWER / GOLD FACTS (
 ## Retrieval Aggregation
 
 ```python
-# eval/retrieval_eval.py
-results = aggregate_retrieval_metrics(questions, ranked_results, k=10)
-# → {"single_hop": {"recall_at_10": 0.72, "mrr": 0.65, ...}, ...}
-# None if a category has no valid values (e.g. all unanswerable).
+results = aggregate_retrieval_metrics(questions, ranked_results, k=10)  # eval/retrieval_eval.py
+# → {"single_hop": {"recall_at_10": 0.72, "mrr": 0.65, ...}, ...}; None if a category has no valid values.
 ```
 
 ## Abstention Precision/Recall
 
 ```python
-# eval/abstention.py
-# Predicate: len(expected_doc_ids) == 0  (NOT category == "info_not_found")
-# e2e: answer == ABSTAIN_ANSWER (exact sentinel from generation/schema.py) and sources == []
+# eval/abstention.py — predicate: len(expected_doc_ids) == 0 (NOT category=="info_not_found")
+# e2e: answer == ABSTAIN_ANSWER (exact sentinel, generation/schema.py) and sources == []
 evaluate_retrieval_abstention(questions, retrieved_results)  # retriever returned []
 evaluate_e2e_abstention(questions, answers)
 # → {"precision": float|None, "recall": float|None, "tp", "fp", "fn", "tn"}
@@ -55,8 +51,7 @@ evaluate_e2e_abstention(questions, answers)
 ## Cassette/Replay (vcrpy)
 
 ```python
-# tests/conftest.py — shared root fixture (Phase 6+)
-# Filters request creds AND scrubs account-identifying response headers.
+# tests/conftest.py — shared root fixture (Phase 6+). Scrubs creds + account headers.
 # vcrpy 6 has no filter_response_headers — use before_record_response.
 vcr.VCR(
     cassette_library_dir="tests/eval/cassettes",
@@ -64,7 +59,6 @@ vcr.VCR(
     filter_headers=["authorization", "x-api-key"],
     before_record_response=_scrub_response,   # drops org-id, set-cookie, cf-ray
 )
-
 # Record: VCR_RECORD_MODE=once uv run pytest tests/eval/test_abstention.py -m vcr
 # Replay (default): make test  (no key, no network)
 ```
@@ -88,6 +82,11 @@ rag-issues ... --all-clusters                     # all clusters (default: domin
 | Fingerprint      | `rag-triage-cluster: {fm}\|{cat} schema={version}` — substring of hidden HTML marker |
 | Default labels   | `["rag-triage"]`                                                                     |
 
+## Router Combined Cost + Cost-Guard (ADR-0012)
+
+- Combined cost (`RouterGenerator`): cheap always + strong iff escalated, `None`→`0.0`, `model="router"`.
+- Runner guard `if gen_stats.cost_usd is None:` — a pre-set generator cost is owned, not recomputed (the `"router"` row, with no price entry, survives); judge cost always recomputed. Out of scope: cost-per-correct-answer metric (phase-3). See `concepts/cost-accounting.md` + `rag-generation/patterns/router-cascade-composite.md`.
+
 ## File map (key modules)
 
 Phase 4/5: `eval/schema.py` · `eval/aggregate.py` · `eval/interfaces.py` · `eval/prompt.py`
@@ -98,3 +97,4 @@ Phase 6: `eval/records.py` · `eval/config.py` · `eval/runner.py` · `eval/repo
 · `generation/openai_generator.py` · `generation/anthropic_generator.py` · `tests/conftest.py`
 Phase 14+15: `eval/triage.py` · `eval/triage_cli.py` · `eval/issues.py` · `eval/github.py` · `eval/issues_cli.py`
 Phase 19: `eval/raw_call.py` (RawCall) · `eval/bronze.py` (BronzeWriter) — bronze archive, opt-in via `RunConfig.persist_bronze`
+S7-P2: `generation/router_generator.py` (RouterGenerator) · `eval/config.py` (RouterConfig) · `eval/runner.py` (cost-guard) — ADR-0012

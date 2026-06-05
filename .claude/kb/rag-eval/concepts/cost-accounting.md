@@ -1,9 +1,10 @@
 # Cost Accounting in Multi-Model Sweeps
 
 > **Purpose**: How token-cost is captured per call, accumulated across a sweep, and
-> guarded by a ceiling — including the "None on missing price, never silent 0" rule.
-> **Confidence**: HIGH (codebase — `eval/records.py`, `eval/runner.py`, ADR-0007)
-> **ADR**: `docs/adr/0007-eval-record-schema.md`
+> guarded by a ceiling — the "None on missing price, never silent 0" rule, plus
+> two-call **combined** cost and the runner **cost-guard invariant** (ADR-0012).
+> **Confidence**: HIGH (codebase — `eval/records.py`, `eval/runner.py`, `generation/router_generator.py`, ADR-0007, ADR-0012)
+> **ADR**: `docs/adr/0007-eval-record-schema.md`, `docs/adr/0012-router-generator-composite.md`
 
 ## Price Table in Config
 
@@ -76,10 +77,60 @@ that model has a `None` cost field — partial missing-price entries are treated
 "total unknown", not as partial sums. This prevents misleadingly low totals when only
 some calls had prices.
 
+## Two-Call Combined Cost (Router, ADR-0012)
+
+A cost-router (an LLM cascade) makes a cheap call **always** and a strong call **iff**
+it escalates. The `RouterGenerator` is the _single owner_ of the combined cost — it is
+the only site holding both sub-`CallStats` objects and the price table — so it
+manufactures one output `CallStats` rather than letting the runner sum two rows:
+
+```python
+# generation/router_generator.py — combined cost (cheap always, strong iff escalated)
+cost_usd = (cheap_cost or 0.0) + ((strong_cost or 0.0) if escalate else 0.0)
+```
+
+- Tokens and `latency_s` are summed the same way (cheap always + strong-iff-escalated).
+- `model = "router"`, `system = "router"` (synthetic identity; both are `str`, not the
+  `ModelConfig` `Literal`, so no schema change).
+- `confidence_score` on the output is the **cheap** call's signal.
+- `None` summands map to `0.0`, mirroring the runner's `(x or 0.0)` convention.
+
+This enforces the #1 research-fairness rule: the cheap call is **always** charged on an
+escalated query — never dropped, never double-counted. See the rag-generation pattern
+[../../rag-generation/patterns/router-cascade-composite.md](../../rag-generation/patterns/router-cascade-composite.md).
+
+## The Runner Cost-Guard Invariant (the load-bearing bit)
+
+The runner's cost line changed from an **unconditional** recompute to a **guarded** one:
+
+```python
+# eval/runner.py — before: cost_usd = compute_cost_usd(...)   (always)
+if gen_stats.cost_usd is None:                                 # after: guarded
+    gen_stats.cost_usd = compute_cost_usd(gen_stats, config.prices.get(gen_stats.model))
+```
+
+**Invariant:** _a generator that pre-sets `cost_usd` owns its cost — the runner treats
+it as final and does not recompute._ This is what lets the router's manufactured
+combined cost survive: a `"router"` model has **no price-table entry**, so an
+unconditional recompute would `compute_cost_usd → None` and **null** the true combined
+figure.
+
+The guard is **backwards-compatible**: all three concrete generators build `CallStats`
+without `cost_usd` (defaults to `None`), so the body runs exactly as before for every
+single-model config. The retrieval-abstain stub already pre-set `cost_usd=0.0` and now
+correctly keeps it (0 tokens × any price = 0.0, unchanged). The judge cost is _always_
+recomputed — only the generator line is guarded.
+
+> **Forward reference (out of scope):** the **cost-per-correct-answer** metric — the
+> point of the router sweep — is **not** documented here; it stabilizes in phase-3.
+
 ## Related
 
 - `eval/records.py` — `Price`, `CallStats`, `compute_cost_usd`
-- `eval/config.py` — `RunConfig.prices`, `cost_ceiling_usd`
-- `eval/runner.py` — cost accumulation + ceiling guard
+- `eval/config.py` — `RunConfig.prices`, `cost_ceiling_usd`, `RouterConfig`
+- `eval/runner.py` — cost accumulation + ceiling guard + the cost-guard invariant
+- `generation/router_generator.py` — combined-cost single owner (ADR-0012)
+- [stats-capture-seam.md](stats-capture-seam.md) — the `*_with_stats` 3-tuple the router composes
 - [eval-record-schema.md](eval-record-schema.md)
 - [../patterns/multi-model-runner.md](../patterns/multi-model-runner.md)
+- [../../rag-generation/patterns/router-cascade-composite.md](../../rag-generation/patterns/router-cascade-composite.md)
