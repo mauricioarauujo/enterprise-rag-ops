@@ -1,0 +1,53 @@
+# Routing evaluation sweep — sprint-7/phase-3 (FR-1, FR-7).
+# One combined run: the three single-model baselines under `models:` PLUS a `router:` block.
+# The runner appends the router as a synthetic ("router","router") row, so all four systems
+# answer the SAME questions through the SAME retriever, scored by the SAME judge, in ONE
+# JSONL — the fairness gold standard for the cost-per-correct head-to-head (NFR-2).
+
+models:
+  - model_id: "gpt-5-nano-2025-08-07"
+    system: "openai"
+  - model_id: "claude-haiku-4-5-20251001"
+    system: "anthropic"
+  - model_id: "gemini-2.5-flash-lite"
+    system: "google"
+
+# Cost-router: cheap (Gemini) by default, escalate to strong (Haiku) on the ADR-0011 signal.
+# threshold 1.0 is the ADR-0011 operating point (escalate unless maximally confident & answered).
+router:
+  cheap_model_id: "gemini-2.5-flash-lite"
+  strong_model_id: "claude-haiku-4-5-20251001"
+  threshold: 1.0
+
+# The judge model to evaluate answers
+judge_model: "gpt-5-nano-2025-08-07"
+
+# Optional limit on number of questions (null = run all 500)
+limit: null
+
+# Retrieval k-cutoff
+k: 10
+
+# Output results location
+output_dir: "results"
+
+# Unique run identifier (-> results/routing-eval.jsonl)
+run_id: "routing-eval"
+
+# Cost-overrun guard ceiling in USD (FR-7). ~2x headroom over the ~$4.79 gen estimate
+# for the 4-way 500-q sweep + judge overhead; a runaway halt, not a budget target.
+cost_ceiling_usd: 10.0
+
+# Price table: in_usd_per_1m and out_usd_per_1m (cheap + strong + judge all present).
+prices:
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40
+  # claude-haiku-4-5 price verified against Anthropic's official pricing page.
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
+  # gemini-2.5-flash-lite price verified against Google's official Gemini API pricing.
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40

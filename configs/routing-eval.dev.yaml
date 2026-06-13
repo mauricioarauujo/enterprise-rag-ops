@@ -1,0 +1,43 @@
+# Routing evaluation DEV sweep — sprint-7/phase-3 (FR-1, FR-10).
+# Identical to routing-eval.yaml except limit: 20 and a distinct run_id (no clobber).
+# Run this end-to-end (sweep -> classify -> scripts/routing_evaluation.py) to validate the
+# full pipeline before the single, capped 500-question production sweep.
+
+models:
+  - model_id: "gpt-5-nano-2025-08-07"
+    system: "openai"
+  - model_id: "claude-haiku-4-5-20251001"
+    system: "anthropic"
+  - model_id: "gemini-2.5-flash-lite"
+    system: "google"
+
+router:
+  cheap_model_id: "gemini-2.5-flash-lite"
+  strong_model_id: "claude-haiku-4-5-20251001"
+  threshold: 1.0
+
+judge_model: "gpt-5-nano-2025-08-07"
+
+# Dev iteration: 20 questions only (FR-10).
+limit: 20
+
+k: 10
+
+output_dir: "results"
+
+# Distinct run_id (-> results/routing-eval-dev.jsonl) so the dev run never clobbers the full one.
+run_id: "routing-eval-dev"
+
+# Same ceiling; a 20-q sweep stays far under it (keeping one knob avoids drift).
+cost_ceiling_usd: 10.0
+
+prices:
+  gpt-5-nano-2025-08-07:
+    input_usd_per_1m: 0.05
+    output_usd_per_1m: 0.40
+  claude-haiku-4-5-20251001:
+    input_usd_per_1m: 1.00
+    output_usd_per_1m: 5.00
+  gemini-2.5-flash-lite:
+    input_usd_per_1m: 0.10
+    output_usd_per_1m: 0.40
