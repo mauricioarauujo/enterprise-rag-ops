@@ -739,3 +739,237 @@ def test_runner_persist_bronze_integration(monkeypatch, tmp_path, run_config):
     # AC-8: exactly one generator + one judge call this run — bronze adds no extra call.
     assert gen_calls == 1
     assert judge_calls == 1
+
+
+# --- Resilience: transient-error skip + resume (sprint-7/phase-3 runner hardening) ---------
+
+
+def _setup_index_and_questions(monkeypatch, tmp_path, questions):
+    """Shared boilerplate: a gold-aware stub index, a mocked retriever, and a patched
+    load_questions returning `questions`. Mirrors the setup used across this module."""
+    from enterprise_rag_ops.eval import runner
+    from enterprise_rag_ops.retrieval import config as retrieval_config
+
+    (tmp_path / "bm25").mkdir()
+    (tmp_path / "lancedb").mkdir()
+    (tmp_path / "chunks.json").write_text('["doc_1::0"]')
+    monkeypatch.setattr(retrieval_config, "BM25_INDEX_DIR", tmp_path / "bm25")
+    monkeypatch.setattr(retrieval_config, "LANCEDB_DIR", tmp_path / "lancedb")
+    monkeypatch.setattr(retrieval_config, "CHUNK_ORDER_PATH", tmp_path / "chunks.json")
+
+    from enterprise_rag_ops.retrieval import pipeline
+
+    monkeypatch.setattr(pipeline, "load_retriever", lambda: MockRetriever())
+    monkeypatch.setattr(runner, "load_questions", lambda limit: questions)
+
+
+def test_runner_skips_transient_error_and_continues(monkeypatch, tmp_path, run_config, caplog):
+    """A transient API/network error on one question is logged and skipped (a resumable
+    gap), NOT fatal — the rest of the sweep still completes and the JSONL is short, not empty.
+    Contrast with test_runner_flushes_jsonl_early_stop, where a non-transient RuntimeError
+    still propagates and halts the run."""
+    import logging
+
+    import httpx
+
+    from enterprise_rag_ops.eval.questions import Question
+
+    _setup_index_and_questions(
+        monkeypatch,
+        tmp_path,
+        [
+            Question("q1", "Q1", ["F1"], ["doc_1"], "cat"),
+            Question("q2", "Q2", ["F2"], ["doc_1"], "cat"),
+        ],
+    )
+
+    call_count = 0
+
+    class TransientGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+            return super().generate_with_stats(chunks, question)
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # single (openai) model
+
+    with caplog.at_level(logging.WARNING):
+        output_path = run_evaluation(
+            run_config,
+            generator_classes={"openai": TransientGenerator},
+            judge_class=StubJudge,
+        )
+
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 1  # q2 skipped, q1 written — run did not crash
+    assert json.loads(lines[0])["question_id"] == "q1"
+    assert "Transient error on q2" in caplog.text
+    assert "Re-run with `--resume`" in caplog.text
+
+
+def test_runner_resume_skips_completed_and_fills_gaps(monkeypatch, tmp_path, run_config):
+    """resume=True: an existing {run_id}.jsonl is appended to — every (system, question_id)
+    already present is skipped and only the gaps are (re)run. No duplicates; prior records
+    preserved."""
+    from enterprise_rag_ops.eval.questions import Question
+    from enterprise_rag_ops.eval.records import (
+        CallStats,
+        EvalRecord,
+        GenAiFields,
+        GenAiRequest,
+    )
+
+    _setup_index_and_questions(
+        monkeypatch,
+        tmp_path,
+        [
+            Question("q1", "Q1", ["F1"], ["doc_1"], "cat"),
+            Question("q2", "Q2", ["F2"], ["doc_1"], "cat"),
+        ],
+    )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # single (openai) model
+    output_path = tmp_path / "test_run.jsonl"
+
+    # Pre-write a completed record for (openai, q1) — the "already done" half.
+    prior = EvalRecord(
+        question_id="q1",
+        category="cat",
+        run_id="test_run",
+        gen_ai=GenAiFields(request=GenAiRequest(model="model-a"), system="openai"),
+        generation=CallStats(
+            input_tokens=1,
+            output_tokens=1,
+            latency_s=0.1,
+            model="model-a",
+            system="openai",
+            cost_usd=0.001,
+        ),
+        judge=CallStats(
+            input_tokens=1,
+            output_tokens=1,
+            latency_s=0.1,
+            model="gpt-5-nano-test",
+            system="openai",
+            cost_usd=0.001,
+        ),
+        answer="prior",
+        sources=[],
+        did_abstain_retrieval=False,
+        did_abstain_e2e=False,
+        failure_mode="correct",
+    )
+    output_path.write_text(prior.model_dump_json() + "\n")
+
+    gen_calls = []
+
+    class CountingGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            gen_calls.append(question)
+            return super().generate_with_stats(chunks, question)
+
+    run_evaluation(
+        run_config,
+        generator_classes={"openai": CountingGenerator},
+        judge_class=StubJudge,
+        resume=True,
+    )
+
+    lines = output_path.read_text().splitlines()
+    qids = sorted(json.loads(line)["question_id"] for line in lines)
+    assert qids == ["q1", "q2"]  # q1 preserved (no dup), q2 appended
+    assert len(gen_calls) == 1  # only q2 was generated — q1 skipped via resume
+    # The preserved q1 row is the original (answer="prior"), untouched.
+    q1_row = next(json.loads(line) for line in lines if json.loads(line)["question_id"] == "q1")
+    assert q1_row["answer"] == "prior"
+
+
+def test_runner_no_resume_truncates_existing(monkeypatch, tmp_path, run_config):
+    """resume=False (default) preserves the original contract: an existing JSONL is
+    truncated, not appended."""
+    from enterprise_rag_ops.eval.questions import Question
+
+    _setup_index_and_questions(
+        monkeypatch,
+        tmp_path,
+        [Question("q1", "Q1", ["F1"], ["doc_1"], "cat")],
+    )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]
+    output_path = tmp_path / "test_run.jsonl"
+    output_path.write_text('{"stale": "row"}\n')
+
+    run_evaluation(
+        run_config,
+        generator_classes={"openai": StubGenerator},
+        judge_class=StubJudge,
+    )
+
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["question_id"] == "q1"  # fresh content, stale row gone
+
+
+def test_runner_transient_then_resume_fills_gap(monkeypatch, tmp_path, run_config):
+    """The operationally critical path the --resume flag exists for: a first sweep hits a
+    transient error on q2 (leaving a gap), then a resume pass fills exactly that gap — q1 is
+    not re-run and the JSONL ends with both rows, no duplicates."""
+    import httpx
+
+    from enterprise_rag_ops.eval.questions import Question
+
+    _setup_index_and_questions(
+        monkeypatch,
+        tmp_path,
+        [
+            Question("q1", "Q1", ["F1"], ["doc_1"], "cat"),
+            Question("q2", "Q2", ["F2"], ["doc_1"], "cat"),
+        ],
+    )
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # single (openai) model
+    output_path = tmp_path / "test_run.jsonl"
+
+    # Pass 1: q2 raises a transient error → gap. q1 is written.
+    pass1_calls = 0
+
+    class FlakyGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            nonlocal pass1_calls
+            pass1_calls += 1
+            if pass1_calls == 2:
+                raise httpx.RemoteProtocolError("Server disconnected")
+            return super().generate_with_stats(chunks, question)
+
+    run_evaluation(
+        run_config,
+        generator_classes={"openai": FlakyGenerator},
+        judge_class=StubJudge,
+    )
+    pass1 = sorted(json.loads(line)["question_id"] for line in output_path.read_text().splitlines())
+    assert pass1 == ["q1"]  # q2 is a gap
+
+    # Pass 2 (resume): only the q2 gap should be generated; q1 skipped.
+    pass2_questions = []
+
+    class HealthyGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            pass2_questions.append(question)
+            return super().generate_with_stats(chunks, question)
+
+    run_evaluation(
+        run_config,
+        generator_classes={"openai": HealthyGenerator},
+        judge_class=StubJudge,
+        resume=True,
+    )
+
+    final = sorted(json.loads(line)["question_id"] for line in output_path.read_text().splitlines())
+    assert final == ["q1", "q2"]  # gap filled, no duplicate q1
+    assert len(pass2_questions) == 1  # resume re-ran only the gap

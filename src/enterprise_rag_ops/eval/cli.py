@@ -44,6 +44,14 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write raw request+response bronze files to data/raw_eval/.",
     )
+    run_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume an interrupted run: append to the existing {run_id}.jsonl, skipping "
+            "every (system, question_id) already present and (re)running only the gaps."
+        ),
+    )
 
     # Sub-command 'report'
     report_parser = subparsers.add_parser(
@@ -78,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
                 config.persist_bronze = True
 
             logger.info("Starting evaluation sweep with configuration: %s", config_path)
-            jsonl_path = run_evaluation(config, concurrency=args.concurrency)
+            jsonl_path = run_evaluation(config, concurrency=args.concurrency, resume=args.resume)
             logger.info("Evaluation sweep complete. Output JSONL: %s", jsonl_path)
 
             # Auto-render reports (Decision 3-C / AC-8)

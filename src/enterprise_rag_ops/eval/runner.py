@@ -13,6 +13,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
 
+import anthropic
+import httpx
+import openai
+
 from enterprise_rag_ops.eval.bronze import BronzeWriter
 from enterprise_rag_ops.eval.config import RunConfig
 from enterprise_rag_ops.eval.openai_judge import OpenAIJudge
@@ -37,6 +41,29 @@ from enterprise_rag_ops.retrieval import pipeline
 from enterprise_rag_ops.retrieval.vector_store import LanceDBStore
 
 logger = logging.getLogger("enterprise_rag_ops.eval.runner")
+
+try:  # google-genai is a hard dependency; guard import only to stay robust to SDK reshuffles
+    from google.genai import errors as _genai_errors
+
+    _GOOGLE_TRANSIENT: tuple[type[BaseException], ...] = (_genai_errors.ServerError,)
+except Exception:  # pragma: no cover
+    _GOOGLE_TRANSIENT = ()
+
+# Transient API/network failures a sweep should survive by leaving a resumable GAP rather
+# than crashing the whole run (one timeout across ~2500 calls otherwise kills everything).
+# Deliberately EXCLUDES auth/4xx config errors (e.g. openai.AuthenticationError, ClientError)
+# and plain bugs (RuntimeError) — those still propagate and crash loudly on the first call,
+# so a misconfigured run fails fast instead of silently skipping every question.
+_TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    openai.APIConnectionError,  # base of openai.APITimeoutError
+    openai.InternalServerError,
+    openai.RateLimitError,
+    anthropic.APIConnectionError,  # base of anthropic.APITimeoutError
+    anthropic.InternalServerError,
+    anthropic.RateLimitError,
+    httpx.TransportError,  # RemoteProtocolError, TimeoutException, ConnectError, ...
+    *_GOOGLE_TRANSIENT,
+)
 
 # Single source of truth for generator mappings (micro-decision 1)
 _GENERATOR_FACTORY = {
@@ -100,12 +127,20 @@ def run_evaluation(
     generator_classes: dict[str, type] | None = None,
     judge_class: type | None = None,
     concurrency: int = 1,
+    resume: bool = False,
 ) -> Path:
     """Run the evaluation sweep according to the RunConfig.
 
     Loads the retriever exactly once (Q6, AC-7), fails fast if the gold-aware index is
     missing or not gold-aware (FR-10, AC-11), and halts if total USD cost exceeds
     cost_ceiling_usd (FR-13, AC-16).
+
+    Robustness: a transient API/network error on one question (see ``_TRANSIENT_ERRORS``)
+    is logged and skipped — it leaves a gap rather than killing the whole sweep. With
+    ``resume=True`` an existing ``{run_id}.jsonl`` is appended to: every ``(system,
+    question_id)`` already present is skipped and only the gaps are (re)run, so re-running
+    converges to a complete sweep. ``resume=False`` (default) truncates and starts fresh,
+    preserving the original contract. Non-transient errors (auth/4xx, bugs) still propagate.
     """
     # 1. Fail-fast guard (FR-10, AC-11): artifacts present *and* the corpus is gold-aware.
     if not (
@@ -139,13 +174,38 @@ def run_evaluation(
     # Track cost and execution state
     total_cost_usd = 0.0
     halt_run = False
+    failed_count = 0  # questions skipped this run due to a transient API/network error
     write_lock = threading.Lock()
     cost_lock = threading.Lock()
+    fail_lock = threading.Lock()
     # The shared retriever's BGE-M3 encoder (torch/MPS) is not thread-safe; concurrent
     # encodes abort the process. Serialize the (fast) encode under this lock — the slow
     # LLM calls still run concurrently, which is where --concurrency actually pays off.
     retrieve_lock = threading.Lock()
     bronze_writer = BronzeWriter(run_id=config.run_id) if config.persist_bronze else None
+
+    # Resume (idempotent re-run): skip every (system, question_id) already in the JSONL and
+    # append only the gaps, so a sweep killed mid-run (or with transient-error gaps) converges
+    # to complete on re-run. Prior cost is re-accumulated so the ceiling stays meaningful.
+    completed: set[tuple[str, str]] = set()
+    resume_active = resume and output_path.exists()
+    if resume_active:
+        for line in output_path.read_text().splitlines():
+            try:
+                prior = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # tolerate a truncated final line from a hard crash mid-write
+            completed.add((prior["gen_ai"]["system"], prior["question_id"]))
+            total_cost_usd += (prior["generation"].get("cost_usd") or 0.0) + (
+                prior["judge"].get("cost_usd") or 0.0
+            )
+        logger.info(
+            "Resume: %d records already complete in %s; %.4f USD prior cost loaded.",
+            len(completed),
+            output_path,
+            total_cost_usd,
+        )
+    file_mode = "a" if resume_active else "w"
 
     # Load questions (limit flows straight through - FR-5)
     questions = list(load_questions(limit=config.limit))
@@ -189,8 +249,8 @@ def run_evaluation(
             )
         )
 
-    # Open file for writing
-    with open(output_path, "w", encoding="utf-8") as f:
+    # Open file for writing (append on resume so prior records are preserved).
+    with open(output_path, file_mode, encoding="utf-8") as f:
         for unit in sweep_units:
             if halt_run:
                 break
@@ -201,7 +261,11 @@ def run_evaluation(
             judge = resolved_judge_class(model=config.judge_model)
 
             def process_one(q: Question, model=unit, generator=unit.generator, judge=judge) -> None:
-                nonlocal total_cost_usd, halt_run
+                nonlocal total_cost_usd, halt_run, failed_count
+
+                # Skip questions already completed for this system (resume — idempotent).
+                if (model.system, q.question_id) in completed:
+                    return
 
                 # Read shared halt/ceiling state under the lock that owns it — bare reads
                 # of `halt_run` / `total_cost_usd` would race under `--concurrency > 1`.
@@ -219,32 +283,48 @@ def run_evaluation(
 
                 did_abstain_retrieval = len(chunk_hits) == 0
 
-                # 2. Assemble and generate
-                if did_abstain_retrieval:
-                    answer = AnswerWithSources(answer=ABSTAIN_ANSWER, sources=[])
-                    gen_stats = CallStats(
-                        input_tokens=0,
-                        output_tokens=0,
-                        latency_s=0.0,
-                        model=model.model_id,
-                        system=model.system,
-                        cost_usd=0.0,
-                    )
-                    ctx_chunks = []
-                    gen_raw = None
-                else:
-                    ctx_chunks = ContextAssembler(store).assemble(chunk_hits)
-                    answer, gen_stats, gen_raw = generator.generate_with_stats(
-                        ctx_chunks, q.question
-                    )
+                # Generation + judging are the network calls. A transient API/network error
+                # on either is skipped (leaving a resumable gap) instead of killing the whole
+                # sweep; non-transient errors (auth/4xx, bugs) propagate and fail fast.
+                try:
+                    # 2. Assemble and generate
+                    if did_abstain_retrieval:
+                        answer = AnswerWithSources(answer=ABSTAIN_ANSWER, sources=[])
+                        gen_stats = CallStats(
+                            input_tokens=0,
+                            output_tokens=0,
+                            latency_s=0.0,
+                            model=model.model_id,
+                            system=model.system,
+                            cost_usd=0.0,
+                        )
+                        ctx_chunks = []
+                        gen_raw = None
+                    else:
+                        ctx_chunks = ContextAssembler(store).assemble(chunk_hits)
+                        answer, gen_stats, gen_raw = generator.generate_with_stats(
+                            ctx_chunks, q.question
+                        )
 
-                # 3. Judge the response
-                verdict, judge_stats, judge_raw = judge.judge_with_stats(
-                    question=q.question,
-                    answer_with_sources=answer,
-                    answer_facts=q.answer_facts,
-                    retrieved_docs=ctx_chunks,
-                )
+                    # 3. Judge the response
+                    verdict, judge_stats, judge_raw = judge.judge_with_stats(
+                        question=q.question,
+                        answer_with_sources=answer,
+                        answer_facts=q.answer_facts,
+                        retrieved_docs=ctx_chunks,
+                    )
+                except _TRANSIENT_ERRORS as exc:
+                    with fail_lock:
+                        failed_count += 1
+                    logger.warning(
+                        "Transient error on %s [%s/%s] — skipping (resume to retry): %s: %s",
+                        q.question_id,
+                        model.system,
+                        model.model_id,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    return
 
                 # 4. Cost accounting (FR-8, FR-9). Guard: a generator that already set
                 # cost_usd owns its cost and the runner treats it as final — the router
@@ -366,4 +446,10 @@ def run_evaluation(
                     if halt_run:
                         break
 
+    if failed_count:
+        logger.warning(
+            "%d question(s) hit a transient error and were skipped this run. Re-run with "
+            "`--resume` to fill the gaps (the overlap guard requires every system complete).",
+            failed_count,
+        )
     return output_path
