@@ -121,9 +121,6 @@ single-model config. The retrieval-abstain stub already pre-set `cost_usd=0.0` a
 correctly keeps it (0 tokens × any price = 0.0, unchanged). The judge cost is _always_
 recomputed — only the generator line is guarded.
 
-> **Forward reference (out of scope):** the **cost-per-correct-answer** metric — the
-> point of the router sweep — is **not** documented here; it stabilizes in phase-3.
-
 ## Related
 
 - `eval/records.py` — `Price`, `CallStats`, `compute_cost_usd`
@@ -134,3 +131,4 @@ recomputed — only the generator line is guarded.
 - [eval-record-schema.md](eval-record-schema.md)
 - [../patterns/multi-model-runner.md](../patterns/multi-model-runner.md)
 - [../../rag-generation/patterns/router-cascade-composite.md](../../rag-generation/patterns/router-cascade-composite.md)
+- [cost-per-correct-answer.md](cost-per-correct-answer.md) — the head-to-head metric that uses this cost

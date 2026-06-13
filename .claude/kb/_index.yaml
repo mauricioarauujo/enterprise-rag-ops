@@ -1,5 +1,5 @@
 version: "1.0"
-last_updated: "2026-06-05"
+last_updated: "2026-06-13"
 
 limits:
   quick_reference: 100
@@ -39,13 +39,22 @@ domains:
       aggregation (per-category, None-skipping, dedup-before-metrics), abstention
       scoring (empty-gold predicate, two-layer gate+generator, sentinel enforcement),
       cassette/replay testing with vcrpy (ADR-0006), multi-model sweep runner
-      (single retriever, crash-safe JSONL flush, cost ceiling), cost accounting
+      (single retriever, crash-safe JSONL flush, cost ceiling, transient-error skip
+      — _TRANSIENT_ERRORS wraps generation+judge, logs+skips leaving a resumable gap,
+      non-transient errors still propagate; --resume appends to existing JSONL skipping
+      completed (system,question_id) pairs and re-accumulating prior cost for the ceiling,
+      supersedes the old separate-run_id workaround), cost accounting
       (price-table-in-config, None on missing price; two-call combined cost — cheap always +
       strong iff escalated, None→0.0, model/system="router" — manufactured by the router as the
       single owner; the runner cost-guard invariant: recompute generator cost_usd only when None,
       so a pre-set cost is owned not recomputed and the price-less "router" row survives,
-      backwards-compatible for the three concrete generators, ADR-0012; cost-per-correct-answer
-      metric deferred to phase-3), HTML+MD report rendering
+      backwards-compatible for the three concrete generators, ADR-0012),
+      cost-per-correct-answer metric (phase-3, shipped: sum(gen.cost_usd)/count(correct)
+      per system; judge cost excluded — eval overhead not a deployment figure; None on
+      zero-correct denominator; None summand → 0.0; caller groups by system before
+      calling; head-to-head metric for router-vs-baselines; null result — routing
+      dominated — is a valid finding; docs/analysis/routing-verdict.md),
+      HTML+MD report rendering
       (string.Template, None->N/A, dynamic k), stats-capture seam
       (generate_with_stats / judge_with_stats on implementations), AnthropicGenerator
       (forced tool-use, max_retries=8, timeout=120), BGE-M3 encoder thread-safety
@@ -61,7 +70,7 @@ domains:
       ADRs: 0001, 0006, 0007, 0009, 0010, 0011, 0012.
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-05"
+    last_updated: "2026-06-13"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:
@@ -92,6 +101,9 @@ domains:
       - name: cost-accounting
         path: concepts/cost-accounting.md
         confidence: 0.95
+      - name: cost-per-correct-answer
+        path: concepts/cost-per-correct-answer.md
+        confidence: 0.97
       - name: stats-capture-seam
         path: concepts/stats-capture-seam.md
         confidence: 0.95
@@ -216,9 +228,13 @@ domains:
       → escalate); single-owner combined cost (cheap always + strong iff escalated, None→0.0,
       model="router"); gen_raw = the cheap call's RawCall. Pairs with the rag-eval runner
       cost-guard invariant. ADRs: 0003, 0005, 0011, 0012.
+      Phase-3 measured outcome (sprint-7/phase-3): router is strictly dominated — $0.0061/correct
+      vs cheap Gemini $0.0007 and GPT-5 Nano $0.0030 (best quality, 2× cheaper); ≈52% escalation
+      rate confirmed as ADR-0011 predicted; null result is the honest baseline
+      (docs/analysis/routing-verdict.md).
     path: rag-generation/
     status: draft
-    last_updated: "2026-06-05"
+    last_updated: "2026-06-13"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:

@@ -88,6 +88,29 @@ class RouterGenerator:
 
 `RunConfig` gains an optional additive `router: RouterConfig | None = None` (omit → `None`, backwards-compatible). The runner appends the synthetic router row only when set; the cheap/strong sub-generators resolve through the **same `_GENERATOR_FACTORY`** the real models use (`"google"` → cheap, `"anthropic"` → strong; injectable doubles in tests).
 
+## Measured Outcome (sprint-7/phase-3)
+
+The harness swept all four systems (500 questions, identical retrieval, same judge) and
+produced this head-to-head (`docs/analysis/routing-verdict.md`):
+
+| System                        | Cost / correct | Fact recall | Gen cost (500 q) |
+| ----------------------------- | :------------: | :---------: | :--------------: |
+| `gemini-2.5-flash-lite`       |    $0.0007     |    22.9%    |      $0.074      |
+| `gpt-5-nano-2025-08-07`       |    $0.0030     |  **25.6%**  |      $0.356      |
+| **`router`** (cheap → strong) |    $0.0061     |    23.4%    |      $0.714      |
+| `claude-haiku-4-5`            |    $0.0104     |    23.4%    |      $1.230      |
+
+**Verdict: the router is strictly dominated.** It sits at 8.7× the cheap model's
+cost-per-correct with no quality dividend — the best single model on quality (GPT-5 Nano)
+is also 2× cheaper. Two causes: (1) the escalation signal was too weak (AUROC 0.685) to
+reliably target the queries that needed upgrading — confirmed at scale, ≈52% escalated
+as ADR-0011 predicted; (2) the dominant model (`gpt-5-nano`) was not a constituent of the
+router, so the routing axis was wrong regardless of signal quality. A null phase-3 result
+was the expected honest baseline per ADR-0011 §6; the phase-3 finding confirmed it.
+
+This is a valid sprint result: the harness rendered a measured verdict on a
+plausible architecture and rejected it with numbers.
+
 ## See Also
 
 - [generator-seam](../concepts/generator-seam.md) — the Protocol; what structural conformance and "localized swap" mean
@@ -96,3 +119,4 @@ class RouterGenerator:
 - [combined-cost-accounting](../../rag-eval/concepts/cost-accounting.md) — the combined-cost rule and the runner cost-guard invariant
 - ADR-0012 (`docs/adr/0012-router-generator-composite.md`) — the decision record
 - ADR-0011 (`docs/adr/0011-escalation-signal.md`) — the escalation signal this consumes
+- `docs/analysis/routing-verdict.md` — full head-to-head analysis and reproduce steps

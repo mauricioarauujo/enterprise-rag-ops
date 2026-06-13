@@ -84,8 +84,8 @@ rag-issues ... --all-clusters                     # all clusters (default: domin
 
 ## Router Combined Cost + Cost-Guard (ADR-0012)
 
-- Combined cost (`RouterGenerator`): cheap always + strong iff escalated, `None`→`0.0`, `model="router"`.
-- Runner guard `if gen_stats.cost_usd is None:` — a pre-set generator cost is owned, not recomputed (the `"router"` row, with no price entry, survives); judge cost always recomputed. Out of scope: cost-per-correct-answer metric (phase-3). See `concepts/cost-accounting.md` + `rag-generation/patterns/router-cascade-composite.md`.
+- Combined cost (`RouterGenerator`): cheap always + strong iff escalated, `None`→`0.0`, `model="router"`. Runner guard `if gen_stats.cost_usd is None:` — owned cost not recomputed; judge always recomputed. See `concepts/cost-accounting.md`.
+- **Cost-per-correct** (`eval/metrics.py::compute_cost_per_correct`): `sum(gen.cost_usd) / count(failure_mode=="correct")` per system; judge cost excluded; `None` on zero-correct; `None` summand → `0.0`. See `concepts/cost-per-correct-answer.md`.
 
 ## File map (key modules)
 
@@ -98,3 +98,4 @@ Phase 6: `eval/records.py` · `eval/config.py` · `eval/runner.py` · `eval/repo
 Phase 14+15: `eval/triage.py` · `eval/triage_cli.py` · `eval/issues.py` · `eval/github.py` · `eval/issues_cli.py`
 Phase 19: `eval/raw_call.py` (RawCall) · `eval/bronze.py` (BronzeWriter) — bronze archive, opt-in via `RunConfig.persist_bronze`
 S7-P2: `generation/router_generator.py` (RouterGenerator) · `eval/config.py` (RouterConfig) · `eval/runner.py` (cost-guard) — ADR-0012
+S7-P3: `eval/metrics.py` (cost-per-correct) · `eval/runner.py` (transient-error skip, `--resume`) · `docs/analysis/routing-verdict.md`
