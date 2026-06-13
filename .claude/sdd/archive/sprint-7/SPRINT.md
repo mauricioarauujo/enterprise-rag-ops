@@ -1,6 +1,6 @@
 # SPRINT 7: Cost-Aware Routing — Make the Tradeoff Pay Off
 
-**Sprint:** sprint-7 | **Date:** 2026-06-04 | **Status:** active
+**Sprint:** sprint-7 | **Date:** 2026-06-04 | **Status:** closed
 
 ## Goal
 
@@ -42,3 +42,43 @@ harness paying off: a measured architectural decision, not a vibes-based one.
 - **Sweep cost.** Running the router plus re-running baselines costs API spend. _Mitigation:_ iterate on the capped `configs/baseline.dev.yaml` (20 questions); full 500-question sweep only for the final numbers.
 - **Outcome risk.** Routing may not pay off on this benchmark. _Mitigation:_ frame a null result as an honest finding, not a failure — the senior signal is the rigorous measurement, not a guaranteed win.
 - **Scope creep on threshold tuning.** _Mitigation:_ pick one escalation threshold, measure, stop; defer a sweep over thresholds unless the sprint has room.
+
+## Retrospective
+
+**Outcome: all 4 success criteria met; the sprint delivered a measured _null_ verdict.**
+A `RouterGenerator` runs behind the unchanged `Generator` Protocol (criterion 1), keys on a
+documented inference-time signal (verbalized confidence, ADR-0011 — criterion 2), and was
+swept head-to-head against the three baselines on cost-per-correct (criterion 3). The verdict
+(criterion 4): **routing does not pay off — the router is strictly dominated.** Gemini alone
+is ~9× cheaper per correct at equal quality; gpt-5-nano alone is 2× cheaper _and_ the highest
+quality (500 q, $4.43). Realized escalation ≈52% (cost-derived) matched ADR-0011's calibrated
+~54%, and the weak signal (AUROC 0.685) bought no quality dividend — exactly as predicted.
+
+**What worked.** The risk register called every shot. The "offline-judge wrinkle" forced the
+verbalized-confidence pivot in phase 1 (after logprobs proved infeasible on Gemini 2.5); the
+"outcome risk" framed the null as a valid result up front, so phase 3 was a clean measurement
+rather than a scramble for a win. Dev-first discipline (20 q before 500 q) caught the pipeline
+end-to-end cheaply.
+
+**What slipped / changed scope.** The full 500-q sweep repeatedly died on a single transient
+OpenAI judge timeout — one unhandled exception in `process_one` killing all ~2500 calls. This
+forced an **unplanned runner-hardening detour** (transient-error skip + `--resume`), a
+deliberate exception to phase-3's NFR-1 "runner unchanged" constraint, landed as its own
+`fix(runner)` commit. It partially delivers backlog B-02 (the _resumable_ half; the
+content-addressable cache half remains). Net: the detour was the right call — without it the
+sprint's headline deliverable was uncompletable on the 8 GB Air.
+
+**Carryover (non-blocking, → sprint close / next sprint):** two deferred `/update-kb` writes
+(rag-eval cost-per-correct; rag-generation router-cascade) + a runner-resume KB line.
+
+## Sprint Close
+
+| Phase | Slug                         | Verdict                                          |
+| ----- | ---------------------------- | ------------------------------------------------ |
+| 1     | `phase-1-escalation-signal`  | ✅ READY (ADR-0011, PR #36)                      |
+| 2     | `phase-2-router-generator`   | ✅ READY (ADR-0012, PR #37)                      |
+| 3     | `phase-3-routing-evaluation` | ✅ READY (PR #38 — null verdict + runner resume) |
+
+All phases shipped. Backlog: **B-07 (cost-aware router) → done**; **B-02** annotated (resume
+half delivered). ADRs: 0011 + 0012 written in-sprint; the runner hardening is a robustness
+fix, no ADR. Folder archived to `.claude/sdd/archive/sprint-7/`.
