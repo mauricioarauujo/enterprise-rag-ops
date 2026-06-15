@@ -68,9 +68,14 @@ domains:
       and CallStats.confidence_score (float|None=None, Gemini-only verbalized confidence
       in [0,1], same optional-default pattern as cost_usd, escalation signal, ADR-0011).
       ADRs: 0001, 0006, 0007, 0009, 0010, 0011, 0012.
+      FactVerdict fields: fact, verdict (Literal present/absent/contradicted),
+      supporting_doc_id (str|None=None, additive sprint-8/phase-1 — the retrieved doc_id
+      most directly supporting a gold fact, or None; strict-mode-compatible via
+      __get_pydantic_json_schema__ hook that forces explicit ["string","null"] type-union
+      and injects the field into required, keeping schema-as-SSoT: no parallel JSON string).
     path: rag-eval/
     status: draft
-    last_updated: "2026-06-13"
+    last_updated: "2026-06-14"
     agents: [kb-architect]
     pillars_used: [codebase, mcp]
     entry_points:

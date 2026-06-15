@@ -46,6 +46,18 @@ def test_stub_judge_returns_all_present_all_supported(sample_answer, sample_chun
     assert verdict.faithfulness_ratio == 1.0
 
 
+def test_stub_judge_emits_none_supporting_doc_id(sample_answer, sample_chunks, sample_facts):
+    """AC-6: StubJudge emits supporting_doc_id is None on every per_fact entry."""
+    verdict = StubJudge().judge(
+        question="What is the capital of France?",
+        answer_with_sources=sample_answer,
+        answer_facts=sample_facts,
+        retrieved_docs=sample_chunks,
+    )
+    assert verdict.per_fact  # non-empty, so the assertion below is meaningful
+    assert all(f.supporting_doc_id is None for f in verdict.per_fact)
+
+
 def test_stub_judge_preserves_fact_and_citation_order(sample_chunks):
     answer = AnswerWithSources(answer="a", sources=["d2", "d1"])
     verdict = StubJudge().judge(

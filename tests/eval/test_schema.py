@@ -21,6 +21,31 @@ def test_fact_verdict_valid_construction():
     assert FactVerdict.model_validate_json(fv.model_dump_json()) == fv
 
 
+def test_fact_verdict_supporting_doc_id_additive_default_none():
+    """AC-1: the field is additive — old construction stays valid, defaulting to None."""
+    fv = FactVerdict(fact="x", verdict="present")
+    assert fv.supporting_doc_id is None
+    fv_with = FactVerdict(fact="x", verdict="present", supporting_doc_id="doc_a")
+    assert fv_with.supporting_doc_id == "doc_a"
+    assert FactVerdict.model_validate_json(fv_with.model_dump_json()) == fv_with
+
+
+def test_supporting_doc_id_is_strict_compatible_nullable():
+    """AC-2 (highest risk): the nullable field lands in `required` with the type-union.
+
+    Asserts on the real `_LLMJudgeVerdict.model_json_schema()` output (the schema fed to
+    OpenAI `strict: true`), not a hand-written shape. Fails closed if Pydantic's default
+    `str | None = None` emission (field excluded from `required`, `anyOf` form) leaks
+    through instead of the forced strict shape.
+    """
+    schema = _LLMJudgeVerdict.model_json_schema()
+    fv = schema["$defs"]["FactVerdict"]
+    assert "supporting_doc_id" in fv["required"]
+    assert fv["properties"]["supporting_doc_id"]["type"] == ["string", "null"]
+    # The existing strict invariant still holds: every property is required.
+    assert set(fv["required"]) == set(fv["properties"])
+
+
 def test_fact_verdict_rejects_out_of_vocab_verdict():
     with pytest.raises(ValidationError):
         FactVerdict.model_validate({"fact": "x", "verdict": "maybe"})

@@ -40,13 +40,25 @@ def canned_verdict_payload() -> str:
     """A valid `_LLMJudgeVerdict` JSON payload the fake client returns by default.
 
     Two facts (present, absent) and two citations (supported, unsupported) — a mixed
-    verdict set so aggregation yields non-trivial, < 1.0 ratios.
+    verdict set so aggregation yields non-trivial, < 1.0 ratios. The two facts carry
+    `supporting_doc_id`s that exercise both hallucination-guard branches: `doc_real`
+    is in the retrieved set (`sample_chunks`) and is retained; `gd_hallucinated` is
+    **not** retrieved and is collapsed to `None` by the guard (FR-5). `gd_unrelated`
+    is deliberately not reused as the hallucinated id — it *is* retrieved.
     """
     verdict = _LLMJudgeVerdict.model_validate(
         {
             "per_fact": [
-                {"fact": "Paris is the capital of France.", "verdict": "present"},
-                {"fact": "France is in Europe.", "verdict": "absent"},
+                {
+                    "fact": "Paris is the capital of France.",
+                    "verdict": "present",
+                    "supporting_doc_id": "doc_real",
+                },
+                {
+                    "fact": "France is in Europe.",
+                    "verdict": "absent",
+                    "supporting_doc_id": "gd_hallucinated",
+                },
             ],
             "per_citation": [
                 {"doc_id": "doc_real", "verdict": "supported"},

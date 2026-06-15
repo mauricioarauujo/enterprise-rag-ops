@@ -65,3 +65,17 @@ def test_deterministic():
     pf = _facts("present", "contradicted")
     pc = _citations("supported", "unsupported")
     assert aggregate(pf, pc) == aggregate(pf, pc)
+
+
+def test_supporting_doc_id_does_not_affect_aggregates():
+    """AC-8: aggregate ignores supporting_doc_id — identical floats with/without it."""
+    pc = _citations("supported", "unsupported")
+    without = [
+        FactVerdict(fact="f0", verdict="present"),
+        FactVerdict(fact="f1", verdict="contradicted"),
+    ]
+    with_attr = [
+        FactVerdict(fact="f0", verdict="present", supporting_doc_id="doc_a"),
+        FactVerdict(fact="f1", verdict="contradicted", supporting_doc_id=None),
+    ]
+    assert aggregate(without, pc) == aggregate(with_attr, pc)
