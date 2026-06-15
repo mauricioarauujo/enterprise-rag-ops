@@ -98,6 +98,51 @@ print(verdict.fact_recall)             # e.g. 0.5 or None
 print(verdict.faithfulness_ratio)      # e.g. 0.5 or None
 ```
 
+## Nullable Fields in Strict Mode
+
+OpenAI `strict: true` has two invariants every nested object must satisfy:
+
+1. Every property must appear in `required`.
+2. Property schemas must not use `anyOf` — explicit `type` unions only.
+
+Pydantic v2 violates both for `str | None = None` fields by default: it emits an
+`anyOf` form and excludes the field from `required` (because it has a default).
+
+The fix used in `FactVerdict.supporting_doc_id` (sprint-8/phase-1) is a
+`__get_pydantic_json_schema__` classmethod hook — it overrides the schema after Pydantic
+resolves it, replacing the property shape and injecting the field into `required`:
+
+```python
+@classmethod
+def __get_pydantic_json_schema__(
+    cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+) -> dict[str, Any]:
+    schema = handler(core_schema)
+    schema = handler.resolve_ref_schema(schema)
+    props = schema.get("properties", {})
+    if "supporting_doc_id" in props:
+        props["supporting_doc_id"] = {
+            "type": ["string", "null"],          # explicit union, not anyOf
+            "description": props["supporting_doc_id"].get("description", ""),
+        }
+    required = schema.setdefault("required", [])
+    if "supporting_doc_id" not in required:
+        required.append("supporting_doc_id")     # force into required
+    return schema
+```
+
+The hook lives in the Pydantic model definition — schema-as-SSoT (NFR-4) is preserved.
+The strict schema fed to OpenAI is still `_LLMJudgeVerdict.model_json_schema()` — no
+parallel hand-maintained JSON string.
+
+The test `test_supporting_doc_id_is_strict_compatible_nullable` in `tests/eval/test_schema.py`
+asserts on the real `model_json_schema()` output and fails closed if Pydantic's default
+emission leaks through.
+
+**When adding a new `str | None = None` field to any strict-mode Pydantic model:**
+apply the same hook or extract it into a shared helper. Do not rely on Pydantic's
+default nullable emission for strict-mode schemas.
+
 ## Common Mistakes
 
 ### Wrong — feeding the full `JudgeVerdict` schema to strict mode

@@ -29,7 +29,10 @@ class StubJudge:
         answer_facts: list[str],
         retrieved_docs: list[Chunk],
     ) -> JudgeVerdict:
-        per_fact = [FactVerdict(fact=fact, verdict="present") for fact in answer_facts]
+        per_fact = [
+            FactVerdict(fact=fact, verdict="present", supporting_doc_id=None)
+            for fact in answer_facts
+        ]
         per_citation = [
             CitationVerdict(doc_id=doc_id, verdict="supported")
             for doc_id in answer_with_sources.sources

@@ -96,6 +96,21 @@ Pydantic v2 docs confirm (source: pydantic.dev):
 The two-model split is therefore the minimal pattern: one Pydantic model per schema
 surface, no hand-maintained JSON, no float friction in the strict contract.
 
+## Additive Nullable Fields and the Hook Extension (sprint-8/phase-1)
+
+Adding `supporting_doc_id: str | None = None` to `FactVerdict` exposed a secondary
+strict-mode friction point: Pydantic v2 emits `anyOf` for nullable fields and excludes
+defaulted fields from `required`. Both violate `strict: true`.
+
+The resolution — still within schema-as-SSoT — is a `__get_pydantic_json_schema__`
+classmethod hook on `FactVerdict`. The hook calls `handler(core_schema)` then
+`handler.resolve_ref_schema(schema)`, replaces the property with an explicit
+`{"type": ["string", "null"], ...}` entry, and appends the field name to `required`.
+The override lives in the model definition; `_LLMJudgeVerdict.model_json_schema()` is
+still the single call that produces the strict schema fed to OpenAI — no parallel JSON
+string. See `patterns/per-fact-judge-call.md` § Nullable Fields in Strict Mode for
+the full hook code.
+
 ## Pattern Reuse
 
 This pattern (private LLM-facing subset + public output model with Python-derived

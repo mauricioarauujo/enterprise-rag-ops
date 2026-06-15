@@ -92,6 +92,11 @@ class OpenAIJudge:
             doc_chunks[c.doc_id].append(c.text)
         doc_text = {doc_id: "\n\n".join(texts) for doc_id, texts in doc_chunks.items()}
         cited_docs = [(doc_id, doc_text.get(doc_id)) for doc_id in answer_with_sources.sources]
+        # Full retrieved set, in retrieval order (doc_text insertion order) — the menu the
+        # judge picks each fact's supporting_doc_id from. Cost note (AC-10): this block
+        # grows the judge user prompt by ~+1,500-3,000 input tokens/call at k=10; no new
+        # cost mechanism — the existing `cost_ceiling_usd` guard is the unchanged backstop.
+        retrieved_docs_rendered = [(doc_id, text) for doc_id, text in doc_text.items()]
 
         system_prompt = build_judge_system_prompt()
         user_prompt = build_judge_user_prompt(
@@ -99,6 +104,7 @@ class OpenAIJudge:
             answer=answer_with_sources.answer,
             answer_facts=answer_facts,
             cited_docs=cited_docs,
+            retrieved_docs=retrieved_docs_rendered,
         )
 
         # Single source of truth: the LLM-facing schema is the two-list subset only.
@@ -124,6 +130,14 @@ class OpenAIJudge:
 
         raw = response.choices[0].message.content or ""
         llm_verdict = _LLMJudgeVerdict.model_validate_json(raw)
+
+        # Hallucination guard (FR-5): collapse any supporting_doc_id the judge emitted that
+        # is not in the retrieved doc-id set down to None — attribution may only point at a
+        # document that was actually retrieved.
+        retrieved_ids = {c.doc_id for c in retrieved_docs}
+        for fv in llm_verdict.per_fact:
+            if fv.supporting_doc_id is not None and fv.supporting_doc_id not in retrieved_ids:
+                fv.supporting_doc_id = None
 
         fact_recall, fact_precision, faithfulness_ratio = aggregate(
             llm_verdict.per_fact, llm_verdict.per_citation

@@ -30,6 +30,11 @@ failure_mode  — str|None: failure-taxonomy tag, written by `rag-classify` post
 per_fact      — list[FactVerdict]|None: the judge's per-fact verdict list, sourced
                 from the in-memory JudgeVerdict at zero extra API cost (ADR-0010).
                 Defaults to None; old results/*.jsonl load cleanly (backward-compat).
+                Each FactVerdict carries: fact (str), verdict (Literal["present",
+                "absent", "contradicted"]), and supporting_doc_id (str|None) — the
+                doc_id of the retrieved document most directly supporting the gold fact,
+                or None when no retrieved doc covers it (sprint-8/phase-1, backward-
+                compatible default).
 per_citation  — list[CitationVerdict]|None: the judge's per-citation verdict list,
                 same provenance and backward-compatibility as per_fact (ADR-0010).
 ```

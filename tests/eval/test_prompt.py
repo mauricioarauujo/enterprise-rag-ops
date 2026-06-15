@@ -28,12 +28,20 @@ def test_system_prompt_embeds_llm_facing_schema_only():
     assert "faithfulness_ratio" not in prompt
 
 
+def test_system_prompt_contains_supporting_doc_id_rubric_line():
+    """AC-4: the rubric tells the judge to emit a supporting_doc_id per fact (or null)."""
+    prompt = build_judge_system_prompt()
+    assert "supporting_doc_id" in prompt
+    assert "RETRIEVED DOCUMENTS" in prompt
+
+
 def test_user_prompt_renders_numbered_facts_and_per_doc_blocks():
     prompt = build_judge_user_prompt(
         question="What is the capital of France?",
         answer="The capital of France is Paris.",
         answer_facts=["Paris is the capital of France.", "France is in Europe."],
         cited_docs=[("doc_real", "Paris is the capital of France."), ("gd_x", "unrelated text")],
+        retrieved_docs=[("doc_real", "Paris is the capital of France.")],
     )
     # 1-based numbered fact checklist.
     assert "1. Paris is the capital of France." in prompt
@@ -43,6 +51,24 @@ def test_user_prompt_renders_numbered_facts_and_per_doc_blocks():
     assert "=== doc gd_x ===" in prompt
 
 
+def test_user_prompt_renders_retrieved_documents_block():
+    """AC-3: the RETRIEVED DOCUMENTS block renders the full candidate set, distinct from CITED."""
+    prompt = build_judge_user_prompt(
+        question="q",
+        answer="a",
+        answer_facts=["f"],
+        cited_docs=[("doc_cited", "cited text")],
+        retrieved_docs=[("doc_cited", "cited text"), ("doc_extra", "extra retrieved text")],
+    )
+    assert "CITED DOCUMENTS" in prompt
+    assert "RETRIEVED DOCUMENTS" in prompt
+    assert prompt.index("CITED DOCUMENTS") < prompt.index("RETRIEVED DOCUMENTS")
+    # A retrieved-only doc (never cited) still appears in the retrieved menu.
+    retrieved_section = prompt[prompt.index("RETRIEVED DOCUMENTS") :]
+    assert "=== doc doc_extra ===" in retrieved_section
+    assert "extra retrieved text" in retrieved_section
+
+
 def test_user_prompt_marks_unavailable_doc():
     """A cited doc with no text (not in the retrieved set) gets an explicit block."""
     prompt = build_judge_user_prompt(
@@ -50,16 +76,25 @@ def test_user_prompt_marks_unavailable_doc():
         answer="a",
         answer_facts=["f"],
         cited_docs=[("doc_missing", None)],
+        retrieved_docs=[],
     )
     assert "=== doc doc_missing (text unavailable) ===" in prompt
 
 
 def test_user_prompt_is_byte_identical_across_calls():
-    args = dict(question="q", answer="a", answer_facts=["f"], cited_docs=[("d", "t")])
+    args = dict(
+        question="q",
+        answer="a",
+        answer_facts=["f"],
+        cited_docs=[("d", "t")],
+        retrieved_docs=[("d", "t")],
+    )
     assert build_judge_user_prompt(**args) == build_judge_user_prompt(**args)
 
 
 def test_user_prompt_empty_facts_and_docs_does_not_raise():
     """Defensive — the abstention shape (no facts, no citations) must not crash."""
-    prompt = build_judge_user_prompt(question="q", answer="a", answer_facts=[], cited_docs=[])
+    prompt = build_judge_user_prompt(
+        question="q", answer="a", answer_facts=[], cited_docs=[], retrieved_docs=[]
+    )
     assert "QUESTION:" in prompt

@@ -127,7 +127,10 @@ def test_eval_record_lossless_roundtrip_ac2():
     parsed_json = json.loads(dumped_json)
     assert "per_fact" in parsed_json
     assert "per_citation" in parsed_json
-    assert parsed_json["per_fact"] == [{"fact": "X", "verdict": "present"}]
+    # supporting_doc_id (sprint-8/phase-1) serialises as an explicit null (key present).
+    assert parsed_json["per_fact"] == [
+        {"fact": "X", "verdict": "present", "supporting_doc_id": None}
+    ]
     assert parsed_json["per_citation"] == [{"doc_id": "d1", "verdict": "supported"}]
 
 
@@ -193,6 +196,50 @@ def test_eval_record_backward_compat_ac3(tmp_path):
     assert loaded_records[0].question_id == "q1"
     assert loaded_records[0].per_fact is None
     assert loaded_records[0].per_citation is None
+
+
+def test_supporting_doc_id_serialises_null_not_absent():
+    """AC-7: supporting_doc_id=None emits `"supporting_doc_id": null` (key present, not omitted).
+
+    Distinguishes a new record's "no supporting doc" (null) from an old record's
+    "field never existed" (key absent). An old-shape FactVerdict JSON missing the key
+    still validates and round-trips to None.
+    """
+    import json
+
+    from enterprise_rag_ops.eval.schema import CitationVerdict, FactVerdict
+
+    rec = EvalRecord(
+        question_id="q_attr",
+        category="general",
+        run_id="run_attr",
+        gen_ai={"request": {"model": "test-gen"}, "system": "openai"},
+        generation=CallStats(
+            input_tokens=10, output_tokens=5, latency_s=0.1, model="test-gen", system="openai"
+        ),
+        judge=CallStats(
+            input_tokens=20, output_tokens=10, latency_s=0.2, model="test-judge", system="openai"
+        ),
+        answer="Hello",
+        sources=["doc_a"],
+        retrieval_ranked_ids=["doc_a"],
+        did_abstain_retrieval=False,
+        did_abstain_e2e=False,
+        per_fact=[FactVerdict(fact="X", verdict="present", supporting_doc_id=None)],
+        per_citation=[CitationVerdict(doc_id="d1", verdict="supported")],
+    )
+
+    dumped = rec.model_dump_json()
+    parsed_json = json.loads(dumped)
+    # Key present with explicit null — not omitted (model_dump_json default exclude_none=False).
+    assert "supporting_doc_id" in parsed_json["per_fact"][0]
+    assert parsed_json["per_fact"][0]["supporting_doc_id"] is None
+
+    # Old-record compatibility: a FactVerdict JSON missing the key validates → None.
+    old_fact = FactVerdict.model_validate({"fact": "X", "verdict": "present"})
+    assert old_fact.supporting_doc_id is None
+    # And it round-trips losslessly through EvalRecord.
+    assert EvalRecord.model_validate_json(dumped) == rec
 
 
 def test_call_stats_fields():

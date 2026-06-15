@@ -32,7 +32,10 @@ _RUBRIC = (
     "For EACH cited document block, emit one per_citation entry (same order) with verdict:\n"
     "  - supported: that document's text substantiates the claim it was cited for.\n"
     "  - unsupported: that document's text does not substantiate the claim (or is "
-    "unavailable)."
+    "unavailable).\n"
+    "For EACH gold fact also emit supporting_doc_id: the doc_id from the RETRIEVED "
+    "DOCUMENTS block whose text most directly substantiates that fact, or null if no "
+    "retrieved document covers it. Pick only a doc_id shown in RETRIEVED DOCUMENTS."
 )
 
 
@@ -54,8 +57,9 @@ def build_judge_user_prompt(
     answer: str,
     answer_facts: list[str],
     cited_docs: list[tuple[str, str | None]],
+    retrieved_docs: list[tuple[str, str]],
 ) -> str:
-    """User turn = question + answer + numbered fact checklist + per-doc_id blocks.
+    """User turn = question + answer + numbered facts + cited + retrieved doc blocks.
 
     Args:
         question: The original question.
@@ -64,6 +68,9 @@ def build_judge_user_prompt(
         cited_docs: `(doc_id, text)` pairs in the answer's citation order. A `None`
             text marks a cited doc that was not in the retrieved set; it is rendered
             as an explicit ``(text unavailable)`` block.
+        retrieved_docs: `(doc_id, text)` pairs for the full retrieved set — the menu the
+            judge picks each fact's `supporting_doc_id` from. Supplements (does not
+            replace) the cited block; text is always present (built from `doc_text`).
     """
     facts_block = "\n".join(f"{i}. {fact}" for i, fact in enumerate(answer_facts, start=1))
 
@@ -75,9 +82,15 @@ def build_judge_user_prompt(
             doc_blocks.append(f"=== doc {doc_id} ===\n{text}")
     cited_block = "\n\n".join(doc_blocks)
 
+    retrieved_block = "\n\n".join(
+        f"=== doc {doc_id} ===\n{text}" for doc_id, text in retrieved_docs
+    )
+
     return (
         f"QUESTION:\n{question}\n\n"
         f"ANSWER UNDER JUDGMENT:\n{answer}\n\n"
         f"GOLD FACTS (one per_fact verdict each, in order):\n{facts_block}\n\n"
-        f"CITED DOCUMENTS (one per_citation verdict each, in order):\n{cited_block}"
+        f"CITED DOCUMENTS (one per_citation verdict each, in order):\n{cited_block}\n\n"
+        "RETRIEVED DOCUMENTS (the full candidate set; pick supporting_doc_id from these "
+        f"doc ids):\n{retrieved_block}"
     )
