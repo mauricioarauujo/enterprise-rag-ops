@@ -39,32 +39,46 @@ test (no personal/career context in tracked files).
 
 ### 4. Knowledge-feedback loop
 
+**KB sync is on-branch phase work, not a post-merge chore.** Any KB update or staleness
+fix this phase drives is **applied now, on the current branch, and committed with the
+phase** — never deferred to "after the PR merges" or punted to `/sprint-close`. The KB
+must land in lockstep with the code it documents. Sub-sections below mark each item
+**Applied** (done on this branch) vs **Deferred** (with a reason — e.g. needs research,
+or is a separate-sprint concern).
+
 **4a. Knowledge capture** — did this work surface knowledge not in any KB (new
-technique, library, integration, hard-won operational detail)? If yes:
+technique, library, integration, hard-won operational detail)? If yes, **apply it now**
+for an existing domain (invoke `/update-kb {domain}` / the `kb-architect` agent on this
+branch); only a brand-new domain (`/new-kb`) may be Deferred if it needs a full 3-pillar
+build. Record what you did:
 
 ```markdown
-## Knowledge Capture Suggestions
+## Knowledge Capture
 
-| What was learned | Suggested KB domain | Action                            |
-| ---------------- | ------------------- | --------------------------------- |
-| {description}    | {domain}            | `/new-kb {domain}` / `/update-kb` |
+| What was learned | KB domain | Action taken                         |
+| ---------------- | --------- | ------------------------------------ |
+| {description}    | {domain}  | Applied on branch / Deferred ({why}) |
 ```
 
 **4b. KB staleness** — map changed files to KB domains via `_index.yaml`. For each
 mapped domain, read the relevant concept/pattern and check whether the diff changed an
-API, enum, or constraint the KB documents. If stale:
+API, enum, or constraint the KB documents. If stale, **fix it now on this branch** and
+record it:
 
 ```markdown
 ## KB Staleness
 
-| KB File | What Changed | Impact | Action |
-| ------- | ------------ | ------ | ------ |
+| KB File | What Changed | Impact   | Action taken                         |
+| ------- | ------------ | -------- | ------------------------------------ |
+| {file}  | {what}       | {impact} | Applied on branch / Deferred ({why}) |
 ```
 
 **4c. ADR check** — did this work make an architectural decision not recorded in
-`docs/adr/`? If yes, recommend writing the ADR.
+`docs/adr/`? If yes, **write the ADR on this branch** (it ships with the phase); Defer
+only if the decision is still genuinely open.
 
-Skip any sub-section with nothing to report.
+Skip any sub-section with nothing to report. After applying, re-stage the KB/ADR/code
+edits so they are part of the phase commit.
 
 ### 5. Write the report
 
@@ -102,13 +116,13 @@ next phase, or opening the PR). Skip only if clearly continuing in the same sess
 
 {Table vs DEFINE.md, if it exists.}
 
-## Knowledge Capture Suggestions
+## Knowledge Capture
 
-{Section 4a — or omit.}
+{Section 4a — Applied/Deferred — or omit.}
 
 ## KB Staleness
 
-{Section 4b — or omit.}
+{Section 4b — Applied/Deferred — or omit.}
 
 ## ADR
 
@@ -116,5 +130,6 @@ next phase, or opening the PR). Skip only if clearly continuing in the same sess
 
 ## Suggested Next Steps
 
-{What to do after the review.}
+{What to do after the review. KB/ADR sync is already applied on this branch (Section 4),
+so this is usually: commit the phase (code + tests + KB/ADR together) and open the PR.}
 ```

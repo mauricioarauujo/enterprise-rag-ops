@@ -1,460 +1,387 @@
-# DESIGN: sprint-8/phase-1-faithfulness-schema — Supporting-Doc Attribution on FactVerdict
+# DESIGN: sprint-8/phase-2-root-cause-linkage — Per-Fact Root-Cause Attribution
 
-**Sprint/Phase:** sprint-8/phase-1-faithfulness-schema | **Date:** 2026-06-14
+**Sprint/Phase:** sprint-8/phase-2-root-cause-linkage | **Date:** 2026-06-16
 
 > Implement stage runs in **Antigravity / Gemini** against this artifact (AGENTS.md
 > § Implement Contract). This DESIGN is the contract — self-contained and precise.
 
----
+## Architecture
 
-## Overview
+### The seam
 
-Approach **B** (full retrieved-set attribution, reading (b)) is LOCKED. This phase is the
-**schema + emission + persistence half only** — root-cause linkage (phase 2) and Phoenix
-spans (phase 3) are explicit Won'ts.
+Phase-1 persisted `FactVerdict.supporting_doc_id: str | None` with the FR-5 guard collapsing any out-of-set id to `None` before write. The **verified invariant** (BRAINSTORM, "Sharp Design Tension"): when phase-2 reads a persisted record, every `supporting_doc_id` is _either_ `None` _or_ already a member of `retrieval_ranked_ids` — so a non-None set-intersection is tautological, and the real per-fact signal for a **failed** fact (`verdict ∈ {absent, contradicted}`) is `supporting_doc_id is None → retrieval_gap` vs `supporting_doc_id is not None → generation_gap`.
 
-The change threads an additive, nullable `supporting_doc_id` through the judge verdict:
+This phase introduces one **pure leaf module** `src/enterprise_rag_ops/eval/root_cause.py` that owns that predicate exactly once — `classify_fact_gap(...)` plus a per-record `rollup(record) -> RootCauseRollup`. It is consumed by **two** real callers — `report.py` (new top-level `"root_cause"` key + one dedicated "Root-Cause Attribution" render block in each of `render_markdown`/`render_html`, SC-2) and `failure_taxonomy.py` (new additive `attribute_root_cause(record) -> RootCauseRollup`, SC-3). The leaf imports only `eval.schema` and `eval.records` — never `runner`/`report`/`failure_taxonomy` (Decision A; FR-1 purity). A defensive explicit membership check (`supporting_doc_id not in retrieval_ranked_ids`, FR-4) keeps the predicate correct if the FR-5 guard is ever relaxed.
 
-1. **`FactVerdict`** gains `supporting_doc_id: str | None` — emitted by the LLM under
-   `strict: true`, so the field must land in the schema's `required` array with a
-   nullable type union (the load-bearing AC-2 decision, resolved below).
-2. The judge prompt gains a **`RETRIEVED DOCUMENTS`** block (full retrieved set, per-`doc_id`
-   join) that **supplements** the existing **`CITED DOCUMENTS`** block — two distinct
-   sections (OQ-2 resolved). It is the menu the judge picks `supporting_doc_id` from.
-3. A **hallucination guard** in `OpenAIJudge.judge_with_stats` collapses any emitted
-   `supporting_doc_id` not present in the retrieved doc-id set to `None`.
-4. **Persistence** round-trips the field as JSON `null` (not omitted) — already true with
-   the current `record.model_dump_json()` call (OQ-4 verified, no fix needed).
-
-`aggregate.py` is untouched; old eval records validate unchanged (Pydantic fills `None`).
-
-### Data flow (changed path only)
+### Data flow
 
 ```
-runner → OpenAIJudge.judge_with_stats(retrieved_docs)
-           │
-           ├─ build doc_text = {doc_id: "\n\n".join(chunk texts)}   ← already exists
-           ├─ cited_docs   = [(doc_id, doc_text.get(doc_id)) for doc_id in sources]   ← already exists
-           ├─ retrieved_docs_rendered = [(doc_id, doc_text[doc_id]) for doc_id in doc_text]   ← NEW (full set)
-           │
-           ├─ build_judge_user_prompt(... cited_docs=, retrieved_docs=)   ← NEW param
-           │     → CITED DOCUMENTS block      (unchanged)
-           │     → RETRIEVED DOCUMENTS block  (NEW)
-           │
-           ├─ create(... strict json_schema = _LLMJudgeVerdict.model_json_schema())
-           ├─ llm_verdict = _LLMJudgeVerdict.model_validate_json(raw)   ← already exists
-           ├─ HALLUCINATION GUARD: for fv in llm_verdict.per_fact:       ← NEW
-           │     if fv.supporting_doc_id not in {c.doc_id for c in retrieved_docs}: → None
-           ├─ aggregate(per_fact, per_citation)   ← unchanged (ignores supporting_doc_id)
-           └─ JudgeVerdict(per_fact=…, …)   ← supporting_doc_id flows through inherited
-                 → EvalRecord.per_fact → record.model_dump_json() → "supporting_doc_id": null|<id>
+EvalRecord.per_fact (list[FactVerdict] | None)
+        │
+        ▼
+  root_cause.rollup(record) ──► RootCauseRollup{retrieval_gap, generation_gap,
+        │   (per fact, via classify_fact_gap)        no_failed_facts, has_per_fact}
+        │
+        ├──► report.generate_report_data → data["root_cause"]  → render_markdown / render_html block  (SC-2)
+        └──► failure_taxonomy.attribute_root_cause(record)      → taxonomy-surface attribution         (SC-3)
+
+classify(record, question)  ── UNCHANGED 5-label cascade (no consumer of root_cause)  (FR-5 / AC-12)
+aggregate.py / schema.py / records.py  ── UNTOUCHED  (AC-13 / NFR-1)
 ```
-
----
-
-## The AC-2 schema decision (load-bearing — stated concretely)
-
-### Verified Pydantic v2 default emission for `str | None = None`
-
-For a field declared `supporting_doc_id: str | None = None` on a model with
-`ConfigDict(extra="forbid")`, Pydantic v2's **default** `model_json_schema()` emits the
-`FactVerdict` `$defs` sub-schema as:
-
-```jsonc
-"FactVerdict": {
-  "additionalProperties": false,
-  "properties": {
-    "fact": { "type": "string", ... },
-    "verdict": { "enum": ["present","absent","contradicted"], "type": "string", ... },
-    "supporting_doc_id": {
-      "anyOf": [ {"type": "string"}, {"type": "null"} ],   // ← anyOf form, NOT ["string","null"]
-      "default": null
-    }
-  },
-  "required": ["fact", "verdict"]                            // ← supporting_doc_id MISSING from required
-}
-```
-
-This is **NOT strict-compatible**, for two independent reasons:
-
-1. **Field excluded from `required`.** Because the field has a default (`= None`),
-   Pydantic v2 omits it from `required`. OpenAI `strict: true` rejects any property absent
-   from `required`. The repo's own `test_llm_facing_schema_is_strict_compatible`
-   (`tests/eval/test_schema.py:66`) asserts `set(defn["required"]) == set(defn["properties"])`
-   — which would **fail** on the default emission. This is the spine of the problem.
-2. **`anyOf` nullable form.** OpenAI strict accepts both `{"type":["string","null"]}` and
-   the `anyOf` form in current API versions, but the project KB and FR-2 standardize on
-   the **explicit type-union `{"type": ["string", "null"]}`**, which is the unambiguous,
-   universally-accepted shape. We normalize to it.
-
-There is **no existing strict-mode normalization step** in `openai_judge.py` — the schema
-is fed raw (`_LLMJudgeVerdict.model_json_schema()` passed directly). The current models are
-strict-compatible only because every field is non-default and non-nullable. Adding a
-nullable defaulted field is the first case that breaks the raw-emission assumption.
-
-### The fix — `json_schema_extra` override on the field (NFR-4 preserving)
-
-Express the override **in the Pydantic model definition** (NFR-4: no hand-maintained
-parallel JSON string, no `model_json_schema` post-processor). Use a per-field
-`json_schema_extra` that overwrites the field's sub-schema with the strict-compatible
-nullable union, **and** force the field into `required`.
-
-`json_schema_extra` on a `Field` merges into / overrides that property's schema node, but
-it does **not** move the field into the parent's `required` array — Pydantic decides
-`required` from the presence of a default. Two clean options; the design selects **Option A**:
-
-**Option A (selected) — drop the Python default, keep nullability via the type, restore
-back-compat with `validate_default`/a validator-free nullable.** Declaring the field
-_without_ a default would force it into `required` automatically — but it would also break
-the additive guarantee (old `FactVerdict(fact=…, verdict=…)` calls and old records lacking
-the key would raise). So Option A is **rejected** for breaking FR-1/NFR-1.
-
-**Option B (SELECTED) — keep `= None` for back-compat; override emission via a
-`model_json_schema` classmethod hook scoped on `FactVerdict` that (i) rewrites the
-`supporting_doc_id` property to `{"type": ["string","null"]}` and (ii) appends it to
-`required`.** Pydantic v2 supports overriding `__get_pydantic_json_schema__` on the model
-to post-process the field schema in a way that still lives _in the model definition_ (not a
-separate JSON blob), satisfying NFR-4. This keeps the Python-side default `None` (FR-1 /
-NFR-1 additive guarantee) while emitting the strict shape (FR-2).
-
-**Concrete implementation (FactVerdict in `eval/schema.py`):**
-
-```python
-from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic.json_schema import GetJsonSchemaHandler
-from pydantic_core import CoreSchema
-
-
-class FactVerdict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    fact: str = Field(description="The gold answer-fact being scored.")
-    verdict: Literal["present", "absent", "contradicted"] = Field(
-        description="Whether the answer states this fact, omits it, or contradicts it.",
-    )
-    # Additive, nullable (FR-1). Python default keeps old records / old construction valid
-    # (NFR-1). The strict-mode shape (required + ["string","null"]) is forced in
-    # __get_pydantic_json_schema__ below (FR-2, NFR-4 — override lives in the model).
-    supporting_doc_id: str | None = Field(
-        default=None,
-        description=(
-            "The doc_id of the retrieved document that most directly substantiates this "
-            "gold fact, or null when no retrieved document covers it."
-        ),
-    )
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
-    ) -> dict[str, Any]:
-        schema = handler(core_schema)
-        schema = handler.resolve_ref_schema(schema)
-        # Strict-mode normalization for the nullable field (OpenAI strict: true):
-        #   1. explicit type-union, not Pydantic's default anyOf
-        #   2. present in `required` (strict rejects any property absent from required)
-        props = schema.get("properties", {})
-        if "supporting_doc_id" in props:
-            props["supporting_doc_id"] = {
-                "type": ["string", "null"],
-                "description": props["supporting_doc_id"].get("description", ""),
-            }
-        required = schema.setdefault("required", [])
-        if "supporting_doc_id" not in required:
-            required.append("supporting_doc_id")
-        return schema
-```
-
-> **Implementer note (AC-2 — VERIFIED against installed Pydantic, 2026-06-14):** the hook
-> above (`__get_pydantic_json_schema__` with `resolve_ref_schema`) was run against the
-> installed Pydantic version in **both** the standalone `FactVerdict.model_json_schema()`
-> and the real nested `_LLMJudgeVerdict.model_json_schema()` context (where `FactVerdict`
-> lands in `$defs`). Confirmed results:
->
-> - Default emission (no hook) **fails** the strict gate: `required == ['fact', 'verdict']`
->   (`supporting_doc_id` excluded) and the prop emits `anyOf`, not the type-union.
-> - With the hook, `$defs.FactVerdict` emits `supporting_doc_id` typed
->   `{"type": ["string", "null"]}` **and** present in `required`; both `FactVerdict` and
->   `CitationVerdict` pass `required == properties`; `additionalProperties: false` is
->   preserved; runtime default stays `None` and `model_dump_json()` emits
->   `"supporting_doc_id":null` (so OQ-4's null-vs-absent distinction holds).
->
-> Implement the hook as written — no Context7 confirmation needed. AC-2 remains the
-> fail-closed gate (the test asserts on the real `_LLMJudgeVerdict.model_json_schema()`
-> output). Do **not** introduce a parallel JSON string (NFR-4).
-
-This preserves the existing `test_llm_facing_schema_is_strict_compatible` invariant
-(`required == properties` for every `$def`) because `supporting_doc_id` is now in both.
-
-### AC-2 test assertion (in `tests/eval/test_schema.py`)
-
-```python
-def test_supporting_doc_id_is_strict_compatible_nullable():
-    schema = _LLMJudgeVerdict.model_json_schema()
-    fv = schema["$defs"]["FactVerdict"]
-    assert "supporting_doc_id" in fv["required"]              # strict requires it
-    assert fv["properties"]["supporting_doc_id"]["type"] == ["string", "null"]
-    # existing invariant still holds: every property is required
-    assert set(fv["required"]) == set(fv["properties"])
-```
-
----
-
-## Component-by-component design
-
-### 1. `eval/schema.py` — `FactVerdict` (FR-1, FR-2)
-
-- Add `supporting_doc_id: str | None = Field(default=None, description=…)`.
-- Add the `__get_pydantic_json_schema__` classmethod (above) to force the strict shape.
-- `_LLMJudgeVerdict.per_fact: list[FactVerdict]` and `JudgeVerdict.per_fact:
-list[FactVerdict]` inherit the field with **zero code change** — both reference
-  `FactVerdict` by type, so the new field and its strict schema flow through automatically.
-- `extra="forbid"` is still satisfied: adding a _declared_ field is not an "extra" field.
-- Update the class docstring (currently says "an optional `supporting_doc_id` is a later
-  additive … not present now") to reflect that it now exists.
-
-### 2. `eval/prompt.py` — `build_judge_user_prompt` + rubric (FR-3, FR-4)
-
-**New signature** — add a `retrieved_docs` param alongside the existing `cited_docs`
-(OQ-2: supplement, do not replace):
-
-```python
-def build_judge_user_prompt(
-    question: str,
-    answer: str,
-    answer_facts: list[str],
-    cited_docs: list[tuple[str, str | None]],
-    retrieved_docs: list[tuple[str, str]],   # NEW — (doc_id, text), full retrieved set
-) -> str:
-```
-
-- Reuse the existing per-`doc_id` `=== doc {doc_id} ===` block-render logic for the new
-  block (extract a tiny local helper or inline a second loop — implementer's choice;
-  the retrieved block never has `None` text since it is built from `doc_text` directly).
-- **Block placement (exact, so the implementer does not guess):** the new
-  `RETRIEVED DOCUMENTS` block is appended **after** the existing `CITED DOCUMENTS` block.
-  Final user-prompt section order:
-
-  ```
-  QUESTION:
-  {question}
-
-  ANSWER UNDER JUDGMENT:
-  {answer}
-
-  GOLD FACTS (one per_fact verdict each, in order):
-  {facts_block}
-
-  CITED DOCUMENTS (one per_citation verdict each, in order):
-  {cited_block}
-
-  RETRIEVED DOCUMENTS (the full candidate set; pick supporting_doc_id from these doc ids):
-  {retrieved_block}
-  ```
-
-  `retrieved_block` is `"\n\n".join(f"=== doc {doc_id} ===\n{text}" for doc_id, text in retrieved_docs)`.
-
-- **`_RUBRIC` addition** — append one block to the existing rubric instructing per-fact
-  attribution (FR-4). Append after the existing per_fact bullet list, before the
-  per_citation block, or as a trailing sentence — exact text:
-
-  ```
-  For EACH gold fact also emit supporting_doc_id: the doc_id from the RETRIEVED
-  DOCUMENTS block whose text most directly substantiates that fact, or null if no
-  retrieved document covers it. Pick only a doc_id shown in RETRIEVED DOCUMENTS.
-  ```
-
-  This line must appear in `build_judge_system_prompt()` output (AC-4 asserts the
-  substring `supporting_doc_id` in the system prompt). Note the embedded schema in the
-  system prompt now _also_ contains `supporting_doc_id` (from `_LLMJudgeVerdict.model_json_schema()`),
-  which is an additional natural anchor for AC-4.
-
-### 3. `eval/openai_judge.py` — wiring + hallucination guard (FR-3, FR-5)
-
-- **Build the retrieved-docs block input** right after the existing `doc_text` map (line
-  ~93). `doc_text` is already the per-`doc_id` joined text of the full retrieved set, so:
-
-  ```python
-  retrieved_docs_rendered = [(doc_id, text) for doc_id, text in doc_text.items()]
-  ```
-
-  (Iteration order of `doc_text` is insertion order = retrieval order, since it is built
-  from a `defaultdict` populated by iterating `retrieved_docs`. Deterministic — good for
-  byte-identical prompts.)
-
-- **Pass it to the prompt builder:**
-
-  ```python
-  user_prompt = build_judge_user_prompt(
-      question=question,
-      answer=answer_with_sources.answer,
-      answer_facts=answer_facts,
-      cited_docs=cited_docs,
-      retrieved_docs=retrieved_docs_rendered,   # NEW
-  )
-  ```
-
-- **Hallucination guard (FR-5)** — sits **immediately after** the existing re-validation
-  (`llm_verdict = _LLMJudgeVerdict.model_validate_json(raw)`, line ~126) and **before**
-  `aggregate(...)`:
-
-  ```python
-  retrieved_ids = {c.doc_id for c in retrieved_docs}
-  for fv in llm_verdict.per_fact:
-      if fv.supporting_doc_id is not None and fv.supporting_doc_id not in retrieved_ids:
-          fv.supporting_doc_id = None
-  ```
-
-  Mutating the validated `FactVerdict` in place is fine (Pydantic v2 models are mutable by
-  default; `extra="forbid"` only constrains construction, not assignment to a declared
-  field). The guarded `per_fact` then flows unchanged into `JudgeVerdict(per_fact=…)`.
-
-- **Add an AC-10 cost-note comment** near the prompt build: the `RETRIEVED DOCUMENTS` block
-  grows the judge user prompt by ~+1,500–3,000 input tokens/call at k=10; no new cost
-  mechanism — the existing `cost_ceiling_usd` guard is the unchanged backstop.
-
-### 4. `eval/stub_judge.py` — conformance (FR-6)
-
-One-line change in `StubJudge.judge`:
-
-```python
-per_fact = [
-    FactVerdict(fact=fact, verdict="present", supporting_doc_id=None)
-    for fact in answer_facts
-]
-```
-
-(Explicit `supporting_doc_id=None` documents intent; the default would also produce `None`.)
-
-### 5. `eval/records.py` / `eval/runner.py` — persistence (FR-7, OQ-4)
-
-- **No code change.** `EvalRecord.per_fact: list[FactVerdict] | None` already holds the new
-  field via the `FactVerdict` type. The runner persists with `record.model_dump_json()`
-  (`runner.py:432`) — **verified: no `exclude_none=True`**. Pydantic v2's
-  `model_dump_json()` defaults to `exclude_none=False`, so `supporting_doc_id=None`
-  serialises as `"supporting_doc_id": null` (key present), distinguishable from an old
-  record's absent key. OQ-4 is resolved with **no fix required**.
-- `StubJudge.judge_with_stats` builds `raw_call.response` via `fv.model_dump()` (lines
-  62–67) — the new field flows through automatically; no change.
-
-### 6. `eval/aggregate.py` — unchanged (NFR-1)
-
-`aggregate` reads only `.verdict` on facts and citations; it never touches
-`supporting_doc_id`. Byte-identical floats for any pre-existing input. Confirmed by code
-read (`aggregate.py:30–41`). AC-8 adds a regression test, no source change.
-
----
 
 ## File Manifest
 
-| File                                          | Change                                                                                                                                    | New/Modified | Mirrored test                        | Phase order     |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------ | --------------- |
-| `src/enterprise_rag_ops/eval/schema.py`       | Add `supporting_doc_id` to `FactVerdict` + `__get_pydantic_json_schema__` strict-shape hook                                               | Modified     | `tests/eval/test_schema.py`          | 1 (core schema) |
-| `src/enterprise_rag_ops/eval/prompt.py`       | `build_judge_user_prompt` gains `retrieved_docs` param + `RETRIEVED DOCUMENTS` block; `_RUBRIC` gains the `supporting_doc_id` instruction | Modified     | `tests/eval/test_prompt.py`          | 2 (core logic)  |
-| `src/enterprise_rag_ops/eval/openai_judge.py` | Build retrieved-docs block input; pass to prompt; post-validation hallucination guard; cost-note comment                                  | Modified     | `tests/eval/test_judge_anchor.py`    | 3 (core logic)  |
-| `src/enterprise_rag_ops/eval/stub_judge.py`   | One-line: emit `supporting_doc_id=None`                                                                                                   | Modified     | `tests/eval/test_judge_contract.py`  | 4 (core logic)  |
-| `src/enterprise_rag_ops/eval/records.py`      | None (field flows through `FactVerdict` type)                                                                                             | Unchanged    | `tests/eval/test_records.py`         | —               |
-| `src/enterprise_rag_ops/eval/runner.py`       | None (`model_dump_json()` already emits null; verified no `exclude_none`)                                                                 | Unchanged    | (covered by test_records round-trip) | —               |
-| `src/enterprise_rag_ops/eval/aggregate.py`    | None (never reads the field)                                                                                                              | Unchanged    | `tests/eval/test_aggregate.py`       | —               |
-| `tests/eval/test_schema.py`                   | AC-1 (construct with/without field), AC-2 (strict-shape assertion on real `model_json_schema()`)                                          | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/conftest.py`                      | Update `canned_verdict_payload` to include `supporting_doc_id` (one in-set `doc_real`, one hallucinated `gd_hallucinated`)                | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/test_judge_anchor.py`             | AC-3 (RETRIEVED DOCUMENTS block + per-doc rendering, distinct from CITED), AC-5 (hallucination-guard collapse + in-set retention)         | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/test_prompt.py`                   | AC-3/AC-4 (new param call; RETRIEVED block present; rubric `supporting_doc_id` line in system prompt)                                     | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/test_judge_contract.py`           | AC-6 (StubJudge emits `supporting_doc_id is None` on every per_fact)                                                                      | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/test_records.py`                  | AC-7 (null-not-absent serialisation; old-record-without-key still validates → None)                                                       | Modified     | —                                    | 6 (tests)       |
-| `tests/eval/test_aggregate.py`                | AC-8 (same floats with/without the field)                                                                                                 | Modified     | —                                    | 6 (tests)       |
+| File                                              | Change                                                                                                                  | Owner                  | Phase order |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------- |
+| `src/enterprise_rag_ops/eval/root_cause.py`       | **CREATE** — `classify_fact_gap`, `rollup`, `RootCauseRollup` (pure leaf + docstring)                                   | direct (eval workflow) | 1           |
+| `tests/eval/test_root_cause.py`                   | **CREATE** — predicate + rollup + degradation + defensive tests (ACs 1–7)                                               | direct (eval workflow) | 2           |
+| `src/enterprise_rag_ops/eval/report.py`           | **MODIFY** — new `"root_cause"` key in `generate_report_data`; one new block in each of `render_markdown`/`render_html` | direct (eval workflow) | 3           |
+| `tests/eval/test_report.py`                       | **MODIFY** — add root-cause data + render tests (ACs 8/9/10)                                                            | direct (eval workflow) | 4           |
+| `src/enterprise_rag_ops/eval/failure_taxonomy.py` | **MODIFY** — add `attribute_root_cause(record)` delegating to `root_cause.rollup`; cascade/StrEnum/`is_*` untouched     | direct (taxonomy)      | 5           |
+| `tests/eval/test_failure_taxonomy.py`             | **MODIFY** — add SC-3 attribution test + no-reclassification regression assertion (ACs 11/12)                           | direct (taxonomy)      | 6           |
+| `src/enterprise_rag_ops/eval/aggregate.py`        | **UNTOUCHED** (AC-13, NFR-1)                                                                                            | —                      | —           |
+| `src/enterprise_rag_ops/eval/schema.py`           | **UNTOUCHED** (no schema change)                                                                                        | —                      | —           |
+| `src/enterprise_rag_ops/eval/records.py`          | **UNTOUCHED** (no schema change)                                                                                        | —                      | —           |
+| `tests/eval/__init__.py`                          | **EXISTS** — confirm present (AC-14); do not recreate                                                                   | —                      | —           |
 
-**No ADR.** SPRINT.md states no new ADR is anticipated; the field was pre-designed into the
-schema-as-SSoT pattern. The strict-nullable emission is an implementation detail of an
-already-decided architecture, not a new architectural decision.
+No specialist sub-agent exists for the eval/observability code surface; all work is `direct` per the existing eval-workflow / taxonomy convention (see Infrastructure Gaps — agent alignment).
 
----
+## Exact Contracts
 
-## Implementation Phases (ordered per the convention)
+### 1. `src/enterprise_rag_ops/eval/root_cause.py` (CREATE)
 
-1. **Data schema / dataset loading** — n/a (no dataset change).
-2. **Config** — n/a (NFR-3: no new cost mechanism; `cost_ceiling_usd` unchanged).
-3. **Core module logic (`src/`)**, in dependency order:
-   1. `eval/schema.py` — `FactVerdict` field + strict-shape hook (everything else depends on it).
-   2. `eval/prompt.py` — `RETRIEVED DOCUMENTS` block + rubric line.
-   3. `eval/openai_judge.py` — wire the block + hallucination guard.
-   4. `eval/stub_judge.py` — one-line conformance.
-4. **Eval harness wiring (`eval/`)** — `records.py` / `runner.py` confirmed unchanged
-   (persistence already correct).
-5. **Observability hooks** — n/a (phase-3 Won't; no `observability/` change).
-6. **Tests** — `test_schema.py` (AC-1, AC-2), `conftest.py` canned payload (AC-9),
-   `test_judge_anchor.py` (AC-3, AC-5), `test_prompt.py` (AC-3, AC-4),
-   `test_judge_contract.py` (AC-6), `test_records.py` (AC-7), `test_aggregate.py` (AC-8).
-7. **Docs + ADR** — none (no ADR; AC-10 cost note is a code comment + PR body).
+```python
+"""Per-fact root-cause attribution — the shared leaf predicate (FR-1, FR-2, FR-4).
 
-**Validate smallest-first:** `uv run pytest -k "schema or prompt or judge_anchor"` →
-then `make lint test` (AC-11). Eval-path tests use the existing `FakeOpenAIClient` +
-canned-payload double — **not** a VCR cassette for the judge path (AC-9; no judge `.yaml`
-cassette exists).
+Why None-vs-non-None is the signal (NOT a set intersection): sprint-8/phase-1's FR-5
+hallucination guard collapses any `FactVerdict.supporting_doc_id` not in the judge's
+retrieved set to `None` *before* persistence, and that retrieved set is provably equal
+to the persisted `EvalRecord.retrieval_ranked_ids` (same `chunk_hits` source, same
+doc-level dedup). So on a persisted record every `supporting_doc_id` is either `None`
+or already a member of `retrieval_ranked_ids` — a non-None intersection is tautological.
 
----
+For a FAILED fact (`verdict in {"absent", "contradicted"}`):
+  - `supporting_doc_id is None`     -> retrieval_gap  (no retrieved doc substantiates
+                                       the fact; evidence never reached the generator)
+  - `supporting_doc_id` is present  -> generation_gap (the evidence WAS retrieved; the
+                                       generator failed to use it)
+
+A defensive explicit membership check (FR-4) is kept so the predicate stays correct if
+the FR-5 guard is ever relaxed. Pure leaf: no I/O, no network, imports only eval.schema
+and eval.records — never runner / report / failure_taxonomy.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+from enterprise_rag_ops.eval.records import EvalRecord
+from enterprise_rag_ops.eval.schema import FactVerdict
+
+FAILED_VERDICTS: frozenset[str] = frozenset({"absent", "contradicted"})
+
+FactGap = Literal["retrieval_gap", "generation_gap"]
+
+
+def classify_fact_gap(
+    fact_verdict: FactVerdict,
+    retrieval_ranked_ids: list[str],
+) -> FactGap | None:
+    """Classify one fact verdict into a root-cause gap label (FR-1, FR-4).
+
+    Returns:
+        None              when verdict == "present" (the fact is not a failure).
+        "retrieval_gap"   when the fact failed AND supporting_doc_id is None, or
+                          (defensively, FR-4) supporting_doc_id is not in
+                          retrieval_ranked_ids.
+        "generation_gap"  when the fact failed AND supporting_doc_id is present in
+                          retrieval_ranked_ids.
+    """
+    if fact_verdict.verdict not in FAILED_VERDICTS:
+        return None
+    doc_id = fact_verdict.supporting_doc_id
+    if doc_id is None or doc_id not in retrieval_ranked_ids:
+        return "retrieval_gap"
+    return "generation_gap"
+
+
+@dataclass(frozen=True, slots=True)
+class RootCauseRollup:
+    """Per-record root-cause counts (FR-2).
+
+    `has_per_fact` distinguishes "no per-fact evidence" (record.per_fact is None →
+    has_per_fact=False, the degraded case the report maps to N/A) from "data present,
+    zero gaps" (has_per_fact=True with all counts 0 → 0.0%). This preserves the
+    null-vs-absent distinction (phase-1 AC-7 / FR-6).
+
+    `no_failed_facts` is True iff per-fact evidence exists but zero facts failed.
+    """
+
+    retrieval_gap: int = 0
+    generation_gap: int = 0
+    no_failed_facts: bool = False
+    has_per_fact: bool = True
+
+    @property
+    def total_failed(self) -> int:
+        """Failed facts with an assigned gap (retrieval_gap + generation_gap)."""
+        return self.retrieval_gap + self.generation_gap
+
+
+def rollup(record: EvalRecord) -> RootCauseRollup:
+    """Apply `classify_fact_gap` across `record.per_fact` (FR-2).
+
+    Graceful degradation (FR-2 / NFR-1): when record.per_fact is None, returns a rollup
+    with has_per_fact=False and zero counts — distinct from "zero gaps" — never raises.
+    """
+    if record.per_fact is None:
+        return RootCauseRollup(has_per_fact=False)
+
+    retrieval = 0
+    generation = 0
+    for fv in record.per_fact:
+        gap = classify_fact_gap(fv, record.retrieval_ranked_ids)
+        if gap == "retrieval_gap":
+            retrieval += 1
+        elif gap == "generation_gap":
+            generation += 1
+    return RootCauseRollup(
+        retrieval_gap=retrieval,
+        generation_gap=generation,
+        no_failed_facts=(retrieval == 0 and generation == 0),
+        has_per_fact=True,
+    )
+```
+
+**A1 resolved:** signature is `classify_fact_gap(fact_verdict: FactVerdict, retrieval_ranked_ids: list[str]) -> FactGap | None`. Passing the whole `FactVerdict` (not unpacked fields) keeps the call site readable and matches Decision A wording. Parameter typed `list[str]` (not `set`) to match the persisted `EvalRecord.retrieval_ranked_ids: list[str]` field exactly — the caller (`rollup`) iterates `per_fact` once and the membership check is over the typically short top-k id list, so the O(1)-set micro-optimization is not justified at this scale and `list` avoids a per-call `set()` build that would obscure the contract. (If a hot path emerges, the caller can pass a pre-built `set[str]` — `in` works identically.)
+
+**A2 resolved:** `RootCauseRollup` is a `@dataclass(frozen=True, slots=True)` (matches the project's frozen-dataclass convention, e.g. `Question`, `TriageReport`). Degraded marker is the explicit `has_per_fact: bool` field — `has_per_fact=False` is "no per-fact evidence" (degraded → N/A), `has_per_fact=True` with `total_failed == 0` is "data present, zero gaps" → `0.0%`. `total_failed` is a `@property`, not a stored field, to keep the count fields the single SSoT.
+
+### 2. `report.py` — `generate_report_data` new key (MODIFY)
+
+**Import to add** (top of file, with the other eval imports):
+
+```python
+from enterprise_rag_ops.eval.root_cause import RootCauseRollup, rollup
+```
+
+**A3 resolved — data shape.** Per DEFINE/FR-3 a **new top-level key** `"root_cause"` (not nested into `categories[*].metrics`). Grain = **per category AND per model**, mirroring the existing `categories[*].metrics[model]` shape. Inside the existing per-category / per-model loop in `generate_report_data`, accumulate a rollup sum across that category-model's records and build a parallel `root_cause_data` list:
+
+```python
+# after the existing category loop body computes model_cat_metrics, also accumulate
+# root-cause rollups per model for this category:
+model_cat_root_cause = {}
+for model_name, recs in model_records.items():
+    cat_recs = [r for r in recs if r.question_id in cat_q_ids]
+    agg_retrieval = 0
+    agg_generation = 0
+    any_evidence = False
+    for r in cat_recs:
+        rc = rollup(r)
+        if rc.has_per_fact:
+            any_evidence = True
+            agg_retrieval += rc.retrieval_gap
+            agg_generation += rc.generation_gap
+    denom = agg_retrieval + agg_generation
+    # FR-6 / Decision D: no per-fact evidence at all -> None (N/A); evidence with
+    # zero gaps -> 0.0 (0.0%); otherwise the retrieval-gap share among failed facts.
+    if not any_evidence:
+        retrieval_gap_pct = None
+    elif denom == 0:
+        retrieval_gap_pct = 0.0
+    else:
+        retrieval_gap_pct = agg_retrieval / denom
+    model_cat_root_cause[model_name] = {
+        "retrieval_gap": agg_retrieval,
+        "generation_gap": agg_generation,
+        "retrieval_gap_pct": retrieval_gap_pct,
+        "has_evidence": any_evidence,
+    }
+root_cause_data.append({"category": cat, "metrics": model_cat_root_cause})
+```
+
+Initialise `root_cause_data = []` alongside `category_data = []`. Add `"root_cause": root_cause_data` to the returned dict. The existing four keys (`k`, `summary`, `categories`, `costs`) and the 7-column category table are **unchanged** (NFR-4).
+
+**Per-category-per-model dict shape (exact):**
+
+```python
+data["root_cause"] = [
+    {
+        "category": str,
+        "metrics": {
+            model_name: {
+                "retrieval_gap": int,            # count of failed facts, no doc retrieved
+                "generation_gap": int,           # count of failed facts, doc was retrieved
+                "retrieval_gap_pct": float | None,  # None => N/A; 0.0 => 0.0%; else share
+                "has_evidence": bool,            # False => whole category-model degraded (N/A)
+            },
+            ...
+        },
+    },
+    ...
+]
+```
+
+**Percentage formula (FR-3, A3):** `retrieval_gap_pct = retrieval_gap / (retrieval_gap + generation_gap)` among **failed** facts. The complement `generation_gap_pct = 1 - retrieval_gap_pct` (the two sum to 100% when data present), so the renderer derives generation share from the stored retrieval share and need not store both.
+
+**N/A vs 0.0% rule (FR-6, Decision D):** `retrieval_gap_pct is None` ⇒ render via `_fmt(None, pct=True)` → `"N/A"` (no per-fact evidence anywhere in the category-model — `has_evidence=False`, or denominator 0 because all records degraded). `retrieval_gap_pct == 0.0` with `has_evidence=True` ⇒ `_fmt(0.0, pct=True)` → `"0.0%"` (data present, zero failed-fact gaps). Counts render directly (`int`) — N/A only ever applies to the percentage cell.
+
+### 3. `report.py` — `render_markdown` new block (MODIFY)
+
+After the cost table block and before `template = Template(...)`, build:
+
+```python
+# Root-Cause Attribution table (SC-2): retrieval-gap vs generation-gap of FAILED facts.
+md_root_cause = (
+    "| Category | Model | Retrieval-Gap (failed facts) | Generation-Gap (failed facts) | Retrieval-Gap % |\n"
+)
+md_root_cause += "| --- | --- | --- | --- | --- |\n"
+for rc_row in data["root_cause"]:
+    first = True
+    for model_name, rc in rc_row["metrics"].items():
+        cat_label = f"**{rc_row['category']}**" if first else ""
+        md_root_cause += (
+            f"| {cat_label} | {model_name} | {rc['retrieval_gap']} | "
+            f"{rc['generation_gap']} | {_fmt(rc['retrieval_gap_pct'], pct=True)} |\n"
+        )
+        first = False
+```
+
+Add a `## Root-Cause Attribution` section to the markdown `Template` string (after the `## Detailed Breakdown Per Category` section) with a `$root_cause_table` placeholder, and add `root_cause_table=md_root_cause` to `template.substitute(...)`.
+
+**Render marker for tests (AC-9):** the exact substring `"## Root-Cause Attribution"` MUST appear in the markdown output.
+
+### 4. `report.py` — `render_html` new block (MODIFY)
+
+After the cost-rows block, build `html_root_cause_rows` mirroring the category-table rowspan pattern, using `_fmt(rc["retrieval_gap_pct"], pct=True)` for the percentage cell. Add a new `<div class="card">` containing an `<h2>Root-Cause Attribution</h2>` and a 5-column table (`Category`, `Model`, `Retrieval-Gap`, `Generation-Gap`, `Retrieval-Gap %`) with a `$root_cause_rows` placeholder in `<tbody>`, inserted after the "Detailed Category breakdown" card. Add `root_cause_rows=html_root_cause_rows` to `template.substitute(...)`.
+
+**Render marker for tests (AC-9):** the exact substring `"Root-Cause Attribution"` MUST appear in the HTML output (the `<h2>` text). The existing category `<table>` keeps its 7 `<th>` columns unchanged (NFR-4).
+
+### 5. `failure_taxonomy.py` — `attribute_root_cause` (MODIFY)
+
+**A4 resolved.** Add a single new public function; the 5-label `classify()` cascade, `FailureMode` StrEnum, `is_*` helpers, and 0.5/0.5 thresholds are **untouched** (FR-5 / AC-12 / AC-13). New import + function:
+
+```python
+from enterprise_rag_ops.eval.root_cause import RootCauseRollup, rollup
+
+
+def attribute_root_cause(record: EvalRecord) -> RootCauseRollup:
+    """Per-fact root-cause attribution at the taxonomy surface (FR-5 / SC-3).
+
+    Delegates to `root_cause.rollup` so the taxonomy can attribute a retrieval-miss
+    vs generation-gap root cause from the per-fact `supporting_doc_id` signal — not
+    just answer-level aggregates (SC-3's literal requirement). Additive and orthogonal:
+    it does NOT touch `classify()`, the cascade order, the `FailureMode` members, or
+    the `is_*` helpers — no record is reclassified (Decision C / AC-12).
+    """
+    return rollup(record)
+```
+
+**Why this satisfies SC-3 at the taxonomy surface without importing report or touching `classify()`:** SC-3 requires "the taxonomy _can attribute_ a retrieval-miss root cause using the new field." `attribute_root_cause` is a public function _in `failure_taxonomy.py`_ (the taxonomy module surface) returning the per-fact `retrieval_gap`/`generation_gap` breakdown via the shared leaf. It adds zero coupling to `report.py` and leaves the 5-label classifier byte-identical (verified by the AC-12 regression). It is a thin delegating wrapper (not a re-export) so the taxonomy surface exposes the capability as its own named function — discoverable where a triage/taxonomy consumer looks.
+
+## Implementation Phases
+
+Built leaf-first, each step independently testable (Engineering Behavior — validate-smallest-first):
+
+1. **Create `eval/root_cause.py`** (Phase order 1) — `FAILED_VERDICTS`, `classify_fact_gap`, `RootCauseRollup`, `rollup`. Pure; no consumer yet.
+2. **Create `tests/eval/test_root_cause.py`** (2) — covers ACs 1–7. Validate: `uv run pytest tests/eval/test_root_cause.py`. Gate the leaf before any consumer wiring.
+3. **Modify `report.py`** (3) — add `"root_cause"` key + the two render blocks. Validate: `uv run pytest tests/eval/test_report.py`.
+4. **Modify `tests/eval/test_report.py`** (4) — ACs 8/9/10. Validate same -k subset.
+5. **Modify `failure_taxonomy.py`** (5) — add `attribute_root_cause`. Validate: `uv run pytest tests/eval/test_failure_taxonomy.py`.
+6. **Modify `tests/eval/test_failure_taxonomy.py`** (6) — ACs 11/12 (incl. the no-reclassification regression). Then full gate: `make lint test` (AC-15 / NFR-5).
+
+This honours the phase-ordering convention: no data-schema/config/dataset change (schema untouched), core module (`root_cause.py`) → eval-harness consumers (`report.py`, `failure_taxonomy.py`) → tests, then the lint/test gate. No observability hook, no docs/ADR (AC-13: no new ADR).
+
+## Test Plan
+
+All tests **offline** (no network, no API key, no model download, no mocked LLM — NFR-2 / AC-14), reusing `tests/eval/conftest.py` fixtures. A new tiny local factory is added in `test_root_cause.py` for records with controllable `per_fact`/`retrieval_ranked_ids` (the existing `make_eval_record` in `test_failure_taxonomy.py` does not expose `per_fact`, so duplicating it locally is cleaner than cross-importing a test helper).
+
+### `tests/eval/test_root_cause.py` (CREATE) — new local factory
+
+```python
+def _fv(fact: str, verdict: str, supporting_doc_id: str | None = None) -> FactVerdict:
+    return FactVerdict(fact=fact, verdict=verdict, supporting_doc_id=supporting_doc_id)
+
+def _record_with_facts(
+    per_fact: list[FactVerdict] | None,
+    retrieval_ranked_ids: list[str],
+) -> EvalRecord:
+    """Minimal EvalRecord with controllable per_fact / retrieval_ranked_ids."""
+    # build via EvalRecord(...) mirroring make_eval_record's required fields, setting
+    # per_fact=per_fact and retrieval_ranked_ids=retrieval_ranked_ids.
+```
+
+| Test name                                                    | AC  | Asserts                                                                                                                                                                                                                                      | Fixtures           |
+| ------------------------------------------------------------ | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `test_present_fact_returns_none`                             | 1   | `classify_fact_gap(_fv("f","present", "doc_x"), ["doc_x"])` and `(..., None, [])` — present always → `None` regardless of `supporting_doc_id`/membership                                                                                     | none (local `_fv`) |
+| `test_failed_fact_none_doc_is_retrieval_gap`                 | 2   | for both `"absent"` and `"contradicted"` with `supporting_doc_id is None` → `"retrieval_gap"` (parametrized over the two verdicts)                                                                                                           | local              |
+| `test_failed_fact_retrieved_doc_is_generation_gap`           | 3   | `_fv("f","absent","doc_real")` with `retrieval_ranked_ids=["doc_real"]` → `"generation_gap"`                                                                                                                                                 | local              |
+| `test_failed_fact_out_of_set_doc_is_retrieval_gap_defensive` | 4   | `_fv("f","absent","gd_hallucinated")` with `retrieval_ranked_ids=["doc_real"]` (non-None but **not** in set) → `"retrieval_gap"` — explicit defensive branch                                                                                 | local              |
+| `test_output_domain_over_matrix`                             | 5   | iterate verdict × `supporting_doc_id ∈ {None, in-set, out-of-set}`; assert every return ∈ `{"retrieval_gap","generation_gap", None}`                                                                                                         | local              |
+| `test_rollup_counts_mixed_facts`                             | 6   | record with `per_fact=[present(doc_real), absent(None), contradicted(doc_real), absent(out_of_set)]`, `retrieval_ranked_ids=["doc_real"]` → `retrieval_gap=2, generation_gap=1, no_failed_facts=False, has_per_fact=True`; `total_failed==3` | local              |
+| `test_rollup_zero_failed_facts_distinct_from_degraded`       | 6   | record with all-`present` per_fact → `no_failed_facts=True, has_per_fact=True, total_failed==0`                                                                                                                                              | local              |
+| `test_rollup_per_fact_none_degrades`                         | 7   | `rollup(record_with per_fact=None)` does not raise; `has_per_fact is False`, all counts 0, `no_failed_facts is False` — distinct from the zero-gaps case above                                                                               | local              |
+
+**Reuse note:** `canned_verdict_payload` already encodes the exact two-branch case (one `present`/`doc_real` retained, one `absent`/`gd_hallucinated` → collapsed to `None` by the guard). `test_root_cause.py` need not parse it (the local `_fv` factory is more direct for unit coverage), but the doc-id vocabulary (`doc_real`, `gd_hallucinated`, `gd_unrelated`) is reused for consistency.
+
+### `tests/eval/test_report.py` (MODIFY) — additions
+
+Extend the existing `sample_jsonl` fixture records (or add a focused second fixture) so that: (a) the `basic` category record carries a `per_fact` list with ≥1 failed fact split across gap types → exercises the count + percentage path; (b) at least one category's records all have `per_fact` **absent/None** → exercises N/A; (c) one category has per-fact evidence with zero failed facts → exercises `0.0%`. (The existing fixture records omit `per_fact`, so they default to `None` and already provide the degraded/N-A baseline — AC-10's N/A half is satisfied by leaving most fillers as-is.)
+
+| Test name                                      | AC  | Asserts                                                                                                                                                                                                                                                           | Fixtures                                             |
+| ---------------------------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `test_root_cause_key_in_report_data`           | 8   | `generate_report_data(sample_jsonl)` (with `load_questions` monkeypatched as in existing test) has top-level `"root_cause"`; the `basic` category entry distinguishes `retrieval_gap` vs `generation_gap` counts among failed facts                               | `sample_jsonl`, `monkeypatch`                        |
+| `test_root_cause_section_rendered_md_and_html` | 9   | `render_report` output contains `"## Root-Cause Attribution"` (md) and `"Root-Cause Attribution"` (html `<h2>`); existing 7-column category table column count unchanged — assert the category header line still has exactly its 7 columns / the 7 `<th>` (NFR-4) | `sample_jsonl`, `tmp_path`, `monkeypatch`            |
+| `test_root_cause_na_vs_zero_pct`               | 10  | a category whose records are all `per_fact=None` renders `N/A` in the root-cause section; a category with per-fact evidence and zero failed facts renders `0.0%`; the two are asserted **distinctly**                                                             | `sample_jsonl` (extended), `tmp_path`, `monkeypatch` |
+
+### `tests/eval/test_failure_taxonomy.py` (MODIFY) — additions
+
+`make_eval_record` currently has no `per_fact` parameter. Add an optional `per_fact: list[FactVerdict] | None = None` parameter to it (additive, default `None` keeps all existing call sites green) and pass it through to the `EvalRecord(...)` constructor.
+
+| Test name                                       | AC  | Asserts                                                                                                                                                                                                                                                                                                                                                            | Fixtures                                          |
+| ----------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `test_attribute_root_cause_at_taxonomy_surface` | 11  | import `attribute_root_cause` from `enterprise_rag_ops.eval.failure_taxonomy`; call on a record with mixed failed facts (`per_fact` set, `retrieval_ranked_ids` set); assert the returned `RootCauseRollup.retrieval_gap`/`generation_gap` match the expected split — proves SC-3 reachable through the taxonomy module's public surface, built on `root_cause.py` | extended `make_eval_record`                       |
+| `test_classify_unchanged_no_reclassification`   | 12  | re-run the five canonical fixtures (one per label) asserting `classify(...)` returns the identical `FailureMode` for each — regression guard that the cascade order, StrEnum members, and `is_*` helpers are untouched. Also assert `len(FailureMode) == 5` (no 6th label, AC-13)                                                                                  | reuse existing `make_eval_record`/`make_question` |
+
+**AC-13 coverage** is split: the `len(FailureMode) == 5` assertion lives in `test_classify_unchanged_no_reclassification`; the "`aggregate.py` unmodified / no new ADR" half is a manifest/diff invariant (the executor must not touch `aggregate.py` or add `docs/adr/*`) — enforced by code review, not a runtime test.
 
 ## Infrastructure Gaps
 
-| Gap Type           | Area                            | Detail                                                                                                                                                                                                                                                                | Recommendation                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Missing domain     | —                               | None. The `rag-eval` domain covers schema-as-SSoT, per-doc faithfulness, the per-fact judge call, and offline-CI testing.                                                                                                                                             | —                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Missing concept    | `rag-eval` (thin, not blocking) | The KB documents `required` + `additionalProperties:false` for strict mode but **not** the `str \| None` nullable-union emission case (`{"type":["string","null"]}` + force-into-`required` via `__get_pydantic_json_schema__`). DEFINE/BRAINSTORM already flag this. | **Post-phase-1** `/update-kb rag-eval` → add the nullable-strict-field note to `patterns/per-fact-judge-call.md` (or `concepts/schema-as-ssot.md`), once phase 1 confirms the exact Pydantic v2 hook. Also add the offline-CI judge test-double note (fake-client canned payload, not VCR, for the judge path) to `patterns/offline-ci-judge.md`. Not blocking — do it after the code confirms the emission. |
-| Missing specialist | —                               | None. No specialist agent registered for `rag-eval`; phase is a direct-implement (small, surgical, single-domain).                                                                                                                                                    | —                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Gap Type           | Area                         | Detail                                                                                                                                                                                                                                                              | Recommendation                                                                                                                                                                                |
+| ------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Missing domain     | —                            | No new technology area. `rag-eval` covers per-fact judge/report-render/eval-record-schema; `observability` covers the failure taxonomy. Both exist in `_index.yaml`.                                                                                                | None                                                                                                                                                                                          |
+| Missing concept    | `rag-eval` / `observability` | The root-cause-attribution predicate (None-vs-non-None on failed facts, the FR-5-tautology insight) is **not yet** a KB concept — but DEFINE A5 explicitly defers KB work to a post-phase `/update-kb observability`. Not a blocker.                                | After phase lands: `/update-kb observability` (failure-taxonomy entry) and optionally a `rag-eval` `root-cause-attribution` concept — per A5, **not** before `/implement`.                    |
+| Missing specialist | eval / taxonomy code         | No `rag-eval` or `observability` _specialist_ sub-agent exists (`.claude/agents/` holds only workflow agents). All prior eval/taxonomy phases shipped `direct`. The change is ~1 leaf module + 3 thin edits — below the self-improvement threshold for a new agent. | None this phase. If a 3rd eval-internals phase needs the same `report.py`+`failure_taxonomy.py`+`conftest` read-set, propose `/new-agent eval-specialist` then (self-improvement trigger #3). |
 
-**Net: no `/new-kb`, no `/new-agent` required.** Two `/update-kb rag-eval` items are
-deferred to **after** phase 1 lands (capture-the-confirmed-pattern, not a blocker).
-
----
+**Three-layer verdict:** domain existence ✅, concept coverage ✅ (sufficient for `/implement`; KB enrichment deferred per A5), agent alignment ✅ (`direct` is the established convention; no gap). Matches DEFINE's "No infrastructure gaps".
 
 ## Consistency Check
 
-**Verdict: ✅ CONSISTENT** (cross-check of DEFINE ↔ DESIGN + AGENTS.md constitution + KB).
-Non-trivial phase (4 src modules + 6 test files), so the full six-pass review was run.
+**Verdict: ✅ CONSISTENT.** Non-trivial phase (3 source modules + 3 test files); full six-pass review run.
 
-| ID  | Severity | Pass               | Location                                         | Finding                                                                                                                                                                                 | Suggested fix                                                                                                                                                                                                                   |
-| --- | -------- | ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C-1 | LOW      | Ambiguity          | DESIGN §2 prompt rubric                          | DEFINE FR-4 leaves the rubric line's exact placement open ("gains a line"); DESIGN pins exact text + placement (after per_fact bullets).                                                | Resolved in DESIGN; no DEFINE edit.                                                                                                                                                                                             |
-| C-2 | LOW      | Underspecification | DESIGN AC-2 hook signature                       | The precise Pydantic v2 hook (`__get_pydantic_json_schema__` vs `Field(json_schema_extra=)`) depends on the installed version; DESIGN selects the hook but flags Context7 confirmation. | AC-2 is fail-closed (asserts real `model_json_schema()`); implementer confirms via Context7. Acceptable — the _outcome_ (required + type-union) is pinned, only the mechanism is version-sensitive.                             |
-| C-3 | LOW      | Coverage           | conftest `gd_unrelated` vs new `gd_hallucinated` | AC-5 needs a doc_id NOT in `retrieved_docs`; the existing fixtures' `sample_chunks` are `doc_real` + `gd_unrelated`, both in-set. The hallucinated id must be a third, NOT-in-set id.   | DESIGN names `gd_hallucinated` (not in `sample_chunks`) for the canned payload's collapse case; `doc_real` (in-set) for the retention case. Implementer must not reuse `gd_unrelated` as the hallucinated id (it IS retrieved). |
+| ID  | Severity | Pass                           | Location                  | Finding                                                                                                                                                                                                                                                               | Suggested fix                                        |
+| --- | -------- | ------------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| C1  | LOW      | 1 Duplication                  | DEFINE FR-4 vs FR-1       | FR-4's defensive membership check is described twice. DESIGN folds both into the single `classify_fact_gap` body — no duplication in code.                                                                                                                            | None; phrasing overlap is intentional emphasis.      |
+| C2  | LOW      | 2 Ambiguity                    | DEFINE FR-2 "True/1"      | DEFINE left `no_failed_facts` as bool-or-int open. DESIGN pins it to `bool`.                                                                                                                                                                                          | Resolved (A2).                                       |
+| C3  | MEDIUM   | 3 Underspecification           | A3 / FR-3 report shape    | DEFINE said "new top-level key" but left nest-vs-parallel and the dict shape open. DESIGN pins a parallel top-level `"root_cause"` list mirroring `categories[*].metrics[model]`, with the exact 4-key per-cell dict.                                                 | Resolved — § Exact Contracts.                        |
+| C4  | —        | 4 Constitution alignment       | whole design              | No speculative scope: leaf justified by **two named consumers**. Defensive FR-4 branch justified by a named anticipated change (FR-5 guard relaxation). Conventions honoured (English, mirrored `tests/eval/`, `__init__.py` present, frozen-dataclass, no LLM mock). | None — no CRITICAL.                                  |
+| C5  | —        | 5 Coverage                     | FR-1…FR-7, NFR-1…5        | Every FR maps to ≥1 manifest entry + ≥1 AC test (FR-1→ACs 1–5; FR-2→ACs 6,7; FR-3→ACs 8,9; FR-4→AC 4; FR-5→ACs 11,12; FR-6→AC 10; FR-7→AC 14). NFR-1→AC 7,10; NFR-4→AC 9; NFR-5→make lint test. No orphan.                                                            | None.                                                |
+| C6  | —        | 6 Inconsistency                | DEFINE↔DESIGN terminology | Terms used identically across DEFINE/BRAINSTORM/DESIGN. No drift.                                                                                                                                                                                                     | None.                                                |
+| C7  | —        | Won't adherence                | AC-13 / Won't             | No `aggregate.py`/`schema.py`/`records.py` change; no 6th label; no cascade-order/`is_*`/threshold change; no Option-2c; no Phoenix span; no schema field; no new ADR. All Won'ts respected.                                                                          | None.                                                |
+| C8  | LOW      | 5 Coverage (test-AC bijection) | AC-13                     | AC-13 is part-runtime (`len(FailureMode)==5`) and part-invariant (no `aggregate.py` diff, no ADR) — invariant half is review-enforced.                                                                                                                                | Acceptable; flagged so the reviewer checks the diff. |
 
-No CRITICAL/HIGH findings. Constitution alignment (pass 4): the change is minimal-scope
-and additive, the seam (`Judge` Protocol) is unchanged (no speculative seam), no
-stranger-test leak, conventions honoured (mirrored tests, no LLM mock — fake-client double).
-Coverage (pass 5): all 11 ACs map to ≥1 manifest entry (AC-1/2→schema, AC-3→prompt+anchor,
-AC-4→prompt, AC-5→anchor, AC-6→judge_contract, AC-7→records, AC-8→aggregate, AC-9→conftest,
-AC-10→openai_judge comment+PR, AC-11→`make lint test`). No DEFINE requirement is unmapped.
-
----
+No CRITICAL or HIGH findings. The two MEDIUM/LOW underspecifications (C2, C3) were the assumptions DEFINE deferred to design (A2, A3) and are now resolved. Self-review; `DEFINE.md` is **not** rewritten.
 
 ## Risks & Trade-offs
 
-- **AC-2 is the spine and the only real risk.** If the installed Pydantic v2 version emits
-  a different shape than documented, the `__get_pydantic_json_schema__` hook may need a
-  different signature (e.g. `resolve_ref_schema` is required because `FactVerdict` appears
-  under `$defs` as a `$ref` — the handler must resolve the ref before mutating, or the
-  mutation hits the wrong node). **Mitigation:** AC-2 fails closed against the real schema;
-  confirm the hook via Context7 (`/pydantic/pydantic`) before declaring done. This is an
-  implementation detail of a decided pattern — **not** an ADR.
-- **Hallucination-guard mutation.** Mutating the re-validated `FactVerdict` in place
-  (rather than rebuilding) is simplest and safe (mutable model, declared field). The
-  alternative — rebuild via `model_copy(update=…)` — is more defensive but unnecessary;
-  the in-place guard is covered by AC-5.
-- **Doc rendered twice (cited + retrieved).** A doc that is both cited and retrieved appears
-  in both blocks (OQ-2 accepted this; the distinct headers disambiguate). Attribution
-  quality under this duplication is validated only by a live cassette run, out of scope
-  here; the Approach-C two-phase rubric is the documented fallback (a Could) if attribution
-  is poor — no schema change needed to adopt it later.
-- **Prompt-token growth (NFR-3).** Bounded by `k`; ~+1,500–3,000 tokens/call at k=10. No new
-  cost mechanism; `cost_ceiling_usd` is the unchanged backstop. Documentation-only (AC-10).
+- **Tautology risk if FR-5 guard is relaxed.** The whole signal rests on the phase-1 invariant. Mitigation is the FR-4 defensive `not in retrieval_ranked_ids` branch plus the module docstring citing the invariant source — a future guard removal degrades gracefully rather than silently inverting the signal. **No ADR warranted** (additive, NFR-3) — but if the coarse 5-label taxonomy later proves insufficient and Option-2c is revisited, _that_ triggers the deferred ADR-0008 amendment (DEFINE Won't / backlog).
+- **Report fixture extension.** The biggest test-surface change is extending `sample_jsonl` to carry `per_fact` for ≥1 category. Mitigation: keep most filler records `per_fact`-absent (their default `None`) so existing assertions stay green and the degraded/N-A path is covered for free; add per-fact evidence to a single category.
+- **`make_eval_record` signature change** in `test_failure_taxonomy.py` (adding `per_fact=None`) is additive with a default — no existing call site breaks.
+- **N/A-vs-0.0% is the load-bearing correctness property** (the sprint's null-vs-absent discipline). Asserted distinctly in AC-10; the `has_evidence` flag in the data shape is what keeps "no data" from collapsing into "0.0%".
 
----
+No architectural decision rises to an ADR this phase (additive, no seam swap, no new tool) — consistent with DEFINE AC-13.
 
 ## Next Step
 
-→ `/implement sprint-8/phase-1-faithfulness-schema` — runs in **Antigravity / Gemini**
-(AGENTS.md § Implement Contract); build from this DESIGN + DEFINE acceptance criteria, on
-branch `sprint-8/phase-1-faithfulness-schema`. **Confirm AC-2 against the live
-`_LLMJudgeVerdict.model_json_schema()` first** (Context7 `/pydantic/pydantic`) — it is the
-fail-closed gate. No infrastructure gaps block implementation; the two `/update-kb rag-eval`
-items are deferred to after the phase lands.
+→ `/implement sprint-8/phase-2-root-cause-linkage` — no infrastructure gaps to clear first; KB enrichment (`/update-kb observability`) runs **after** the phase lands per assumption A5.

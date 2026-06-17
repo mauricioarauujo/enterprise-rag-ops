@@ -99,9 +99,30 @@ To add a new label:
 4. Update thresholds in this file and in `_index.yaml`.
 5. Run `rag-classify --dry-run` on the existing baseline to verify the distribution shift.
 
+## Per-Fact Root-Cause Attribution (additive — sprint-8/phase-2)
+
+`failure_taxonomy.py` exposes `attribute_root_cause(record)` as a taxonomy-surface
+entry point for per-fact root-cause attribution. It delegates to the shared leaf
+`root_cause.rollup` — do not call `rollup` directly from taxonomy-aware code.
+
+```python
+from enterprise_rag_ops.eval.failure_taxonomy import attribute_root_cause
+from enterprise_rag_ops.eval.root_cause import RootCauseRollup
+
+rc: RootCauseRollup = attribute_root_cause(record)
+# rc.retrieval_gap   — failed facts where evidence never reached the generator
+# rc.generation_gap  — failed facts where evidence was retrieved but unused
+# rc.has_per_fact    — False when record.per_fact is None (pre-sprint-8); renders N/A
+```
+
+This capability is orthogonal to `classify()`: calling it never changes the label
+returned by `classify`. See [concepts/failure-taxonomy.md](../concepts/failure-taxonomy.md)
+§ Per-Fact Root-Cause Attribution for the signal design and null discipline.
+
 ## Sources
 
 - `src/enterprise_rag_ops/eval/failure_taxonomy.py`
+- `src/enterprise_rag_ops/eval/root_cause.py` — shared leaf predicate + `RootCauseRollup`
 - `src/enterprise_rag_ops/eval/classify_cli.py`
 - `docs/adr/0008-failure-taxonomy.md`
 - See also: [concepts/failure-taxonomy.md](../concepts/failure-taxonomy.md)

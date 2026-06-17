@@ -26,12 +26,12 @@ After the last phase of a sprint has passed `/review`.
    verdict (✅ READY). List any phase that did not ship; do **not** archive an
    incomplete sprint without confirming with the user.
 
-3. **Sprint knowledge loop** (the aggregate of the per-phase `/review` loop)
-   - **Knowledge capture** — collect the Knowledge Capture suggestions from every phase
-     `REVIEW.md`, consolidate duplicates, recommend the `/new-kb` / `/update-kb` worth
-     doing now.
-   - **KB staleness sweep** — across all files the sprint changed, flag KB domains the
-     sprint may have left outdated.
+3. **Sprint knowledge loop** (backstop for the per-phase `/review` loop — most KB/ADR
+   work is already applied on each phase branch; this catches only what slipped through)
+   - **Knowledge capture** — collect the Knowledge Capture entries from every phase
+     `REVIEW.md`; for any marked **Deferred**, apply the `/new-kb` / `/update-kb` now.
+   - **KB staleness sweep** — across all files the sprint changed, flag (and fix) any KB
+     domain a phase left outdated despite its `/review`.
    - **ADR sweep** — list architectural decisions made during the sprint not yet
      recorded in `docs/adr/`.
 
@@ -51,7 +51,8 @@ After the last phase of a sprint has passed `/review`.
 
 8. **Reminders**
    - Update the private sprint track in the Carreira repo (path in `CLAUDE.local.md`).
-   - Run the recommended `/new-kb` / `/update-kb` / ADR work before the next sprint.
+   - Run any **Deferred** `/new-kb` / `/update-kb` / ADR work before the next sprint
+     (per-phase items already landed on their branches).
 
 9. **Hand off** — invoke the **`handoff`** skill to capture the sprint outcome and the
    entry point for the next sprint (the recommended KB/ADR work + the next sprint to open).

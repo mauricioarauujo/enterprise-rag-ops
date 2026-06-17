@@ -62,6 +62,20 @@
 | `http://host:6006`           | `http://host:6006/v1/traces` | `http://host:6006`             |
 | `http://host:6006/v1/traces` | unchanged                    | stripped to `http://host:6006` |
 
+## Root-Cause Attribution (sprint-8/phase-2)
+
+| `RootCauseRollup` field | Type   | Meaning                                                                                    |
+| ----------------------- | ------ | ------------------------------------------------------------------------------------------ |
+| `retrieval_gap`         | `int`  | Failed facts where `supporting_doc_id is None` (evidence never retrieved)                  |
+| `generation_gap`        | `int`  | Failed facts where `supporting_doc_id` is in `retrieval_ranked_ids` (retrieved but unused) |
+| `has_per_fact`          | `bool` | `False` → degraded (pre-sprint-8 `per_fact=None`); renders **N/A**                         |
+| `no_failed_facts`       | `bool` | `True` → evidence present, zero failures; report re-derives from counts                    |
+
+Report null discipline: `any_evidence=False` → `None` → **N/A**; `denom==0` → `0.0` → **0.0%**.
+
+Entry points: `failure_taxonomy.attribute_root_cause(record)` (taxonomy surface) or
+`root_cause.rollup(record)` (leaf direct). See `concepts/failure-taxonomy.md`.
+
 ## Common Pitfalls
 
 | Don't                                              | Do                                                 |
@@ -70,3 +84,4 @@
 | Assume upsert-by-span-id idempotency               | Always `reset_project` before replay               |
 | Classify on raw zero `fact_recall` without cascade | Let `abstention_error`/`retrieval_miss` fire first |
 | Use `faithfulness_ratio is None` as hallucination  | Skip hallucination check when ratio is None        |
+| Check `no_failed_facts` to distinguish N/A from 0% | Check `has_per_fact` first, then `denom==0`        |

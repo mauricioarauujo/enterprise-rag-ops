@@ -6,6 +6,7 @@
 > economics on spans, offline score write-back, and the rule-based failure-mode taxonomy
 > (5-label first-match cascade over EvalRecord aggregates + gold). ADRs: 0004, 0007, 0008.
 > **Sprint 3 / Phases 7–8 shipped.** **Sprint 6 / Phases 17 + 19 shipped** (2026-06-03): I/O hydration for Phoenix Info tab.
+> **Sprint 8 / Phase 2 shipped** (2026-06-17): per-fact root-cause attribution (`root_cause.py`, `attribute_root_cause`, report Root-Cause Attribution section).
 > **MCP Validated**: 2026-06-01
 
 ## Quick Navigation
@@ -52,6 +53,6 @@
 - Idempotency: `reset_project` (delete) then full replay; no upsert-by-seed.
 - `cost_usd_total` on the chain span is written only when BOTH `generation.cost_usd` and `judge.cost_usd` are non-None.
 - Span kind strings: `"chain"`, `"retriever"`, `"llm"` (generation and judge both use `"llm"`).
-- Failure taxonomy classifies on aggregate metrics only; per-fact detail is excluded from `EvalRecord`.
+- Failure taxonomy `classify()` classifies on aggregate metrics only — cascade and labels are unchanged by sprint-8/phase-2. The additive `attribute_root_cause(record)` provides per-fact root-cause attribution alongside (not via) the cascade; see `concepts/failure-taxonomy.md`.
 - `failure_mode: str | None = None` — backward-compatible; older records parse cleanly.
 - **Info tab legibility (Sprint 6):** generation `output.value` = answer (always-on); judge `output.value` = verdict lines when non-empty (always-on); chain `input.value` = gold question (opt-in, `--enrich-from-questions`). See `concepts/span-attribute-mapping.md`.
