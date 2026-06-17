@@ -14,6 +14,7 @@ from enterprise_rag_ops.eval.abstention import compute_abstention_metrics
 from enterprise_rag_ops.eval.questions import load_questions
 from enterprise_rag_ops.eval.records import EvalRecord
 from enterprise_rag_ops.eval.retrieval_eval import aggregate_retrieval_metrics
+from enterprise_rag_ops.eval.root_cause import rollup
 
 
 def _mean(values: list[float]) -> float | None:
@@ -82,6 +83,10 @@ def generate_report_data(jsonl_path: Path) -> dict:
     # Get all categories present in the run
     categories = sorted({q.category for q in questions})
     category_data = []
+    # Root-Cause Attribution (SC-2): per-category, per-model retrieval-gap vs
+    # generation-gap split of FAILED facts, parallel to `category_data` (NFR-4 — does
+    # not touch the 7-column category table).
+    root_cause_data = []
 
     for cat in categories:
         cat_qs = [q for q in questions if q.category == cat]
@@ -114,6 +119,36 @@ def generate_report_data(jsonl_path: Path) -> dict:
             }
 
         category_data.append({"category": cat, "metrics": model_cat_metrics})
+
+        # Root-cause rollups per model for this category (SC-2 / FR-3 / FR-6).
+        model_cat_root_cause = {}
+        for model_name, recs in model_records.items():
+            cat_recs = [r for r in recs if r.question_id in cat_q_ids]
+            agg_retrieval = 0
+            agg_generation = 0
+            any_evidence = False
+            for r in cat_recs:
+                rc = rollup(r)
+                if rc.has_per_fact:
+                    any_evidence = True
+                    agg_retrieval += rc.retrieval_gap
+                    agg_generation += rc.generation_gap
+            denom = agg_retrieval + agg_generation
+            # FR-6 / Decision D: no per-fact evidence at all -> None (N/A); evidence with
+            # zero gaps -> 0.0 (0.0%); otherwise the retrieval-gap share among failed facts.
+            if not any_evidence:
+                retrieval_gap_pct = None
+            elif denom == 0:
+                retrieval_gap_pct = 0.0
+            else:
+                retrieval_gap_pct = agg_retrieval / denom
+            model_cat_root_cause[model_name] = {
+                "retrieval_gap": agg_retrieval,
+                "generation_gap": agg_generation,
+                "retrieval_gap_pct": retrieval_gap_pct,
+                "has_evidence": any_evidence,
+            }
+        root_cause_data.append({"category": cat, "metrics": model_cat_root_cause})
 
     # 3. Cost & Latency
     cost_data = []
@@ -151,6 +186,7 @@ def generate_report_data(jsonl_path: Path) -> dict:
         "summary": summary_data,
         "categories": category_data,
         "costs": cost_data,
+        "root_cause": root_cause_data,
     }
 
 
@@ -188,6 +224,19 @@ def render_markdown(data: dict) -> str:
         cost_str = f"${row['total_cost']:.4f}" if row["total_cost"] is not None else "N/A"
         md_cost += f"| **{row['model']}** | {cost_str} | {_fmt(row['mean_latency'], decimals=2)}s | {row['total_tokens']:,} |\n"
 
+    # 4. Root-Cause Attribution table (SC-2): retrieval-gap vs generation-gap of FAILED facts.
+    md_root_cause = "| Category | Model | Retrieval-Gap (failed facts) | Generation-Gap (failed facts) | Retrieval-Gap % |\n"
+    md_root_cause += "| --- | --- | --- | --- | --- |\n"
+    for rc_row in data["root_cause"]:
+        first = True
+        for model_name, rc in rc_row["metrics"].items():
+            cat_label = f"**{rc_row['category']}**" if first else ""
+            md_root_cause += (
+                f"| {cat_label} | {model_name} | {rc['retrieval_gap']} | "
+                f"{rc['generation_gap']} | {_fmt(rc['retrieval_gap_pct'], pct=True)} |\n"
+            )
+            first = False
+
     template = Template(
         """# RAG Multi-Model Evaluation Baseline Report
 
@@ -206,12 +255,20 @@ $cost_table
 
 ## Detailed Breakdown Per Category
 $category_table
+
+## Root-Cause Attribution
+Of the **failed** gold facts (`absent` / `contradicted`), the split between a
+*retrieval gap* (no retrieved doc substantiated the fact) and a *generation gap* (the
+evidence WAS retrieved but the generator failed to use it). N/A = no per-fact evidence.
+
+$root_cause_table
 """
     )
     return template.substitute(
         summary_table=md_summary,
         cost_table=md_cost,
         category_table=md_cat,
+        root_cause_table=md_root_cause,
     )
 
 
@@ -265,6 +322,27 @@ def render_html(data: dict) -> str:
             <td>{_fmt(row["mean_latency"], decimals=2)}s</td>
             <td>{row["total_tokens"]:,}</td>
         </tr>"""
+
+    # 4. Root-Cause Attribution (SC-2) — mirrors the category rowspan pattern.
+    html_root_cause_rows = ""
+    for rc_row in data["root_cause"]:
+        first = True
+        num_models = len(rc_row["metrics"])
+        for model_name, rc in rc_row["metrics"].items():
+            cat_cell = (
+                f'<td rowspan="{num_models}" class="category-name">{rc_row["category"]}</td>'
+                if first
+                else ""
+            )
+            html_root_cause_rows += f"""
+            <tr>
+                {cat_cell}
+                <td>{model_name}</td>
+                <td>{rc["retrieval_gap"]}</td>
+                <td>{rc["generation_gap"]}</td>
+                <td>{_fmt(rc["retrieval_gap_pct"], pct=True)}</td>
+            </tr>"""
+            first = False
 
     template = Template(
         """<!DOCTYPE html>
@@ -428,6 +506,25 @@ def render_html(data: dict) -> str:
                 </tbody>
             </table>
         </div>
+
+        <div class="card">
+            <h2>Root-Cause Attribution</h2>
+            <p class="subtitle">Of the <strong>failed</strong> gold facts, the split between a <em>retrieval gap</em> (no retrieved doc substantiated the fact) and a <em>generation gap</em> (evidence was retrieved but unused). N/A = no per-fact evidence.</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Model</th>
+                        <th>Retrieval-Gap</th>
+                        <th>Generation-Gap</th>
+                        <th>Retrieval-Gap %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    $root_cause_rows
+                </tbody>
+            </table>
+        </div>
     </div>
 </body>
 </html>
@@ -438,6 +535,7 @@ def render_html(data: dict) -> str:
         summary_rows=html_summary_rows,
         cost_rows=html_cost_rows,
         category_rows=html_cat_rows,
+        root_cause_rows=html_root_cause_rows,
     )
 
 

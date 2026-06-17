@@ -1,186 +1,168 @@
-# BRAINSTORM: sprint-8/phase-1-faithfulness-schema — Supporting-Doc Attribution on FactVerdict
+# BRAINSTORM: sprint-8/phase-2-root-cause-linkage — Per-Fact Root-Cause Attribution
 
-**Sprint/Phase:** sprint-8/phase-1-faithfulness-schema | **Date:** 2026-06-14
+**Sprint/Phase:** sprint-8/phase-2-root-cause-linkage | **Date:** 2026-06-15
 
 ---
 
 ## Problem Statement
 
-Today `FactVerdict` records whether a gold fact is present/absent/contradicted in the
-answer but carries no information about which document was the source (or culprit).
-Phase 1 adds an optional `supporting_doc_id` to `FactVerdict`, makes the LLM emit it
-under `strict` mode, validates it against the retrieved set, and persists it in the
-eval record — so phase 2 can perform the root-cause cross-reference ("fact failed
-because that doc was never retrieved").
+Phase-1 added `supporting_doc_id: str | None` to `FactVerdict`, with a hallucination
+guard that collapses any id not in the retrieved set to `None` before persistence.
+Phase-2 must cross-reference this field against retrieval to attribute root cause for
+failed facts, distinguish "retrieval gap" from "generation gap" in the report, and feed
+that signal into the failure-mode taxonomy — **without** redesigning the taxonomy or the
+report's data model.
+
+Serves sprint success criteria:
+
+- **SC-2** — the eval report distinguishes "fact failed, supporting doc WAS retrieved"
+  from "fact failed, supporting doc was NEVER retrieved" for at least one worked category.
+- **SC-3** — the failure-mode taxonomy can attribute a retrieval-miss root cause using the
+  new field, not just answer-level aggregates.
 
 ---
 
 ## Suggested Research & KB Work
 
-| Topic                                  | Coverage                                                                                                                                                     | Action                                                                                            |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Per-`doc_id` faithfulness isolation    | **Sufficient** — `rag-eval/concepts/per-doc-faithfulness.md` fully describes the per-block rendering convention and anchor case.                             | Read before implementing; no update needed.                                                       |
-| Schema-as-SSoT / two-model split       | **Sufficient** — `rag-eval/concepts/schema-as-ssot.md` covers the `_LLMJudgeVerdict` / `JudgeVerdict` split and OpenAI `strict` constraints exactly.         | Read; no update needed until after implementation confirms the pattern holds for nullable fields. |
-| Per-fact judge call                    | **Sufficient** — `rag-eval/patterns/per-fact-judge-call.md` describes the four-step call pattern including schema wiring.                                    | Read; may need a targeted update after phase 1 to add the nullable-field strict-mode note.        |
-| OpenAI `strict` mode + nullable fields | **Thin** — the KB covers `additionalProperties: false` and `required`, but does not yet document how `strict: true` handles `["string","null"]` type unions. | No separate KB work now; capture the pattern in the pattern update after phase 1 lands.           |
-| Failure-mode taxonomy                  | **Sufficient for now** — not touched in phase 1; phase 2's brainstorm will decide if a taxonomy extension needs KB work.                                     | Skip.                                                                                             |
-
-No `--deep-research` needed. The schema decision is purely architectural; the KB and
-codebase together are the complete evidence base.
+The `rag-eval` KB domain already covers `supporting_doc_id` (sprint-8/phase-1 entry), the
+5-label taxonomy cascade, the report-render pattern, and the eval-record schema. The
+`observability` KB covers ADR-0008 (taxonomy). Coverage is **sufficient** — no `/new-kb`,
+`/update-kb`, or `--deep-research` is needed before `/define`. The planned post-phase KB
+action is `/update-kb observability` (failure-taxonomy) **after** phase-2 lands.
 
 ---
 
-## The Central Design Tension
+## The Sharp Design Tension — Resolved from Code
 
-The crux is **what `supporting_doc_id` means**, because that determines which documents
-the judge must see when scoring each fact.
+**Question:** does the judge's retrieved-doc set equal the persisted
+`retrieval_ranked_ids`? If so, cross-referencing a non-None `supporting_doc_id` against
+the retrieved set is tautological (phase-1's FR-5 guard already guarantees membership).
 
-**Candidate readings:**
+**Verified from `runner.py` (lines ~281–315) and `openai_judge.py` (lines ~137–140):**
 
-- **(a) Answer-citation reading:** The doc the answer explicitly cited when asserting
-  this fact. Cheap — the judge already sees cited docs. But it cannot detect "fact
-  absent because the right doc was never retrieved." It is citation-level attribution,
-  not fact-level.
+- Persisted `retrieval_ranked_ids = deduplicate_ranked_ids([cid for cid, _, _ in chunk_hits])`
+  — deduped doc-level ids from `chunk_hits`.
+- The judge's guard set `retrieved_ids = {c.doc_id for c in ctx_chunks}`, where
+  `ctx_chunks = ContextAssembler(store).assemble(chunk_hits)` — same `chunk_hits` source.
+- The two sets are **equivalent** in the happy path (same source, same doc-level dedup);
+  `ContextAssembler` neither adds nor drops docs relative to `deduplicate_ranked_ids`.
 
-- **(b) Retrieved-set substantiation reading:** The doc in the full retrieved set whose
-  text most directly substantiates this gold fact, regardless of what the answer cited.
-  `None` when no retrieved doc covers the fact. This is the reading that powers the
-  sprint's root-cause story: a `None` here means "the substantiating doc was not among
-  those retrieved."
+**Consequence:** when phase-2 reads a record, `supporting_doc_id` is **either `None` or
+already a member of `retrieval_ranked_ids`**. A naive set-intersection on non-None values
+is provably tautological — a structural invariant of the FR-5 guard, not a coincidence.
 
-- **(c) Cited-set-only substantiation:** Like (b) but restricted to cited docs. Cheaper
-  prompt (only cited docs rendered for fact scoring), but cannot distinguish "the right
-  doc existed in the retrieved set and was ignored" from "the right doc was never
-  retrieved at all."
+**The real signal** — for any failed fact (`verdict ∈ {absent, contradicted}`):
 
-Reading **(b)** is the only one that makes the sprint's failure diagnosis sentence
-possible. It requires the judge to see doc texts when scoring facts — which today it
-does not. The question is: which set of docs is rendered during fact scoring?
+- `supporting_doc_id is not None` → the evidence WAS retrieved, but the answer still got
+  the fact wrong/missing → **generation gap** (generator had the doc, failed to use it).
+- `supporting_doc_id is None` → no retrieved doc substantiates this fact → **retrieval
+  gap** (evidence never reached the generator).
+
+This None-vs-non-None framing on failed facts is the correct predicate — not a set
+intersection.
+
+**Honest caveat:** if a future change relaxes/removes the FR-5 guard, the invariant breaks
+and a naive None-vs-non-None read becomes wrong. A defensive explicit cross-reference
+(`supporting_doc_id in record.retrieval_ranked_ids`) costs ~nothing and makes the
+assumption visible in code → kept as a **Should**.
 
 ---
 
 ## Approaches Considered
 
-| Approach                                                                 | Description                                                                                                                                                                                                     | Pros                                                                                                                                                                                                                  | Cons                                                                                                                                                                                                                                         | Effort |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| **A — Cite-only attribution (reading a)**                                | Add `supporting_doc_id: str \| None` to `FactVerdict`. Render only cited docs in the per-fact block (already rendered for per-citation). Ask the LLM: "for this fact, which cited doc supports it — or None?"   | No new docs in prompt. Minimal prompt change. LLM already sees cited doc blocks. Simplest strict-schema wiring.                                                                                                       | Does not distinguish "right doc retrieved but uncited" from "right doc never retrieved." Phase 2 root-cause is limited to "cited doc was wrong/missing." Sprint goal is partially met but the retrieval-miss diagnosis is blocked.           | S      |
-| **B — Full retrieved-set attribution (reading b)**                       | Render the full `retrieved_docs` list (all chunks joined by doc_id) as a new `RETRIEVED DOCUMENTS` block in the per-fact scoring section. Ask the LLM: "which retrieved doc substantiates this fact — or None?" | Enables the complete root-cause story: `supporting_doc_id is None` = never retrieved; `supporting_doc_id not None but fact absent` = retrieved but answer missed it. Direct discriminator for the sprint's diagnosis. | Larger prompt — up to `k` docs (typically 5–10) rendered per call. Cost grows linearly with retrieved set. Higher hallucination risk on the doc_id field (LLM must pick from a larger menu). Needs a new prompt section and rubric addition. | M      |
-| **C — Cited-or-retrieved with two-phase rubric (reading b, restricted)** | Render the full retrieved set but instruct the judge to first check whether any cited doc covers the fact (fast path), then scan uncited retrieved docs only if no cited doc covers it.                         | Keeps the completeness of reading (b) while making the LLM's job easier (clear search order). Prompt is the same size as B but the rubric is more directed.                                                           | Slightly more complex rubric. The judge may not reliably follow the two-phase instruction. In practice the distinction from B is an instruction-engineering detail, not a schema change. Same schema and validation logic as B.              | M      |
+| #     | Approach                                                                                                                                                                                                                | Pros                                                                                                                                                | Cons                                                                                                                                                                                       | Effort |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| **A** | New pure module `eval/root_cause.py` with a `classify_fact_gap(...) -> "retrieval_gap" \| "generation_gap" \| None` predicate + a per-record `rollup(record)`; **both** `report.py` and `failure_taxonomy.py` import it | DRY — single definition of a named predicate; clean seam (two real consumers); defensive cross-reference lives in one place; one tiny tested module | One new file for what is essentially one boolean expression                                                                                                                                | S      |
+| **B** | Inline the predicate in `report.py` and `failure_taxonomy.py` separately                                                                                                                                                | No new files                                                                                                                                        | Duplicates the core `supporting_doc_id is None and verdict ∈ {absent, contradicted}` logic across two modules; divergence risk; the predicate is a named concept, not an inline expression | S      |
+| **C** | Inline in `report.py` only (satisfy SC-2); leave taxonomy untouched                                                                                                                                                     | Strictest minimal scope; zero taxonomy risk                                                                                                         | **SC-3 unmet** — taxonomy attribution is a stated success criterion                                                                                                                        | XS→S   |
 
 ---
 
-## Recommended Approach
+## Recommended Approach — **A** (shared `eval/root_cause.py` predicate)
 
-**Approach B (full retrieved-set attribution)**, with Approach A's cite-only path
-treated as an explicit Won't — not because it is wrong but because it does not deliver
-the sprint's root-cause diagnostic.
-
-Rationale:
-
-1. **Reading (b) is the only reading that supports the sprint goal.** Sprint success
-   criterion 2 requires distinguishing "fact failed, supporting doc was retrieved" from
-   "fact failed, supporting doc was never retrieved." That distinction is not resolvable
-   if the judge only sees cited docs.
-
-2. **The prompt cost increase is bounded and acceptable.** The retrieved set is already
-   passed to `judge()` via the `Judge` Protocol (`retrieved_docs: list[Chunk]`). The
-   judge already joins chunks by doc_id for the per-citation block. Rendering the same
-   joined texts as an additional block is a prompt addition, not a new API call. At
-   `k=5` typical retrieved docs, each ~300 tokens, the added prompt cost is ~1,500
-   tokens — well inside the model's context and an acceptable per-call cost increment.
-
-3. **The hallucination guard is mandatory but straightforward.** Validate the emitted
-   `supporting_doc_id` against the set of doc_ids from `retrieved_docs`. Any id not in
-   that set collapses to `None`. This is a three-line post-processing step; cover it
-   with an anchor case in `test_judge_anchor.py`.
-
-4. **Approach C's two-phase rubric is a prompt-engineering improvement that can be
-   added without any schema change.** If the judge produces poor attributions in
-   cassette tests, the rubric can be refined without touching the schema or the
-   validation logic. Start with a single-phase rubric (B) and refine if needed — do
-   not prematurely encode instruction-order logic.
-
-**Schema mechanics for `strict` mode:** `supporting_doc_id` must be typed
-`str | None` (JSON: `{"type": ["string","null"]}`) on `FactVerdict` in the
-`_LLMJudgeVerdict` surface. Under `strict: true`, OpenAI requires every property in
-`required` — so `supporting_doc_id` goes in `required` with a nullable type union,
-not as an `Optional` default. The Python-side `FactVerdict` uses
-`supporting_doc_id: str | None = None` so old records without the field validate
-(Pydantic fills `None`). The `_LLMJudgeVerdict` surface inherits from `FactVerdict`
-meaning `model_json_schema()` will include `supporting_doc_id` in `required` with the
-nullable type — this is the correct strict-compatible shape.
-
-**Non-breaking guarantee:** The `extra="forbid"` on `FactVerdict` is fine — adding a
-new field is additive. Old eval records (no `supporting_doc_id`) validate because the
-field defaults to `None`. The stub judge emits `FactVerdict(fact=..., verdict="present")`
-and must be updated to include `supporting_doc_id=None` — a one-line change.
+1. **SC-3 requires the taxonomy to change** — rules out C. B meets it but duplicates the
+   predicate. A meets both without speculation.
+2. **The predicate is a named concept, not an inline expression** — "a failed fact whose
+   `supporting_doc_id is None` is a retrieval gap; non-None is a generation gap" is a
+   reusable, testable invariant that belongs in one place.
+3. **Two consumers confirm the seam** — `report.py` needs per-category counts;
+   `failure_taxonomy.py` needs the same predicate. A pure function (no I/O) is trivially
+   testable and imports nothing risky.
+4. **Aligned with clean-structure / minimal-scope** — ~30 lines (one predicate, one
+   rollup type). It refines two existing labels by adding a per-fact evidence check;
+   it does **not** change the 5-label cascade, its order, or the StrEnum values.
+5. **Defensive cross-reference is right** — makes the FR-5 invariant explicit and robust
+   to a future guard removal at near-zero cost.
 
 ---
 
 ## Scope (MoSCoW)
 
-| Priority   | Item                                                                                                                                                                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Must**   | Add `supporting_doc_id: str \| None = None` to `FactVerdict` in `schema.py`.                                                                                                                                                                                |
-| **Must**   | Verify `_LLMJudgeVerdict.model_json_schema()` emits `supporting_doc_id` in `required` with `{"type": ["string","null"]}` — i.e., the strict-compatible nullable union — not as an optional default-excluded field. Adjust if Pydantic emits it incorrectly. |
-| **Must**   | Extend `build_judge_user_prompt` to render the full retrieved set as a named `RETRIEVED DOCUMENTS` block (same per-`doc_id` join logic already used for citation blocks).                                                                                   |
-| **Must**   | Extend the judge rubric in `prompt.py` to instruct: "For each gold fact, emit `supporting_doc_id`: the `doc_id` of the retrieved document that most directly substantiates the fact, or `null` if no retrieved document covers it."                         |
-| **Must**   | Post-validate `supporting_doc_id` in `OpenAIJudge` after re-validating through `_LLMJudgeVerdict`: if the emitted id is not in the retrieved doc_id set, replace with `None`.                                                                               |
-| **Must**   | Update `StubJudge` to emit `supporting_doc_id=None` on every `FactVerdict` (keeps the stub non-breaking and conformant).                                                                                                                                    |
-| **Must**   | Add an anchor case to `test_judge_anchor.py`: judge emits a hallucinated `supporting_doc_id` not in the retrieved set → it collapses to `None`.                                                                                                             |
-| **Must**   | Add/extend cassette in `test_judge_anchor.py` (or a new cassette file) for the nominal supporting-doc attribution path.                                                                                                                                     |
-| **Must**   | `make lint test` green. All changed modules have mirrored test coverage.                                                                                                                                                                                    |
-| **Should** | Confirm that `JudgeVerdict` serialisation (used in `records.py` and `report.py`) round-trips `supporting_doc_id=None` without breaking existing JSONL consumers.                                                                                            |
-| **Should** | Confirm `eval/aggregate.py` requires no change (it only counts verdicts, not field values).                                                                                                                                                                 |
-| **Could**  | Refine the rubric to a two-phase search order (Approach C's instruction) if initial cassette tests show poor attribution accuracy.                                                                                                                          |
-| **Could**  | Add `supporting_doc_id` to the judge span `output.value` text rendering in `observability/attributes.py` (only if the change is truly one-liner; otherwise defer to phase 3).                                                                               |
-| **Won't**  | Cross-reference `supporting_doc_id` against retrieved doc_ids to produce a root-cause label — that is phase 2's job.                                                                                                                                        |
-| **Won't**  | Change any report table or failure-taxonomy rule — those are phase 2 consumers.                                                                                                                                                                             |
-| **Won't**  | Surface `supporting_doc_id` as a Phoenix span attribute — that is phase 3.                                                                                                                                                                                  |
-| **Won't**  | Add per-fact `supporting_doc_id` to the eval aggregate floats — it is a raw field only; aggregation logic is unchanged.                                                                                                                                     |
-| **Won't**  | Use cite-only attribution (Approach A) — it cannot resolve retrieval-miss root cause.                                                                                                                                                                       |
-| **Won't**  | Change the public `Judge` Protocol signature — `retrieved_docs` is already there.                                                                                                                                                                           |
+| Priority   | Item                                                                                                                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Must**   | `eval/root_cause.py`: `classify_fact_gap(fv, retrieval_ranked_ids) -> Literal["retrieval_gap","generation_gap"] \| None`. Returns `None` for `verdict == "present"` (not a failure); `"retrieval_gap"` when `supporting_doc_id is None` (or, defensively, not in `retrieval_ranked_ids`); else `"generation_gap"`. |
+| **Must**   | `eval/root_cause.py`: a small `RootCauseRollup` (dataclass/TypedDict) with `{retrieval_gap, generation_gap, no_failed_facts}` counts + `rollup(record: EvalRecord) -> RootCauseRollup`. Degrades gracefully when `per_fact is None`.                                                                               |
+| **Must**   | `report.py`: per-category root-cause counts (retrieval-gap vs generation-gap on failed facts) added to `generate_report_data` output and rendered in `render_markdown` + `render_html`. Satisfies **SC-2**.                                                                                                        |
+| **Must**   | `failure_taxonomy.py`: refine an existing label (likely `is_retrieval_miss` / `is_incomplete`) to use per-fact supporting-doc evidence when `per_fact` is available. Satisfies **SC-3**. **No 6th label; no cascade-order change.**                                                                                |
+| **Must**   | `tests/eval/test_root_cause.py`: predicate (present excluded; absent + contradicted; None vs non-None; defensive out-of-set), rollup (incl. `per_fact is None`), and the taxonomy refinement branches.                                                                                                             |
+| **Should** | Defensive cross-reference `supporting_doc_id not in record.retrieval_ranked_ids` inside `classify_fact_gap` (guards against future FR-5 removal).                                                                                                                                                                  |
+| **Should** | Docstring in `root_cause.py` explaining why None-vs-non-None is the signal, citing FR-5 as the invariant source.                                                                                                                                                                                                   |
+| **Could**  | Refine `is_incomplete` too (distinguish "low recall, no evidence" vs "low recall, evidence available") — low confidence; defer unless cheap.                                                                                                                                                                       |
+| **Could**  | Per-question root-cause drill-down in the report.                                                                                                                                                                                                                                                                  |
+| **Won't**  | A 6th taxonomy label (→ ADR-0008 amendment; out of scope per sprint risk).                                                                                                                                                                                                                                         |
+| **Won't**  | Phoenix span integration (phase-3 scope).                                                                                                                                                                                                                                                                          |
+| **Won't**  | Change the cascade order / 5-label `StrEnum` values.                                                                                                                                                                                                                                                               |
+| **Won't**  | Modify `aggregate.py` (phase brief excludes it).                                                                                                                                                                                                                                                                   |
 
 ---
 
-## Open Questions
+## Resolved Open Questions
 
-1. **How does Pydantic v2 emit the JSON schema for `str | None = None` under
-   `extra="forbid"` — is `supporting_doc_id` placed in `required` with a nullable type
-   union, or excluded from `required` as a defaulted optional?** OpenAI `strict: true`
-   requires all properties in `required`. If Pydantic emits it outside `required` (as
-   it might for fields with defaults), the schema will be rejected by OpenAI. The
-   `/define` step should pin the exact Pydantic v2 emission behavior (testable with
-   `FactVerdict.model_json_schema()`) and specify what override is needed if it is not
-   strict-compatible as-is.
+All three resolved with the user (2026-06-16) — decisions locked for `/define`.
 
-2. **Should the retrieved-docs block in the prompt replace or supplement the cited-docs
-   block?** Currently the per-citation scoring is keyed to the cited-docs block. If the
-   retrieved-docs block is added separately, the prompt has two doc sections (one for
-   fact attribution, one for citation scoring). Does rendering docs twice (once in each
-   section) confuse the judge, or is the structural separation clear enough? The
-   `/define` step should settle the prompt layout.
+1. **Report placement → DEDICATED SUB-SECTION (option 1b).** Root-cause counts render as
+   a **separate "Root-Cause Attribution" section**, not extra columns on the already-wide
+   (7-col) per-category table. `generate_report_data` gains a **new top-level key**
+   (e.g. `"root_cause"`); `render_markdown`/`render_html` each gain one new table block.
+   Rationale: keep the primary metrics table readable; give the diagnosis its own billing
+   (it is the sprint deliverable). _Rejected: 1a (new columns) — inflates a 9-col table and
+   mixes quality metrics with diagnosis._
 
-3. **What is the expected cassette update cost?** The existing `test_judge_anchor.py`
-   cassette was recorded against the current prompt. Adding a new `RETRIEVED DOCUMENTS`
-   block changes the user-prompt hash, invalidating the existing cassette. The `/define`
-   step should decide: re-record the existing cassette (and update the anchor test to
-   include `supporting_doc_id` assertions), or add a separate new cassette file for
-   the attribution tests while keeping the old cassette as-is (only possible if the old
-   prompt is preserved for the old test path — which it is not, since `prompt.py` is
-   shared).
+2. **Taxonomy refinement → ORTHOGONAL PER-FACT ATTRIBUTION (option 2a).** The 5-label
+   `classify()` cascade, its order, and the `StrEnum` values stay **untouched** — no record
+   is reclassified. The taxonomy gains a **new, additive capability**: a per-fact root-cause
+   attribution (`retrieval_gap` vs `generation_gap`) built on `eval/root_cause.py`,
+   satisfying SC-3's literal wording ("the taxonomy _can attribute_ a retrieval-miss root
+   cause using the new field, not just answer-level aggregates"). No ADR needed.
+   **Rejected: 2c (redefine `is_retrieval_miss` to fire on the per-fact signal even on a
+   gold-doc hit) — deliberately a Won't.** Cost analysis (2026-06-16): 2c delivers **zero**
+   diagnostic information beyond 2a (the retrieval-gap/generation-gap breakdown is fully in
+   the report either way); it is a _lossy_ projection of a per-fact distribution onto one
+   per-record label, and it costs (a) an arbitrary aggregation threshold (all/any/≥X% failing
+   facts → label) = a new policy knob, (b) a cascade ripple — `retrieval_miss` sits at
+   position 2 and would steal records from `hallucination`/`incomplete`, re-partitioning the
+   whole space = the redesign the sprint risk forbids, (c) broken comparability with the
+   published Sprint-3 baseline distribution, (d) an ADR-0008 amendment, (e) test-fixture
+   churn. The 5-label headline is _intentionally_ answer-level/coarse and the root-cause is
+   _intentionally_ fact-level/fine (cf. KB `observability/aggregate-granularity-limit`);
+   keeping them separate is the cleaner architecture even at zero cost. **2c is deferred,
+   not killed** → harvest as a backlog item ("fact-level `failure_mode` / per-fact
+   taxonomy") that triggers the ADR-0008 amendment _if and when_ the coarse label proves
+   insufficient in practice (e.g. `rag-triage` routing degrades and the report section is
+   not enough). The closed-loop pull (triage groups by `failure_mode`) is solvable
+   **additively** — extend `triage` to also group by the root-cause attribution — without
+   redefining the label.
 
-4. **How does `supporting_doc_id=None` in the JSONL interact with the bronze-archive
-   (`BronzeWriter`)?** The bronze payload is the raw LLM response, not the Pydantic
-   model, so it is unaffected. But the gold JSONL (`EvalRecord`) serialises `FactVerdict`
-   via `model_dump`. Confirm that `None` values are serialised as JSON `null` (not
-   omitted) so old and new records are distinguishable: `null` = "judge said no doc
-   covers this" vs. key absent = "old record, field did not exist." If Pydantic omits
-   `None` by default in `model_dump`, use `model_dump(exclude_none=False)` or verify
-   the existing serialisation path already retains `null`.
+3. **`per_fact is None` handling → N/A, NOT 0/0 (option 3a).** When a category has no
+   per-fact evidence (e.g. pre-sprint-8 records with `per_fact=None`, or an empty
+   failed-fact denominator), the root-cause cells render **N/A** via the existing
+   `_fmt(None)` → `"N/A"` path (KB `rag-eval/none-empty-denominator`). "Data present, zero
+   gaps" renders `0.0%`. Rationale: preserve the **null-vs-absent** distinction the whole
+   sprint defends (phase-1 AC-7) — a missing signal must not read as "zero gaps."
+   _Rejected: 3b (silent 0/0) — conflates "no data" with "no failure."_
 
 ---
 
 ## Next Step
 
--> `/define sprint-8/phase-1-faithfulness-schema`
+→ `/define sprint-8/phase-2-root-cause-linkage`

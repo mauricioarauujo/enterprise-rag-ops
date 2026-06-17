@@ -15,6 +15,7 @@ from enum import StrEnum
 
 from enterprise_rag_ops.eval.questions import Question
 from enterprise_rag_ops.eval.records import EvalRecord
+from enterprise_rag_ops.eval.root_cause import RootCauseRollup, rollup
 
 
 class FailureMode(StrEnum):
@@ -104,3 +105,15 @@ def classify(record: EvalRecord, question: Question) -> FailureMode:
     if is_incomplete(record, question):
         return FailureMode.INCOMPLETE
     return FailureMode.CORRECT
+
+
+def attribute_root_cause(record: EvalRecord) -> RootCauseRollup:
+    """Per-fact root-cause attribution at the taxonomy surface (FR-5 / SC-3).
+
+    Delegates to `root_cause.rollup` so the taxonomy can attribute a retrieval-miss
+    vs generation-gap root cause from the per-fact `supporting_doc_id` signal — not
+    just answer-level aggregates (SC-3's literal requirement). Additive and orthogonal:
+    it does NOT touch `classify()`, the cascade order, the `FailureMode` members, or
+    the `is_*` helpers — no record is reclassified (Decision C / AC-12).
+    """
+    return rollup(record)

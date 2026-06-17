@@ -1,12 +1,36 @@
-# DEFINE: sprint-8/phase-1-faithfulness-schema — Supporting-Doc Attribution on FactVerdict
+# DEFINE: sprint-8/phase-2-root-cause-linkage — Per-Fact Root-Cause Attribution
 
-**Sprint/Phase:** sprint-8/phase-1-faithfulness-schema | **Date:** 2026-06-14
+**Sprint/Phase:** sprint-8/phase-2-root-cause-linkage | **Date:** 2026-06-16
 
-Approach **B (full retrieved-set attribution, reading (b))** is LOCKED by the user: the
-judge picks which retrieved doc substantiates each gold fact, or `None` if none does.
-Approach A (cite-only) is a confirmed **Won't**. This phase is the **schema + emission +
-persistence half only**; root-cause linkage (phase 2) and Phoenix spans (phase 3) are
-explicit Won'ts.
+---
+
+## Context & Grounding Invariant
+
+Phase-1 added `FactVerdict.supporting_doc_id: str | None` (`eval/schema.py`) and an FR-5
+hallucination guard that collapses any `supporting_doc_id` not in the judge's retrieved
+set to `None` _before_ persistence. The judge's retrieved set (`{c.doc_id for c in
+ctx_chunks}`) is provably equal to the persisted `EvalRecord.retrieval_ranked_ids` (same
+`chunk_hits` source, same doc-level dedup). **Verified invariant:** when phase-2 reads a
+persisted record, every `supporting_doc_id` is _either_ `None` _or_ already a member of
+`retrieval_ranked_ids`. A naive non-None set-intersection is therefore tautological.
+
+The real per-fact signal for a **failed** fact (`verdict ∈ {absent, contradicted}`) is:
+
+- `supporting_doc_id is None` → **retrieval_gap** — no retrieved doc substantiates the
+  fact; the evidence never reached the generator.
+- `supporting_doc_id is not None` → **generation_gap** — the evidence WAS retrieved; the
+  generator failed to use it.
+
+A defensive explicit cross-reference (`supporting_doc_id not in retrieval_ranked_ids` →
+retrieval_gap) is kept as a Should, so the predicate stays correct if the FR-5 guard is
+ever relaxed.
+
+This phase serves the sprint success criteria:
+
+- **SC-2** — the eval report distinguishes "fact failed, supporting doc WAS retrieved"
+  from "fact failed, supporting doc was NEVER retrieved" for ≥1 worked category.
+- **SC-3** — the failure-mode taxonomy can attribute a retrieval-miss root cause using
+  the new field, not just answer-level aggregates.
 
 ---
 
@@ -14,211 +38,219 @@ explicit Won'ts.
 
 ### Functional
 
-- **FR-1 — Nullable field on `FactVerdict`.** `FactVerdict` (in `eval/schema.py`) gains
-  `supporting_doc_id: str | None = None`: the `doc_id` of the retrieved document that
-  most directly substantiates the gold fact, or `None` when no retrieved doc covers it.
-  The field is additive — existing `FactVerdict(fact=..., verdict=...)` construction
-  stays valid (default `None`).
+**FR-1 — Shared root-cause predicate.** A new pure module
+`src/enterprise_rag_ops/eval/root_cause.py` exposes a single named predicate that classifies
+one fact verdict, given the record's `retrieval_ranked_ids`, into a root-cause label.
+Contract:
 
-- **FR-2 — Strict-mode-compatible JSON schema.** `_LLMJudgeVerdict.model_json_schema()`
-  (which embeds `FactVerdict` via `per_fact: list[FactVerdict]`) must place
-  `supporting_doc_id` in the `required` array of the `FactVerdict` sub-schema with a
-  nullable type union `{"type": ["string", "null"]}` — **not** as a defaulted-optional
-  field excluded from `required`. OpenAI `strict: true` rejects any property absent from
-  `required`. The implementation must inspect the actual emitted schema and apply a
-  Pydantic v2 override (see § Notes / FR-2 risk) if the default emission is not
-  strict-compatible.
+- Returns `None` when `verdict == "present"` (the fact is not a failure).
+- Returns `"retrieval_gap"` when the fact failed (`verdict ∈ {absent, contradicted}`) **and**
+  `supporting_doc_id is None` — or, defensively, when `supporting_doc_id` is not in
+  `retrieval_ranked_ids` (FR-4).
+- Returns `"generation_gap"` when the fact failed and `supporting_doc_id` is present in
+  `retrieval_ranked_ids`.
+- Output domain is exactly `Literal["retrieval_gap", "generation_gap"] | None`.
+- The module is pure: no I/O, no network, no imports from `runner`/`report`/`failure_taxonomy`
+  (it is a leaf consumed by them, never the reverse).
 
-- **FR-3 — Judge emits the field (prompt block).** `build_judge_user_prompt`
-  (`eval/prompt.py`) gains a new named **`RETRIEVED DOCUMENTS`** block rendering the full
-  retrieved set (all chunks joined per `doc_id`, reusing the existing per-`doc_id` join
-  logic), distinct from the existing **`CITED DOCUMENTS`** block. The block is the menu
-  the judge picks `supporting_doc_id` from.
+**FR-2 — Per-record rollup.** `root_cause.py` exposes a `RootCauseRollup` type (dataclass or
+TypedDict — design's call) carrying integer counts `{retrieval_gap, generation_gap,
+no_failed_facts}`, and a `rollup(record: EvalRecord) -> RootCauseRollup` that applies FR-1's
+predicate across `record.per_fact`. Contract:
 
-- **FR-4 — Rubric instruction.** `build_judge_system_prompt`/`_RUBRIC` (`eval/prompt.py`)
-  gains a line instructing: for each gold fact, emit `supporting_doc_id` = the `doc_id`
-  from the RETRIEVED DOCUMENTS block that most directly substantiates the fact, or `null`
-  if no retrieved document covers it. (Single-phase rubric per Approach B; the two-phase
-  Approach C ordering is a Could, not required here.)
+- Counts each failed fact into `retrieval_gap` or `generation_gap` per FR-1.
+- `no_failed_facts` is `True`/`1` (design's representation) **iff** the record has per-fact
+  evidence but zero failed facts — i.e. the "data present, zero gaps" case (distinct from
+  the degraded case below).
+- **Graceful degradation:** when `record.per_fact is None`, `rollup` must signal "no
+  per-fact evidence" distinctly from "zero gaps" (e.g. all-zero counts plus a degraded
+  marker, or a sentinel the report maps to N/A). It must NOT raise and must NOT report it
+  as `0` gaps masquerading as data.
 
-- **FR-5 — Hallucination guard (post-validation).** In `OpenAIJudge.judge_with_stats`,
-  after re-validating through `_LLMJudgeVerdict`, each emitted `supporting_doc_id` is
-  validated against the set of `doc_id`s present in `retrieved_docs`. Any id **not** in
-  that set is replaced with `None` before the public `JudgeVerdict` is assembled.
+**FR-3 — Report sub-section (Decision B / OQ-1 → 1b).** `report.py`'s
+`generate_report_data(jsonl_path) -> dict` gains a **new top-level key** (e.g. `"root_cause"`)
+holding per-category root-cause aggregates, computed via `root_cause.rollup`. `render_markdown`
+and `render_html` each gain **one new dedicated "Root-Cause Attribution" section/table block**
+— NOT extra columns on the existing 7-column per-category table. The section must, for at
+least one category with per-fact evidence, present the retrieval-gap vs generation-gap split
+of failed facts (counts and/or percentages). This satisfies **SC-2**.
 
-- **FR-6 — `StubJudge` conformance.** `StubJudge.judge` emits
-  `supporting_doc_id=None` on every `FactVerdict` it constructs (one-line change),
-  keeping the offline-CI path non-breaking and schema-conformant.
+**FR-4 — Defensive cross-reference (Should).** FR-1's predicate uses an explicit membership
+check (`supporting_doc_id not in record.retrieval_ranked_ids` → retrieval*gap) rather than
+relying solely on the `None` value, making the FR-5 invariant visible in code and robust to a
+future guard removal. A module docstring states \_why* None-vs-non-None is the signal and cites
+phase-1 FR-5 as the invariant source.
 
-- **FR-7 — Persistence round-trips the field.** `EvalRecord.per_fact`
-  (`eval/records.py`) already holds `list[FactVerdict] | None`; the new field flows
-  through unchanged. JSONL serialisation must emit `supporting_doc_id` as JSON `null`
-  (key present with null value) when it is `None`, so a new record's "no supporting doc"
-  (`null`) is distinguishable from an old record's "field never existed" (key absent).
+**FR-5 — Taxonomy-level attribution capability (Decision C / OQ-2 → 2a).** The failure-mode
+taxonomy gains a **new, additive per-fact root-cause attribution capability** built on
+`root_cause.py`, reachable as a taxonomy-surface capability (a function in
+`failure_taxonomy.py` that calls `root_cause.py`, or `root_cause.py` re-exported through the
+taxonomy module — design finalizes placement). This capability lets the taxonomy attribute a
+retrieval-miss root cause from the per-fact `supporting_doc_id` field, satisfying **SC-3**.
+The existing 5-label `classify()` cascade, its order, the `FailureMode` `StrEnum` values, and
+the `is_*` helpers/thresholds are **untouched** — no record changes label.
+
+**FR-6 — N/A vs 0.0% rendering (Decision D / OQ-3 → 3a).** When a category has no per-fact
+evidence (pre-sprint-8 `per_fact=None` records, or an empty failed-fact denominator),
+root-cause cells render **N/A** via the existing `_fmt(None) -> "N/A"` path. The "data present,
+zero gaps" case renders `0.0%`. The null-vs-absent distinction (phase-1 AC-7) is preserved end
+to end — a missing signal must never read as "zero gaps."
+
+**FR-7 — Mirrored tests.** `tests/eval/test_root_cause.py` covers the predicate, the rollup
+(including `per_fact is None` degradation), and the defensive branch. Report and taxonomy
+changes are covered in their existing mirrored test files (`tests/eval/test_report.py`,
+`tests/eval/test_failure_taxonomy.py`). All tests are offline (no network, no API key, no
+mocked LLM) and reuse `tests/eval/conftest.py` fixtures / canned payloads.
 
 ### Non-functional
 
-- **NFR-1 — Non-breaking, backward-compatible.** Old eval records lacking the field
-  still validate (Pydantic fills `None`). `aggregate.py` is unchanged — it counts
-  verdicts (`present`/`contradicted`/`supported`), never reads `supporting_doc_id`; the
-  three floats are byte-identical for any pre-existing input. This must be confirmed, not
-  assumed.
+**NFR-1 — Backward compatibility.** Records with `per_fact=None` (pre-sprint-8) must flow
+through `rollup`, the report, and the taxonomy capability without error, rendering N/A per
+FR-6. No schema field is added or changed; `aggregate.py` is not modified.
 
-- **NFR-2 — Offline determinism preserved.** All phase-1 tests run under `make test`
-  with no network and no API key, via the existing `FakeOpenAIClient` canned-payload
-  pattern (`tests/eval/conftest.py`). No live LLM call in the test path.
+**NFR-2 — Determinism & offline.** All new code is pure and deterministic; the full test
+surface runs under `make test` with no network, no API key, no model download, no mocked LLM.
 
-- **NFR-3 — Bounded judge-prompt growth / cost.** Approach B grows the judge user prompt
-  by the full retrieved set (~+1,500–3,000 input tokens/call at k=10). Measured
-  incremental cost for a full 500q×3-model sweep on `gpt-5-nano` (@ $0.05/1M input) is
-  ~$0.15–0.28, keeping the total judge bill ~$1 — well under the existing `$5.00`
-  `cost_ceiling_usd` guard. **No new cost mechanism is introduced**; the existing
-  `cost_ceiling_usd` remains the backstop. The growth is bounded by `k` (the retrieved
-  set size) and observed, not unbounded. Phase-1 development itself is ~$0 (cassette /
-  fake-client replay); only a one-time cassette re-record (AC-9) spends a few cents live.
+**NFR-3 — Minimal scope, clean seam.** The predicate is defined exactly once in
+`root_cause.py` and imported by both consumers (no duplicated inline logic). No speculative
+config knobs, no new ADR (the change is additive). New module ≈ one predicate + one rollup
+type + docstring.
 
-- **NFR-4 — Schema-as-SSoT preserved.** No hand-maintained parallel JSON schema string is
-  introduced. The strict schema remains `_LLMJudgeVerdict.model_json_schema()`; any FR-2
-  override is expressed in the Pydantic model definition, not a separate JSON blob.
+**NFR-4 — Report data-model stability.** The existing `report` output keys (`k`, `summary`,
+`categories`, `costs`) and the 7-column per-category table are unchanged; root-cause is purely
+additive (a new key + a new render block). Existing report tests stay green unmodified except
+for additions.
+
+**NFR-5 — Gate.** `make lint test` is green.
 
 ---
 
 ## Acceptance Criteria
 
-1. **AC-1 (FR-1):** `FactVerdict(fact="x", verdict="present")` constructs with
-   `supporting_doc_id is None`; `FactVerdict(fact="x", verdict="present",
-supporting_doc_id="doc_a")` round-trips the value. Covered in `tests/eval/test_schema.py`.
-
-2. **AC-2 (FR-2, highest risk):** A test in `tests/eval/test_schema.py` asserts on the
-   actual output of `_LLMJudgeVerdict.model_json_schema()`: within the `FactVerdict`
-   `$defs` sub-schema, `"supporting_doc_id"` appears in the `required` list **and** its
-   property schema is the nullable union (`{"type": ["string", "null"]}`, or the
-   equivalent `anyOf` form OpenAI strict accepts). If Pydantic v2's default emission for
-   `str | None = None` excludes it from `required` or uses a non-strict shape, the design
-   must specify and the test must verify the override (e.g. `Field(json_schema_extra=...)`
-   or a `field_serializer`/`model_json_schema` customization) that produces the
-   strict-compatible shape. The test fails if the field is strict-incompatible.
-
-3. **AC-3 (FR-3):** After judging, the rendered user prompt
-   (`client.calls[0]["messages"][1]["content"]`) contains a `RETRIEVED DOCUMENTS` section
-   header **and** a `=== doc <id> ===` block for every retrieved `doc_id`, distinct from
-   the existing `CITED DOCUMENTS` section. Asserted in `tests/eval/test_judge_anchor.py`
-   (or a sibling test in `tests/eval/`).
-
-4. **AC-4 (FR-4):** The system prompt (`build_judge_system_prompt()`) contains the
-   `supporting_doc_id` instruction line (the rubric tells the judge to pick a retrieved
-   `doc_id` or `null`). Asserted as a substring in `tests/eval/test_prompt.py` (create if
-   absent; mirror existing prompt-construction tests).
-
-5. **AC-5 (FR-5, hallucination guard — anchor case):** With a `FakeOpenAIClient` canned
-   payload whose `per_fact` emits a `supporting_doc_id` **not** in the `retrieved_docs`
-   set, the returned `JudgeVerdict`'s corresponding `FactVerdict.supporting_doc_id`
-   collapses to `None`. A second fact emitting an in-set `doc_id` retains that id
-   unchanged. Anchor case in `tests/eval/test_judge_anchor.py`.
-
-6. **AC-6 (FR-6):** `StubJudge.judge(...)` returns a `JudgeVerdict` whose every
-   `per_fact` entry has `supporting_doc_id is None`. Asserted in
-   `tests/eval/test_stub_judge.py` (create if absent) or the existing stub test.
-
-7. **AC-7 (FR-7, serialisation — null vs absent):** `EvalRecord` containing a
-   `FactVerdict(supporting_doc_id=None)`, serialised via the project's persistence path
-   (`model_dump` / `model_dump_json` as used by `records.py`/the runner), emits
-   `"supporting_doc_id": null` — the key is **present with null**, not omitted. A record
-   JSON missing the key entirely still validates back into `EvalRecord` (old-record
-   compatibility), and the round-tripped value is `None`. The chosen `model_dump`
-   behavior (default, or `exclude_none=False` if needed) is pinned in the test. Covered in
-   `tests/eval/test_records.py`.
-
-8. **AC-8 (NFR-1, aggregate unchanged):** `aggregate(per_fact, per_citation)` returns
-   byte-identical `(fact_recall, fact_precision, faithfulness_ratio)` whether or not
-   `per_fact` entries carry `supporting_doc_id`. Asserted by a regression case in
-   `tests/eval/test_aggregate.py` (same input with/without the field → same floats).
-
-9. **AC-9 (cassette / canned-payload re-record):** The new RETRIEVED DOCUMENTS block
-   changes the user-prompt text. The judge anchor test uses a **fake-client canned
-   `_LLMJudgeVerdict` payload** (`canned_verdict_payload` in `tests/eval/conftest.py`),
-   **not** an on-disk VCR cassette — so the re-record cost is: update the canned payload
-   to include `supporting_doc_id` values (one in-set, one hallucinated) and update the
-   prompt-assertion to expect the new block. No VCR `tests/eval/cassettes/*.yaml` file
-   exists for the judge path; none needs re-recording. (Verified: only
-   `abstention_info_not_found.yaml` and the generator cassettes exist; the judge anchor
-   path is fake-client-based.) If a maintainer later adds a live judge cassette, the
-   re-record plan is `VCR_RECORD_MODE` + the documented scrub fixture — out of scope here.
-
-10. **AC-10 (NFR-3, cost note):** The DESIGN/implementation records (in a code comment or
-    the PR body) the observed prompt-growth bound (~+1,500–3,000 tokens/call at k=10) and
-    confirms no new cost mechanism is added — the `cost_ceiling_usd` guard is unchanged.
-    No automated test; this is a documentation acceptance check.
-
-11. **AC-11 (NFR-2, NFR-4 / quality gate):** `make lint test` is green. Every changed
-    module (`schema.py`, `prompt.py`, `openai_judge.py`, `stub_judge.py`) has mirrored
-    coverage in `tests/eval/`. No new hand-maintained schema string; strict schema is
-    still `_LLMJudgeVerdict.model_json_schema()`.
+1. **(FR-1, present→None)** `classify_fact_gap` returns `None` for any fact with
+   `verdict == "present"`, regardless of `supporting_doc_id` value or membership in
+   `retrieval_ranked_ids`.
+2. **(FR-1, retrieval_gap)** For a failed fact (`verdict == "absent"` and `verdict ==
+"contradicted"`, both tested) with `supporting_doc_id is None`, the predicate returns
+   `"retrieval_gap"`.
+3. **(FR-1, generation_gap)** For a failed fact whose `supporting_doc_id` IS present in
+   `retrieval_ranked_ids`, the predicate returns `"generation_gap"`.
+4. **(FR-4, defensive)** For a failed fact whose `supporting_doc_id` is non-None but **not**
+   in `retrieval_ranked_ids`, the predicate returns `"retrieval_gap"` (defensive branch) and a
+   test asserts this explicitly.
+5. **(FR-1, output domain)** The predicate's return value is always one of
+   `{"retrieval_gap", "generation_gap", None}` — asserted across the verdict × membership
+   matrix.
+6. **(FR-2, rollup counts)** Given a record with a mix of present/absent/contradicted facts,
+   `rollup` returns counts that sum the failed facts correctly into `retrieval_gap` and
+   `generation_gap`, with `no_failed_facts` set only when per-fact evidence exists but no
+   fact failed.
+7. **(FR-2/NFR-1, degradation)** `rollup(record)` with `record.per_fact is None` does not
+   raise and yields a result the report renders as N/A (not `0` gaps) — the degraded marker is
+   distinct from "zero gaps".
+8. **(FR-3/SC-2, report data)** `generate_report_data` output contains the new top-level
+   `"root_cause"` key with per-category aggregates, and for ≥1 category with per-fact evidence
+   the aggregate distinguishes retrieval-gap from generation-gap counts/percentages among
+   failed facts.
+9. **(FR-3/SC-2, render)** Both `render_markdown` and `render_html` emit a dedicated
+   "Root-Cause Attribution" section/table block (asserted by a section-header/table-marker
+   substring), and the existing 7-column per-category table is unchanged in column structure
+   (NFR-4).
+10. **(FR-6/Decision D)** A category whose records all have `per_fact=None` renders N/A in the
+    root-cause section; a category with per-fact evidence and zero failed facts renders `0.0%`.
+    Both are asserted in a render test, distinguishing N/A from `0.0%`.
+11. **(FR-5/SC-3)** A taxonomy-surface function attributes a per-fact root-cause
+    (`retrieval_gap` vs `generation_gap`) for a record, built on `root_cause.py`; a test calls
+    it through the taxonomy module's public surface and asserts the attribution.
+12. **(FR-5, no reclassification)** `classify(record, question)` returns the same
+    `FailureMode` for every fixture record as before this phase — the cascade order, the
+    `FailureMode` `StrEnum` members, and the `is_*` helpers are unchanged (regression test over
+    existing taxonomy fixtures stays green).
+13. **(Won't enforcement)** `aggregate.py` is unmodified (no diff); `FailureMode` has exactly
+    5 members (no 6th label); no new ADR is added under `docs/adr/`.
+14. **(FR-7/NFR-2)** `tests/eval/test_root_cause.py` exists with a package `__init__.py`
+    present, runs offline, and reuses existing conftest fixtures/canned payloads; no LLM is
+    mocked.
+15. **(NFR-5)** `make lint test` is green.
 
 ---
 
-## Resolved Open Questions
+## Resolved Open Questions (assumptions — confirm before `/design`)
 
-`AskUserQuestion` was not invoked: the four open questions were resolvable from the
-BRAINSTORM lock + SPRINT scope + codebase evidence to their aligned defaults. Each is
-flagged below as an assumption for the orchestrator to confirm before `/design`.
+The three real open questions (report placement, taxonomy refinement, `per_fact is None`
+handling) are LOCKED by the user (Decisions B/C/D in BRAINSTORM). The residual ambiguities
+below were resolved to BRAINSTORM/code-aligned defaults; each is an **unconfirmed assumption**,
+flagged per protocol (AskUserQuestion not invoked):
 
-- **OQ-1 (strict-mode nullable emission) → resolved into AC-2.** Default: design must
-  verify the real `model_json_schema()` and apply a Pydantic v2 override only if the
-  emitted shape is strict-incompatible. Treated as the highest-risk item; the AC fails
-  closed (test asserts the strict shape). _Assumption:_ the override, if needed, stays
-  expressed in the Pydantic model (NFR-4), not a parallel JSON string.
+- **A1 — Predicate signature.** Assumed `classify_fact_gap(fact_verdict: FactVerdict,
+retrieval_ranked_ids: list[str]) -> Literal["retrieval_gap","generation_gap"] | None`
+  (matches the locked Decision A wording). Exact parameter shape (passing the `FactVerdict` vs
+  unpacked fields) is design's call; the ACs pin only the _contract_.
+- **A2 — `RootCauseRollup` representation.** Assumed an integer-count triple `{retrieval_gap,
+generation_gap, no_failed_facts}` plus a degraded marker for `per_fact is None`. Dataclass
+  vs TypedDict and the exact degraded-marker encoding are deferred to design (Decision A says
+  so).
+- **A3 — Report aggregate unit.** Assumed the report's `"root_cause"` key aggregates **per
+  category** (mirroring the existing per-category table grain) and per model where multiple
+  models are present, summing rollups across that category's records. The report renders
+  percentages as `retrieval_gap / (retrieval_gap + generation_gap)` among failed facts (so the
+  two percentages sum to 100% when data is present), with N/A when the denominator is empty
+  or all records are degraded.
+- **A4 — Taxonomy capability name/placement.** Assumed a new public function in
+  `failure_taxonomy.py` (e.g. `attribute_root_cause(record) -> RootCauseRollup` or a per-fact
+  variant) that delegates to `root_cause.py`, so SC-3 is met at the _taxonomy surface_. Exact
+  name and whether it is a re-export vs a thin wrapper is design's call.
+- **A5 — Post-phase KB.** Assumed the only KB action is `/update-kb observability`
+  (failure-taxonomy) **after** this phase lands; no `/new-kb` or new ADR. (Matches BRAINSTORM.)
 
-- **OQ-2 (prompt layout — replace vs supplement) → resolved: supplement, two distinct
-  sections.** The RETRIEVED DOCUMENTS block is **added separately** from the existing
-  CITED DOCUMENTS block (FR-3, AC-3). Rationale: citation scoring is keyed to cited docs
-  and must not change; fact attribution needs the full retrieved set. The two sections
-  are unambiguous because each carries a distinct header and purpose line. _Assumption:_
-  rendering a doc in both sections (when a doc is both cited and retrieved) does not
-  confuse the judge — to be validated by cassette accuracy; the Could two-phase rubric
-  (Approach C) is the fallback if attribution is poor.
+---
 
-- **OQ-3 (cassette update cost) → resolved into AC-9.** The judge anchor path uses a
-  fake-client canned payload, not a VCR cassette, so "re-record" = update the canned
-  `_LLMJudgeVerdict` payload + prompt assertion. No `.yaml` cassette to invalidate.
+## Won't (explicit, this phase)
 
-- **OQ-4 (`None` serialised as `null` vs omitted) → resolved into AC-7.** Default: pin
-  the `model_dump` path so `supporting_doc_id=None` emits `"supporting_doc_id": null`
-  (key present), preserving the new-`null` vs old-`absent` distinction phase 2 relies on.
-  Use `exclude_none=False` if the current path would otherwise omit it. _Assumption:_ the
-  runner's persistence call does not set `exclude_none=True`; verify in DESIGN.
+- No modification to `aggregate.py` (phase brief excludes it).
+- No 6th `FailureMode` label; no change to the `StrEnum` values.
+- No cascade-order change in `classify()`; no change to `is_*` helpers or the 0.5/0.5
+  thresholds.
+- No Option-2c redefinition of `is_retrieval_miss` to fire on the per-fact signal — deferred
+  to a backlog item + ADR-0008 amendment only if the coarse label later proves insufficient.
+- No Phoenix span integration (phase-3 scope).
+- No schema field added/changed; no record reclassification.
 
 ---
 
 ## Clarity Score
 
-| Dimension       | Score | Note                                                                                                                                                                                                                    |
-| --------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Problem**     | 3     | Root cause with evidence: failed facts carry no doc attribution, blocking the retrieval-miss diagnosis; codebase confirms `FactVerdict` has no doc field.                                                               |
-| **Users**       | 2     | The eval/observability consumer (the harness operator reading the report + phase-2 root-cause linkage) is the named downstream; workflow impact is the diagnosis sentence. Internal-tooling phase, so no end-user role. |
-| **Success**     | 3     | 11 measurable, falsifiable ACs; the highest-risk one (AC-2) asserts on real `model_json_schema()` output and fails closed.                                                                                              |
-| **Scope**       | 3     | Full MoSCoW inherited from BRAINSTORM with an explicit Won't list (phase-2 linkage, phase-3 spans, Approach A, aggregate changes, Protocol change).                                                                     |
-| **Constraints** | 3     | Strict-mode requirement, `extra="forbid"`, offline-CI/no-mock-LLM, schema-as-SSoT, bounded cost vs `cost_ceiling_usd`, null-vs-absent serialisation — all named.                                                        |
+| Dimension       | Score | Note                                                                                                                                                               |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Problem**     | 3     | Root cause stated with code evidence: the FR-5 guard makes non-None intersection tautological; None-vs-non-None on failed facts is the verified signal.            |
+| **Users**       | 3     | Named roles: the eval operator reading the report (SC-2 diagnosis) and the triage/taxonomy consumer (SC-3 attribution). Workflow impact is explicit.               |
+| **Success**     | 3     | 15 falsifiable ACs mapped to FRs, each asserting a concrete branch/output; SC-2 and SC-3 each have a dedicated AC (8/9, 11).                                       |
+| **Scope**       | 3     | MoSCoW inherited from BRAINSTORM + explicit Won't list (aggregate.py, 6th label, cascade order, 2c, Phoenix, schema change).                                       |
+| **Constraints** | 3     | All constraints named: offline/no-mock-LLM, `make lint test` gate, mirrored test layout + `__init__.py`, additive data model, N/A-vs-0.0% null discipline, no ADR. |
 
-**Total: 14/15** — PASS (≥12).
+**Total: 15/15** — PASS (≥12). All three open questions were pre-resolved and locked by the
+user; residual ambiguities resolved to aligned defaults and flagged as assumptions (A1–A5).
 
 ---
 
 ## Infrastructure Readiness
 
-| Dependency                                | KB domain                                                           | Specialist        | Status                                                                                                                                                                                                                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FactVerdict` / `_LLMJudgeVerdict` schema | `rag-eval/concepts/schema-as-ssot.md`                               | (none registered) | Ready — covers two-model split + strict constraints.                                                                                                                                                                                                                                   |
-| Per-doc faithfulness rendering            | `rag-eval/concepts/per-doc-faithfulness.md`                         | (none registered) | Ready — per-`doc_id` block convention is the FR-3 model.                                                                                                                                                                                                                               |
-| Per-fact judge call wiring                | `rag-eval/patterns/per-fact-judge-call.md`                          | (none registered) | Ready — four-step call pattern is the FR-5 insertion point.                                                                                                                                                                                                                            |
-| OpenAI `strict` + nullable union (AC-2)   | `rag-eval/concepts/schema-as-ssot.md` (thin on `["string","null"]`) | (none)            | **Thin but sufficient.** KB documents `required`/`additionalProperties` but not the nullable-union case. No `/new-kb` now — capture as an `/update-kb rag-eval` to `per-fact-judge-call.md` **after** phase 1 confirms the exact Pydantic v2 emission (already planned in BRAINSTORM). |
-| Cassette/replay (ADR-0006)                | `tests/conftest.py` `vcr_record`                                    | (none registered) | Ready — but the judge anchor path is fake-client, not VCR (AC-9).                                                                                                                                                                                                                      |
-| Pydantic v2 schema emission               | (library docs)                                                      | Context7 MCP      | Use Context7 (`/pydantic/pydantic`) during DESIGN/implement to confirm the v2 `str \| None` `model_json_schema()` emission and the minimal override for AC-2.                                                                                                                          |
+| Dependency                                                                    | KB domain       | Specialist      | Status                                                                            |
+| ----------------------------------------------------------------------------- | --------------- | --------------- | --------------------------------------------------------------------------------- |
+| `eval/schema.py` `FactVerdict.supporting_doc_id`                              | `rag-eval`      | (eval workflow) | Ready — shipped phase-1; verified in code.                                        |
+| `eval/records.py` `EvalRecord` (`per_fact`, `retrieval_ranked_ids`, `k`)      | `rag-eval`      | (eval workflow) | Ready — fields verified; `per_fact: list[FactVerdict] \| None`.                   |
+| `eval/report.py` (`generate_report_data`, `render_*`, `_fmt`/`_mean`)         | `rag-eval`      | (eval workflow) | Ready — render pattern + `_fmt(None)->"N/A"` confirmed; additive key/section.     |
+| `eval/failure_taxonomy.py` (5-label cascade, `is_*`)                          | `observability` | (taxonomy)      | Ready — cascade/StrEnum verified; additive capability only.                       |
+| `tests/eval/conftest.py` fixtures (`canned_verdict_payload`, `sample_chunks`) | `rag-eval`      | (eval workflow) | Ready — offline fixtures exercise both guard branches; reusable for FR-7.         |
+| `make lint test` gate                                                         | —               | —               | Ready — standard gate.                                                            |
+| ADR-0008 (taxonomy) — amendment                                               | `observability` | (taxonomy)      | Not needed this phase (2c is a Won't); deferred to backlog if coarse label fails. |
+| Post-phase `/update-kb observability`                                         | `observability` | (taxonomy)      | Pending — run AFTER phase lands (failure-taxonomy entry). Not a blocker.          |
 
-No `/new-kb` or `/new-agent` required: the `rag-eval` domain holds. The only KB action is
-the post-phase-1 `/update-kb rag-eval` to add the nullable-strict-field note, already
-anticipated in BRAINSTORM and SPRINT.
+No infrastructure gaps. KB domains `rag-eval` and `observability` are sufficient; no
+`/new-kb`, `/new-agent`, or new ADR is required.
+
+---
 
 ## Next Step
 
-→ `/design sprint-8/phase-1-faithfulness-schema`
+→ `/design sprint-8/phase-2-root-cause-linkage`

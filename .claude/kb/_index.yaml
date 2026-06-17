@@ -159,11 +159,14 @@ domains:
       (gold question, opt-in at the exporter boundary via --enrich-from-questions), generation
       output.value (answer, always-on), judge output.value (per-fact/per-citation verdict as
       text/plain, always-on, omit-guarded when no verdicts).
+      Sprint 8/phase-2 — per-fact root-cause attribution (root_cause.py leaf: classify_fact_gap
+      predicate + RootCauseRollup + rollup; taxonomy surface: attribute_root_cause; report
+      Root-Cause Attribution section; null discipline: has_per_fact=False -> N/A, denom==0 -> 0.0%).
       ADRs: 0004 (tool — Phoenix deployed, Langfuse rejected on 8 GB hardware),
       0008 (taxonomy), 0007 (schema).
     path: observability/
     status: draft
-    last_updated: "2026-06-03"
+    last_updated: "2026-06-17"
     agents: [kb-architect]
     pillars_used: [codebase, deep-research]
     research_source: _research/archive/observability-2026-05-25.md

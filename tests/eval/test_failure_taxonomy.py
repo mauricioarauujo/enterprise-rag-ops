@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from enterprise_rag_ops.eval.failure_taxonomy import (
     FailureMode,
+    attribute_root_cause,
     classify,
     is_abstention_error,
     is_hallucination,
@@ -20,6 +21,7 @@ from enterprise_rag_ops.eval.records import (
     GenAiOperation,
     GenAiRequest,
 )
+from enterprise_rag_ops.eval.schema import FactVerdict
 from enterprise_rag_ops.ingest import config
 
 
@@ -32,6 +34,7 @@ def make_eval_record(
     did_abstain_e2e: bool = False,
     k: int = 10,
     failure_mode: str | None = None,
+    per_fact: list[FactVerdict] | None = None,
 ) -> EvalRecord:
     """Helper to build a dummy EvalRecord with defaults."""
     return EvalRecord(
@@ -69,6 +72,7 @@ def make_eval_record(
         did_abstain_retrieval=did_abstain_retrieval,
         did_abstain_e2e=did_abstain_e2e,
         failure_mode=failure_mode,
+        per_fact=per_fact,
     )
 
 
@@ -404,3 +408,72 @@ def test_classify_cli_skips_missing_question_id(tmp_path, caplog):
 
     assert out_known.failure_mode == "correct"
     assert out_unknown.failure_mode is None
+
+
+def test_attribute_root_cause_at_taxonomy_surface():
+    """AC-11/SC-3: the taxonomy surface attributes a per-fact root cause via root_cause.py.
+
+    A failed fact with no supporting doc -> retrieval_gap; a failed fact whose supporting
+    doc IS retrieved -> generation_gap. Reached through the public `failure_taxonomy`
+    function, proving SC-3 is met at the taxonomy module surface.
+    """
+    record = make_eval_record(
+        retrieval_ranked_ids=["doc1"],
+        per_fact=[
+            FactVerdict(fact="a", verdict="present", supporting_doc_id="doc1"),
+            FactVerdict(fact="b", verdict="absent", supporting_doc_id=None),
+            FactVerdict(fact="c", verdict="contradicted", supporting_doc_id="doc1"),
+        ],
+    )
+    rollup_result = attribute_root_cause(record)
+    assert rollup_result.retrieval_gap == 1
+    assert rollup_result.generation_gap == 1
+    assert rollup_result.no_failed_facts is False
+    assert rollup_result.has_per_fact is True
+
+
+def test_classify_unchanged_no_reclassification():
+    """AC-12/AC-13: the 5-label cascade is byte-identical — no record is reclassified.
+
+    Re-runs the canonical fixture per label, asserting `classify` returns the same
+    `FailureMode` as before this phase, and that `FailureMode` still has exactly 5
+    members (no 6th label). Regression guard over the cascade order / StrEnum / is_* helpers.
+    """
+    cases = [
+        (
+            make_eval_record(did_abstain_e2e=True),
+            make_question(expected_doc_ids=["doc1"]),
+            FailureMode.ABSTENTION_ERROR,
+        ),
+        (
+            make_eval_record(retrieval_ranked_ids=["doc2"]),
+            make_question(expected_doc_ids=["doc1"]),
+            FailureMode.RETRIEVAL_MISS,
+        ),
+        (
+            make_eval_record(
+                retrieval_ranked_ids=["doc1"], faithfulness_ratio=0.4, fact_recall=1.0
+            ),
+            make_question(expected_doc_ids=["doc1"]),
+            FailureMode.HALLUCINATION,
+        ),
+        (
+            make_eval_record(
+                retrieval_ranked_ids=["doc1"], faithfulness_ratio=1.0, fact_recall=0.4
+            ),
+            make_question(expected_doc_ids=["doc1"]),
+            FailureMode.INCOMPLETE,
+        ),
+        (
+            make_eval_record(
+                retrieval_ranked_ids=["doc1"], faithfulness_ratio=1.0, fact_recall=1.0
+            ),
+            make_question(expected_doc_ids=["doc1"]),
+            FailureMode.CORRECT,
+        ),
+    ]
+    for record, question, expected in cases:
+        assert classify(record, question) == expected
+
+    # No 6th label introduced (AC-13).
+    assert len(FailureMode) == 5
