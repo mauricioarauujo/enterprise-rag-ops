@@ -59,10 +59,20 @@ and warns per record.
 | `gen_ai.operation.name`      | `"chat"` (literal)                | OTel GenAI                       | always           |
 | `gen_ai.usage.input_tokens`  | `record.generation.input_tokens`  | OTel GenAI                       | always           |
 | `gen_ai.usage.output_tokens` | `record.generation.output_tokens` | OTel GenAI                       | always           |
+| `llm.token_count.prompt`     | `record.generation.input_tokens`  | OpenInference (B-05)             | always           |
+| `llm.token_count.completion` | `record.generation.output_tokens` | OpenInference (B-05)             | always           |
+| `llm.token_count.total`      | input + output                    | OpenInference (B-05)             | always           |
+| `llm.model_name`             | `record.generation.model`         | OpenInference (B-05)             | always           |
+| `llm.provider`               | `record.generation.system`        | OpenInference (B-05)             | always           |
 | `latency_s`                  | `record.generation.latency_s`     | custom                           | always           |
 | `output.value`               | `record.answer`                   | OpenInference — Phoenix Info tab | always           |
 | `output.mime_type`           | `"text/plain"` (literal)          | OpenInference                    | always           |
 | `cost_usd`                   | `record.generation.cost_usd`      | custom                           | only if non-None |
+
+The `llm.token_count.*` / `llm.model_name` / `llm.provider` keys (B-05) are emitted by the
+`_llm_token_keys` helper **alongside** the OTel `gen_ai.*` keys (none removed) so Phoenix's
+native Total Cost widget derives cost from token-count x its model-pricing table. Verified:
+the widget's aggregate matches the offline report's own `cost_usd` accounting to the cent.
 
 `output.value` is **always-on** (Phase 17): `record.answer` is an in-record field — no
 external read needed — so the pure mapper sets it directly. This makes Phoenix's Info tab
@@ -70,17 +80,18 @@ render the generated answer for every trace.
 
 ## Judge Span
 
-| Attribute                    | Source field                 | Convention                       | When                  |
-| ---------------------------- | ---------------------------- | -------------------------------- | --------------------- |
-| `gen_ai.request.model`       | `record.judge.model`         | OTel GenAI                       | always                |
-| `gen_ai.system`              | `record.judge.system`        | OTel GenAI                       | always                |
-| `gen_ai.operation.name`      | `"chat"` (literal)           | OTel GenAI                       | always                |
-| `gen_ai.usage.input_tokens`  | `record.judge.input_tokens`  | OTel GenAI                       | always                |
-| `gen_ai.usage.output_tokens` | `record.judge.output_tokens` | OTel GenAI                       | always                |
-| `latency_s`                  | `record.judge.latency_s`     | custom                           | always                |
-| `output.value`               | verdict lines (see below)    | OpenInference — Phoenix Info tab | if verdicts non-empty |
-| `output.mime_type`           | `"text/plain"` (literal)     | OpenInference                    | if verdicts non-empty |
-| `cost_usd`                   | `record.judge.cost_usd`      | custom                           | only if non-None      |
+| Attribute                                               | Source field                 | Convention                       | When                  |
+| ------------------------------------------------------- | ---------------------------- | -------------------------------- | --------------------- |
+| `gen_ai.request.model`                                  | `record.judge.model`         | OTel GenAI                       | always                |
+| `gen_ai.system`                                         | `record.judge.system`        | OTel GenAI                       | always                |
+| `gen_ai.operation.name`                                 | `"chat"` (literal)           | OTel GenAI                       | always                |
+| `gen_ai.usage.input_tokens`                             | `record.judge.input_tokens`  | OTel GenAI                       | always                |
+| `gen_ai.usage.output_tokens`                            | `record.judge.output_tokens` | OTel GenAI                       | always                |
+| `llm.token_count.*` / `llm.model_name` / `llm.provider` | `record.judge.*`             | OpenInference (B-05)             | always                |
+| `latency_s`                                             | `record.judge.latency_s`     | custom                           | always                |
+| `output.value`                                          | verdict lines (see below)    | OpenInference — Phoenix Info tab | if verdicts non-empty |
+| `output.mime_type`                                      | `"text/plain"` (literal)     | OpenInference                    | if verdicts non-empty |
+| `cost_usd`                                              | `record.judge.cost_usd`      | custom                           | only if non-None      |
 
 `output.value` on the judge span is a `text/plain` block rendered from
 `record.per_fact` and `record.per_citation` (Phase 19; per-fact root-cause suffix added
@@ -128,17 +139,24 @@ Score-to-span routing:
 - `faithfulness_ratio` → generation span
 - `fact_recall`, `fact_precision` → judge span
 
-## Known Display Artifacts in Phoenix
+## Native Widget Fidelity (B-05 — resolved)
 
-- **Native cost widget shows $0**: Phoenix reads `llm.token_count.*` for its cost widget,
-  but the harness emits `gen_ai.usage.*` (OTel GenAI) + a custom `cost_usd` attribute.
-  The real cost is present on the span's Attributes tab; the widget simply doesn't read it.
-- **Trace latency is replay duration**: Phoenix displays the span start/end delta, which
-  reflects when `exporter.py` opened/closed the context manager — not the real
-  `latency_s` attribute stored in the record. Both values are correct for their purpose;
-  they measure different things.
+Two native Phoenix widgets previously showed misleading values on replayed traces; both
+are now faithful:
 
-These are known/acceptable display artifacts, not bugs.
+- **Total Cost** (was `$0`): fixed by emitting the OpenInference `llm.token_count.*` /
+  `llm.model_name` / `llm.provider` keys (see the Generation/Judge tables) so Phoenix
+  computes per-span cost from token-count x its model-pricing table and aggregates to the
+  trace. Phoenix 15's built-in pricing already covers the harness models — no Settings >
+  Models config needed. Verified: the aggregate matches the offline report's `cost_usd`.
+- **Trace latency** (was the millisecond replay duration): fixed in `exporter.py` via
+  `span_timings(record, base_ns)`, which sets each span's explicit `start_time`/`end_time`
+  so the duration equals the real `latency_s`. The waterfall is sequential
+  (retriever → generation → judge), the chain span covers the whole run, and the retriever
+  span is **zero-duration** because retrieval latency is not persisted (we never fabricate
+  an unmeasured value — consistent with `.document.score` being omitted). The
+  `PhoenixScoreSink.start_span` seam grew optional `start_time`/`end_time` kwargs for this;
+  when omitted it falls back to auto-timestamped spans.
 
 ## Sources
 

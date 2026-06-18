@@ -32,7 +32,13 @@ class NoOpScoreSink(ScoreSink):
 
     @contextmanager
     def start_span(
-        self, name: str, openinference_span_kind: str, attributes: dict[str, Any]
+        self,
+        name: str,
+        openinference_span_kind: str,
+        attributes: dict[str, Any],
+        *,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> Generator[Any, None, None]:
         class DummySpanContext:
             @property

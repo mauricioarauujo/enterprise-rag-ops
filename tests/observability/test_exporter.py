@@ -9,11 +9,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from enterprise_rag_ops.eval.records import EvalRecord
 from enterprise_rag_ops.observability import attributes as attrs_mod
 from enterprise_rag_ops.observability import cli
 from enterprise_rag_ops.observability import phoenix_client as pc_mod
-from enterprise_rag_ops.observability.exporter import replay_jsonl
+from enterprise_rag_ops.observability.exporter import replay_jsonl, span_timings
 from enterprise_rag_ops.observability.phoenix_client import PhoenixScoreSink, split_endpoint
+
+_NS = 1_000_000_000
 
 
 class _FakeHTTPError(Exception):
@@ -96,13 +99,21 @@ class FakeSpanContext:
 
 class FakeSpan:
     def __init__(
-        self, span_id: int, name: str, openinference_span_kind: str, attributes: dict[str, Any]
+        self,
+        span_id: int,
+        name: str,
+        openinference_span_kind: str,
+        attributes: dict[str, Any],
+        start_time: int | None = None,
+        end_time: int | None = None,
     ):
         self.span_id_int = span_id
         self.name = name
         self.openinference_span_kind = openinference_span_kind
         self.attributes = attributes
         self.parent_id = None
+        self.start_time = start_time
+        self.end_time = end_time
 
     def get_span_context(self) -> FakeSpanContext:
         return FakeSpanContext(self.span_id_int)
@@ -124,13 +135,19 @@ class FakeScoreSink:
 
     @contextmanager
     def start_span(
-        self, name: str, openinference_span_kind: str, attributes: dict[str, Any]
+        self,
+        name: str,
+        openinference_span_kind: str,
+        attributes: dict[str, Any],
+        *,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> Generator[FakeSpan, None, None]:
         span_id = self.current_span_id
         self.current_span_id += 1
         parent_id = self.span_stack[-1].span_id_int if self.span_stack else None
 
-        span = FakeSpan(span_id, name, openinference_span_kind, attributes)
+        span = FakeSpan(span_id, name, openinference_span_kind, attributes, start_time, end_time)
         span.parent_id = parent_id
         self.spans.append(span)
 
@@ -436,6 +453,40 @@ def test_split_endpoint_normalizes_otlp_and_base_url():
         "https://phoenix.example.com:443/v1/traces",
         "https://phoenix.example.com:443",
     )
+
+
+def test_span_timings_builds_real_duration_waterfall():
+    """B-05: span_timings yields a sequential retriever→generation→judge waterfall whose
+    durations equal the persisted latency_s, with the chain spanning the whole run.
+    `_one_record_jsonl` carries generation latency_s=1.5 and judge latency_s=2.5."""
+    rec = EvalRecord.model_validate_json(_one_record_jsonl(["d1"]).strip())
+    base = 1_000_000_000_000
+    t = span_timings(rec, base)
+
+    assert t["retriever"] == (base, base)  # retrieval latency not persisted → zero-duration
+    assert t["generation"] == (base, base + int(1.5 * _NS))
+    assert t["judge"] == (base + int(1.5 * _NS), base + int(1.5 * _NS) + int(2.5 * _NS))
+    assert t["chain"] == (base, base + int(4.0 * _NS))  # chain spans gen + judge
+
+
+def test_replay_passes_real_latency_timestamps_to_sink(tmp_path):
+    """B-05: replay_jsonl threads span_timings into the sink so each span's wall-clock
+    duration is the real latency_s (gen 1.5s, judge 2.5s), not the millisecond replay time."""
+    jsonl = tmp_path / "b.jsonl"
+    jsonl.write_text(_one_record_jsonl(["d1"]))
+    sink = FakeScoreSink()
+
+    replay_jsonl(jsonl, sink, project="p")
+
+    by_name = {s.name: s for s in sink.spans}
+    gen, judge = by_name["generation"], by_name["judge"]
+    assert gen.end_time - gen.start_time == int(1.5 * _NS)
+    assert judge.end_time - judge.start_time == int(2.5 * _NS)
+    # judge starts where generation ends (sequential waterfall).
+    assert judge.start_time == gen.end_time
+    # chain (named by question_id) spans the whole run.
+    chain = by_name["qst_0001"]
+    assert chain.end_time - chain.start_time == int(4.0 * _NS)
 
 
 def test_cli_dry_run(tmp_path, two_record_jsonl_content):
