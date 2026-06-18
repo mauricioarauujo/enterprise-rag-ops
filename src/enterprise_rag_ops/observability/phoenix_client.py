@@ -6,6 +6,7 @@ to ensure that a future tool swap is localized here.
 
 import logging
 import os
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, Protocol
@@ -18,6 +19,14 @@ from phoenix.otel import register
 logger = logging.getLogger("enterprise_rag_ops.observability.phoenix_client")
 
 _OTLP_HTTP_TRACES_PATH = "/v1/traces"
+
+# Annotation ingestion-race retry budget. `provider.force_flush()` guarantees spans are
+# *sent* over OTLP, not yet *persisted*/queryable by Phoenix — annotations posted with
+# sync=True validate span existence server-side and 404 ("span not found") in that window.
+# Measured lag is sub-second; a short bounded linear backoff clears it. Only the first
+# metric pays the wait — once spans are queryable the rest succeed on attempt 1.
+_ANNOTATION_INGEST_RETRIES = 6
+_ANNOTATION_INGEST_BACKOFF_S = 0.5
 
 
 def split_endpoint(endpoint: str) -> tuple[str, str]:
@@ -124,6 +133,12 @@ class PhoenixScoreSink(ScoreSink):
             df = pd.DataFrame(rows)
 
             logger.info(f"Logging {len(rows)} annotations for metric '{metric_name}'")
+            self._log_metric_with_ingest_retry(metric_name, df)
+
+    def _log_metric_with_ingest_retry(self, metric_name: str, df: pd.DataFrame) -> None:
+        """POST one metric's annotations, retrying the transient 404 raised while Phoenix
+        is still ingesting the just-flushed spans (see _ANNOTATION_INGEST_* above)."""
+        for attempt in range(1, _ANNOTATION_INGEST_RETRIES + 1):
             try:
                 self.client.spans.log_span_annotations_dataframe(
                     dataframe=df,
@@ -131,8 +146,25 @@ class PhoenixScoreSink(ScoreSink):
                     annotator_kind="CODE",
                     sync=True,
                 )
+                return
             except Exception as e:
+                # A 404 here is "span not found" — the spans are still being ingested, not
+                # a missing endpoint. Retry that case only; surface everything else at once.
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                if status == 404 and attempt < _ANNOTATION_INGEST_RETRIES:
+                    wait = _ANNOTATION_INGEST_BACKOFF_S * attempt
+                    logger.debug(
+                        "Annotations for '%s' 404'd (spans not yet queryable); "
+                        "retry %d/%d after %.1fs",
+                        metric_name,
+                        attempt,
+                        _ANNOTATION_INGEST_RETRIES - 1,
+                        wait,
+                    )
+                    time.sleep(wait)
+                    continue
                 logger.error(f"Failed to log annotations for metric '{metric_name}': {e}")
+                return
 
     def flush(self) -> None:
         """Ensure all buffered spans and annotations are delivered (FR-5)."""

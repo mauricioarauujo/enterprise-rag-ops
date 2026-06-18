@@ -33,6 +33,18 @@ not support deterministic span IDs or idempotency keys at ingest time.
 Step 1 must complete before step 2 begins. Steps 3 and 4 must be ordered: Phoenix
 spans must be committed before annotations reference their IDs.
 
+**Ingestion-race caveat (important).** `provider.force_flush()` in step 3 only guarantees
+spans are _sent_ over OTLP — **not** that Phoenix has _persisted_ them into the queryable
+span store. Phoenix ingests OTLP spans asynchronously, so for a short window (measured
+sub-second, but load-dependent) the just-flushed span IDs are not yet annotatable. Step 4
+posts annotations with `sync=True`, which validates span existence server-side and returns
+**HTTP 404 "span not found"** during that window — silently dropping every score. The fix
+is a bounded linear-backoff retry on the 404 inside
+`PhoenixScoreSink._log_metric_with_ingest_retry` (`_ANNOTATION_INGEST_RETRIES` /
+`_ANNOTATION_INGEST_BACKOFF_S`): only the first metric pays the one-time wait; once the
+spans are queryable the remaining metrics succeed on the first attempt. The retry fires
+**only** on 404 — a non-404 error (auth/5xx) is logged once and not retried.
+
 ## Known Limitation
 
 `PhoenixScoreSink.reset_project` catches **all** exceptions from
