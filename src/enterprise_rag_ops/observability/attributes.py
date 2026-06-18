@@ -5,8 +5,23 @@ Does not import Phoenix or OpenTelemetry, allowing easy unit testing and zero lo
 
 from typing import Any
 
-from enterprise_rag_ops.eval.records import EvalRecord
+from enterprise_rag_ops.eval.records import CallStats, EvalRecord
 from enterprise_rag_ops.eval.root_cause import classify_fact_gap
+
+
+def _llm_token_keys(stats: CallStats) -> dict[str, Any]:
+    """OpenInference token-count + model keys that drive Phoenix's native cost widget (B-05).
+
+    Phoenix computes per-span cost as token_count x its model-pricing table and aggregates
+    to the trace; it reads these `llm.*` keys, not the OTEL `gen_ai.*` keys we also emit.
+    """
+    return {
+        "llm.token_count.prompt": stats.input_tokens,
+        "llm.token_count.completion": stats.output_tokens,
+        "llm.token_count.total": stats.input_tokens + stats.output_tokens,
+        "llm.model_name": stats.model,
+        "llm.provider": stats.system,
+    }
 
 
 def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
@@ -50,6 +65,11 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         "gen_ai.usage.input_tokens": record.generation.input_tokens,
         "gen_ai.usage.output_tokens": record.generation.output_tokens,
         "latency_s": record.generation.latency_s,
+        # OpenInference token-count + model keys (B-05): Phoenix's native Total Cost widget
+        # derives cost from llm.token_count.* x its model-pricing table, NOT from our custom
+        # cost_usd. Emitted alongside the OTEL gen_ai.* keys (no key removed); cost_usd stays
+        # for the offline report's own accounting.
+        **_llm_token_keys(record.generation),
     }
     # Phase 17: hydrate the generated answer onto the generation span as the OpenInference
     # output.value so Phoenix's Info tab renders it. Always-on — record.answer is an in-record
@@ -69,6 +89,8 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         "gen_ai.usage.input_tokens": record.judge.input_tokens,
         "gen_ai.usage.output_tokens": record.judge.output_tokens,
         "latency_s": record.judge.latency_s,
+        # OpenInference token-count + model keys (B-05) — see the generation span note.
+        **_llm_token_keys(record.judge),
     }
     # Build verdict lines for hydration onto the judge span (FR-10, RQ-2).
     # Each fact line carries its supporting_doc_id (or "—" sentinel); failed facts also

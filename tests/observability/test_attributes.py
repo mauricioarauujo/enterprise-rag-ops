@@ -150,8 +150,9 @@ def test_label_matches_classify_fact_gap_predicate():
             assert "|" not in line
 
 
-def test_judge_attrs_key_set_unchanged():
-    """AC-12: no new judge-span attribute keys (no eval.fact.* keys introduced)."""
+def test_judge_attrs_key_set():
+    """Judge-span attribute key set. Sprint-8 introduced no eval.fact.* keys; B-05 then added
+    the OpenInference `llm.*` cost keys alongside the OTEL `gen_ai.*` keys (no key removed)."""
     record = _make_record(
         per_fact=[FactVerdict(fact="f", verdict="present", supporting_doc_id="d1")],
         per_citation=[CitationVerdict(doc_id="d1", verdict="supported")],
@@ -169,7 +170,38 @@ def test_judge_attrs_key_set_unchanged():
         "output.value",
         "output.mime_type",
         "cost_usd",
+        # B-05: OpenInference cost-widget keys
+        "llm.token_count.prompt",
+        "llm.token_count.completion",
+        "llm.token_count.total",
+        "llm.model_name",
+        "llm.provider",
     }
+    # No eval.fact.* keys (sprint-8 invariant preserved).
+    assert not any(k.startswith("eval.fact") for k in judge_attrs)
+
+
+def test_llm_token_keys_helper_maps_distinct_values():
+    """B-05: the cost-widget helper maps prompt/completion/total/model/provider correctly
+    (distinct token values so prompt, completion, and total can't be confused)."""
+    stats = CallStats(input_tokens=11, output_tokens=7, latency_s=1.0, model="m1", system="openai")
+    assert attributes._llm_token_keys(stats) == {
+        "llm.token_count.prompt": 11,
+        "llm.token_count.completion": 7,
+        "llm.token_count.total": 18,
+        "llm.model_name": "m1",
+        "llm.provider": "openai",
+    }
+
+
+def test_llm_cost_keys_present_on_both_llm_spans():
+    """B-05: both LLM spans (generation + judge) carry the llm.* cost keys, and the OTEL
+    gen_ai.* keys remain (additive — no key removed)."""
+    attrs = build_span_attrs(_make_record())
+    for role in ("generation", "judge"):
+        a = attrs[role]
+        assert {"llm.token_count.prompt", "llm.token_count.total", "llm.model_name"} <= set(a)
+        assert "gen_ai.usage.input_tokens" in a  # OTEL key still present
 
 
 def test_attributes_module_has_no_phoenix_or_otel_import():

@@ -1,6 +1,7 @@
 """Orchestrator for replaying evaluation records into Phoenix traces (FR-2, FR-4, FR-5)."""
 
 import logging
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,29 @@ from enterprise_rag_ops.observability.attributes import build_score_rows, build_
 from enterprise_rag_ops.observability.phoenix_client import ScoreSink
 
 logger = logging.getLogger("enterprise_rag_ops.observability.exporter")
+
+_NS_PER_S = 1_000_000_000
+
+
+def span_timings(record: EvalRecord, base_ns: int) -> dict[str, tuple[int, int]]:
+    """Per-span (start_ns, end_ns) so the native latency widget reflects real durations (B-05).
+
+    Builds a sequential waterfall anchored at `base_ns`: retriever → generation → judge,
+    with the chain span spanning the whole. Generation and judge use their persisted
+    `latency_s`; retrieval latency is not persisted, so the retriever span is zero-duration
+    (consistent with `.score` being omitted — we never fabricate an unmeasured value).
+    """
+    gen_ns = int(record.generation.latency_s * _NS_PER_S)
+    judge_ns = int(record.judge.latency_s * _NS_PER_S)
+    retr_start = retr_end = base_ns  # retrieval latency not persisted → zero-duration
+    gen_start, gen_end = retr_end, retr_end + gen_ns
+    judge_start, judge_end = gen_end, gen_end + judge_ns
+    return {
+        "chain": (base_ns, judge_end),
+        "retriever": (retr_start, retr_end),
+        "generation": (gen_start, gen_end),
+        "judge": (judge_start, judge_end),
+    }
 
 
 @dataclass
@@ -107,11 +131,17 @@ def replay_jsonl(
                 )
         span_ids: dict[str, str] = {}
 
+        # Latency-faithful span timing (B-05): anchor this trace's waterfall at "now" so it
+        # lands in the recent time range, while each span's duration is the real latency_s.
+        timings = span_timings(record, time.time_ns())
+
         # Root chain span (name is the question ID)
         with sink.start_span(
             name=record.question_id,
             openinference_span_kind="chain",
             attributes=span_attrs["chain"],
+            start_time=timings["chain"][0],
+            end_time=timings["chain"][1],
         ) as chain_span:
             # Capture the in-process span ID as 16-char hex string (FR-4)
             span_ids["chain"] = f"{chain_span.get_span_context().span_id:016x}"
@@ -121,6 +151,8 @@ def replay_jsonl(
                 name="retriever",
                 openinference_span_kind="retriever",
                 attributes=span_attrs["retriever"],
+                start_time=timings["retriever"][0],
+                end_time=timings["retriever"][1],
             ) as retriever_span:
                 span_ids["retriever"] = f"{retriever_span.get_span_context().span_id:016x}"
 
@@ -129,6 +161,8 @@ def replay_jsonl(
                 name="generation",
                 openinference_span_kind="llm",
                 attributes=span_attrs["generation"],
+                start_time=timings["generation"][0],
+                end_time=timings["generation"][1],
             ) as gen_span:
                 span_ids["generation"] = f"{gen_span.get_span_context().span_id:016x}"
 
@@ -137,6 +171,8 @@ def replay_jsonl(
                 name="judge",
                 openinference_span_kind="llm",
                 attributes=span_attrs["judge"],
+                start_time=timings["judge"][0],
+                end_time=timings["judge"][1],
             ) as judge_span:
                 span_ids["judge"] = f"{judge_span.get_span_context().span_id:016x}"
 
