@@ -5,14 +5,84 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from enterprise_rag_ops.observability import attributes as attrs_mod
 from enterprise_rag_ops.observability import cli
+from enterprise_rag_ops.observability import phoenix_client as pc_mod
 from enterprise_rag_ops.observability.exporter import replay_jsonl
-from enterprise_rag_ops.observability.phoenix_client import split_endpoint
+from enterprise_rag_ops.observability.phoenix_client import PhoenixScoreSink, split_endpoint
+
+
+class _FakeHTTPError(Exception):
+    """Mimics httpx.HTTPStatusError: carries a `.response.status_code` the retry inspects."""
+
+    def __init__(self, status_code: int):
+        super().__init__(f"HTTP {status_code}")
+        self.response = SimpleNamespace(status_code=status_code)
+
+
+def _sink_with_mock_client(annotate_side_effect) -> tuple[PhoenixScoreSink, MagicMock]:
+    """A PhoenixScoreSink whose network __init__ is bypassed, wired to a mock client whose
+    log_span_annotations_dataframe uses the given side_effect. Returns (sink, annotate_mock)."""
+    sink = object.__new__(PhoenixScoreSink)  # skip __init__ (no Phoenix connection)
+    sink.project = "p"
+    annotate = MagicMock(side_effect=annotate_side_effect)
+    sink.client = SimpleNamespace(spans=SimpleNamespace(log_span_annotations_dataframe=annotate))
+    return sink, annotate
+
+
+@pytest.fixture
+def _no_sleep(monkeypatch):
+    """Make the ingest-retry backoff instant so the retry tests don't actually wait."""
+    monkeypatch.setattr(pc_mod.time, "sleep", lambda _s: None)
+
+
+def test_log_scores_retries_then_succeeds_on_ingest_404(_no_sleep):
+    """Regression: annotations 404 ('span not found') while Phoenix ingests the just-flushed
+    spans. log_scores must retry the transient 404 and succeed once the spans are queryable."""
+    # First two calls 404 (spans not yet queryable), third succeeds.
+    sink, annotate = _sink_with_mock_client([_FakeHTTPError(404), _FakeHTTPError(404), None])
+
+    sink.log_scores({"fact_recall": [{"span_id": "abc", "score": 1.0, "label": "1.0"}]})
+
+    assert annotate.call_count == 3  # two retries, then success
+    assert annotate.call_args.kwargs["annotation_name"] == "fact_recall"
+    assert annotate.call_args.kwargs["sync"] is True
+
+
+def test_log_scores_gives_up_after_retry_budget_on_persistent_404(_no_sleep, caplog):
+    """A 404 that never clears is bounded by the retry budget (no infinite loop) and is
+    logged as an error — it does not raise."""
+    sink, annotate = _sink_with_mock_client(_FakeHTTPError(404))
+
+    with caplog.at_level(logging.ERROR, logger="enterprise_rag_ops.observability.phoenix_client"):
+        sink.log_scores({"fact_recall": [{"span_id": "abc", "score": 1.0, "label": "1.0"}]})
+
+    assert annotate.call_count == pc_mod._ANNOTATION_INGEST_RETRIES
+    assert "Failed to log annotations for metric 'fact_recall'" in caplog.text
+
+
+def test_log_scores_does_not_retry_non_404_errors(_no_sleep, caplog):
+    """A non-404 failure (e.g. 500/auth) is a real error: log once, do not retry."""
+    sink, annotate = _sink_with_mock_client(_FakeHTTPError(500))
+
+    with caplog.at_level(logging.ERROR, logger="enterprise_rag_ops.observability.phoenix_client"):
+        sink.log_scores({"fact_recall": [{"span_id": "abc", "score": 1.0, "label": "1.0"}]})
+
+    assert annotate.call_count == 1  # no retry on a non-ingest error
+    assert "Failed to log annotations for metric 'fact_recall'" in caplog.text
+
+
+def test_log_scores_skips_empty_metric_rows(_no_sleep):
+    """An empty rows list for a metric is skipped — the client is never called for it."""
+    sink, annotate = _sink_with_mock_client(None)
+
+    sink.log_scores({"fact_recall": []})
+
+    annotate.assert_not_called()
 
 
 class FakeSpanContext:
