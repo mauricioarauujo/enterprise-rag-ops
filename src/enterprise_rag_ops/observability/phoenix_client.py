@@ -57,9 +57,19 @@ class ScoreSink(Protocol):
 
     @contextmanager
     def start_span(
-        self, name: str, openinference_span_kind: str, attributes: dict[str, Any]
+        self,
+        name: str,
+        openinference_span_kind: str,
+        attributes: dict[str, Any],
+        *,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> Generator[Any, None, None]:
-        """Start a new span within the current context, capturing its span_id (FR-3, FR-4)."""
+        """Start a new span within the current context, capturing its span_id (FR-3, FR-4).
+
+        Optional `start_time`/`end_time` (epoch ns) override the span's wall-clock so the
+        native latency widget reflects the real per-call duration on replay (B-05).
+        """
         ...
 
     def log_scores(self, rows_by_metric: dict[str, list[dict[str, Any]]]) -> None:
@@ -114,14 +124,41 @@ class PhoenixScoreSink(ScoreSink):
 
     @contextmanager
     def start_span(
-        self, name: str, openinference_span_kind: str, attributes: dict[str, Any]
+        self,
+        name: str,
+        openinference_span_kind: str,
+        attributes: dict[str, Any],
+        *,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> Generator[Any, None, None]:
-        """Start a new span within the current context, capturing its span_id (FR-3, FR-4)."""
-        # Pass the openinference_span_kind directly to tracer.start_as_current_span
-        with self.tracer.start_as_current_span(
-            name, openinference_span_kind=openinference_span_kind, attributes=attributes
-        ) as span:
-            yield span
+        """Start a new span within the current context, capturing its span_id (FR-3, FR-4).
+
+        Optional `start_time`/`end_time` (epoch ns) override the span's wall-clock so the
+        native latency widget reflects the real per-call duration on replay (B-05).
+        """
+        # Default path: auto-timestamped span (no latency override).
+        if start_time is None:
+            with self.tracer.start_as_current_span(
+                name, openinference_span_kind=openinference_span_kind, attributes=attributes
+            ) as span:
+                yield span
+            return
+
+        # Latency-faithful path (B-05): create the span with an explicit start_time, make it
+        # the current span for child nesting WITHOUT auto-ending it, then end at end_time so
+        # the span's duration is the real latency_s, not the millisecond replay duration.
+        span = self.tracer.start_span(
+            name,
+            openinference_span_kind=openinference_span_kind,
+            attributes=attributes,
+            start_time=start_time,
+        )
+        try:
+            with trace.use_span(span, end_on_exit=False):
+                yield span
+        finally:
+            span.end(end_time=end_time)
 
     def log_scores(self, rows_by_metric: dict[str, list[dict[str, Any]]]) -> None:
         """Write back evaluation metrics to their semantically aligned spans (FR-5)."""
