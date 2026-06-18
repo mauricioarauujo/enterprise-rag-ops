@@ -83,19 +83,30 @@ render the generated answer for every trace.
 | `cost_usd`                   | `record.judge.cost_usd`      | custom                           | only if non-None      |
 
 `output.value` on the judge span is a `text/plain` block rendered from
-`record.per_fact` and `record.per_citation` (Phase 19):
+`record.per_fact` and `record.per_citation` (Phase 19; per-fact root-cause suffix added
+sprint-8/phase-3):
 
 ```
-fact: <fact text> -> <verdict>
-fact: <fact text> -> <verdict>
+fact: <fact text> -> <verdict> [doc: <supporting_doc_id or —>]
+fact: <fact text> -> <verdict> [doc: <supporting_doc_id or —> | <retrieval_gap|generation_gap>]
 citation: <doc_id> -> <verdict>
 ```
 
-Built with `str.join` from `record.per_fact` (if non-None/non-empty) then
-`record.per_citation` (if non-None/non-empty). When **both** lists are None or empty,
-both `output.value` and `output.mime_type` are omitted (mirrors the `cost_usd` omit
-guard). Always-on when verdicts exist — no new flag, no new import — mapper purity
-(NFR-1) preserved.
+Each **fact** line carries its `supporting_doc_id` in a `[doc: …]` suffix (symmetric —
+present and failed facts alike); the `—` is the **U+2014 em-dash** sentinel for a `None`
+doc id (never an empty string, never `"None"`). For a **failed** fact (`verdict ∈
+{absent, contradicted}`) the suffix also carries the phase-2 root-cause label after `|`,
+obtained by calling `eval/root_cause.py::classify_fact_gap(fv, record.retrieval_ranked_ids)`
+(a present fact returns `None` → no label). This makes a single failed trace
+self-diagnosing in Phoenix's Info tab (SC-4) without cross-referencing the aggregate
+report. Importing the pure leaf `classify_fact_gap` is the only new dependency — mapper
+purity (no phoenix/otel) is preserved.
+
+Built by appending fact lines (each from `record.per_fact`, if non-None/non-empty) then
+citation lines (from `record.per_citation`, if non-None/non-empty). Citation lines are
+**unchanged** by phase-3. When **both** lists are None or empty, both `output.value` and
+`output.mime_type` are omitted (mirrors the `cost_usd` omit guard). Always-on when
+verdicts exist — no new flag.
 
 ## Cost Rule
 
