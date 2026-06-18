@@ -6,6 +6,7 @@ Does not import Phoenix or OpenTelemetry, allowing easy unit testing and zero lo
 from typing import Any
 
 from enterprise_rag_ops.eval.records import EvalRecord
+from enterprise_rag_ops.eval.root_cause import classify_fact_gap
 
 
 def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
@@ -69,8 +70,16 @@ def build_span_attrs(record: EvalRecord) -> dict[str, dict[str, Any]]:
         "gen_ai.usage.output_tokens": record.judge.output_tokens,
         "latency_s": record.judge.latency_s,
     }
-    # Build verdict lines for hydration onto the judge span (FR-10, RQ-2)
-    lines = [f"fact: {fv.fact} -> {fv.verdict}" for fv in (record.per_fact or [])] + [
+    # Build verdict lines for hydration onto the judge span (FR-10, RQ-2).
+    # Each fact line carries its supporting_doc_id (or "—" sentinel); failed facts also
+    # carry the phase-2 root-cause label from classify_fact_gap (sprint-8/phase-3, FR-1/2/3).
+    fact_lines = []
+    for fv in record.per_fact or []:
+        doc_or_dash = fv.supporting_doc_id if fv.supporting_doc_id is not None else "—"
+        gap = classify_fact_gap(fv, record.retrieval_ranked_ids)
+        bracket = f"[doc: {doc_or_dash}]" if gap is None else f"[doc: {doc_or_dash} | {gap}]"
+        fact_lines.append(f"fact: {fv.fact} -> {fv.verdict} {bracket}")
+    lines = fact_lines + [
         f"citation: {cv.doc_id} -> {cv.verdict}" for cv in (record.per_citation or [])
     ]
     if lines:
