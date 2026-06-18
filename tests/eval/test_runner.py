@@ -810,6 +810,56 @@ def test_runner_skips_transient_error_and_continues(monkeypatch, tmp_path, run_c
     assert "Re-run with `--resume`" in caplog.text
 
 
+def test_runner_skips_malformed_model_output_and_continues(
+    monkeypatch, tmp_path, run_config, caplog
+):
+    """A model returning structured output that fails its schema (AnswerWithSources missing
+    `sources`) raises pydantic.ValidationError on one question. That is a per-question fault
+    and must be skipped as a resumable gap — NOT crash the whole sweep (the bug that killed a
+    1500-call full sweep at 745/1500). Mirrors the transient-error skip."""
+    import logging
+
+    from enterprise_rag_ops.eval.questions import Question
+    from enterprise_rag_ops.generation.schema import AnswerWithSources
+
+    _setup_index_and_questions(
+        monkeypatch,
+        tmp_path,
+        [
+            Question("q1", "Q1", ["F1"], ["doc_1"], "cat"),
+            Question("q2", "Q2", ["F2"], ["doc_1"], "cat"),
+        ],
+    )
+
+    call_count = 0
+
+    class MalformedGenerator(StubGenerator):
+        def generate_with_stats(self, chunks, question):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                # A model that omits the required `sources` field — raises ValidationError,
+                # exactly the real failure mode that crashed the full sweep.
+                AnswerWithSources(answer="model forgot the sources field")
+            return super().generate_with_stats(chunks, question)
+
+    run_config.output_dir = str(tmp_path)
+    run_config.models = [run_config.models[0]]  # single (openai) model
+
+    with caplog.at_level(logging.WARNING):
+        output_path = run_evaluation(
+            run_config,
+            generator_classes={"openai": MalformedGenerator},
+            judge_class=StubJudge,
+        )
+
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 1  # q2 skipped, q1 written — run did not crash
+    assert json.loads(lines[0])["question_id"] == "q1"
+    assert "Malformed model output on q2" in caplog.text
+    assert "Re-run with `--resume`" in caplog.text
+
+
 def test_runner_resume_skips_completed_and_fills_gaps(monkeypatch, tmp_path, run_config):
     """resume=True: an existing {run_id}.jsonl is appended to — every (system, question_id)
     already present is skipped and only the gaps are (re)run. No duplicates; prior records

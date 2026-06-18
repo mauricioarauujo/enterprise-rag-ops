@@ -16,6 +16,7 @@ from typing import NamedTuple
 import anthropic
 import httpx
 import openai
+from pydantic import ValidationError
 
 from enterprise_rag_ops.eval.bronze import BronzeWriter
 from enterprise_rag_ops.eval.config import RunConfig
@@ -325,6 +326,24 @@ def run_evaluation(
                         exc,
                     )
                     return
+                except ValidationError as exc:
+                    # A model returned structured output that fails its schema (e.g.
+                    # AnswerWithSources missing `sources`, or a malformed judge verdict). Like a
+                    # transient API error, this is a per-question fault that must not crash a
+                    # 1500-call sweep — skip it as a resumable gap. A *systematic* schema bug
+                    # surfaces as "every question skipped, resume never converges" (the
+                    # end-of-run warning), which is visible, not silent.
+                    with fail_lock:
+                        failed_count += 1
+                    logger.warning(
+                        "Malformed model output on %s [%s/%s] — skipping (resume to retry): %s: %s",
+                        q.question_id,
+                        model.system,
+                        model.model_id,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    return
 
                 # 4. Cost accounting (FR-8, FR-9). Guard: a generator that already set
                 # cost_usd owns its cost and the runner treats it as final — the router
@@ -448,8 +467,9 @@ def run_evaluation(
 
     if failed_count:
         logger.warning(
-            "%d question(s) hit a transient error and were skipped this run. Re-run with "
-            "`--resume` to fill the gaps (the overlap guard requires every system complete).",
+            "%d question(s) hit a transient error or malformed model output and were skipped "
+            "this run. Re-run with `--resume` to fill the gaps (the overlap guard requires "
+            "every system complete).",
             failed_count,
         )
     return output_path
