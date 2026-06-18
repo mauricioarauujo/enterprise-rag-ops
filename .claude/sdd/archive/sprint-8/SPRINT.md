@@ -1,6 +1,6 @@
 # SPRINT 8: Per-Fact Root-Cause Attribution
 
-**Sprint:** sprint-8 | **Date:** 2026-06-14 | **Status:** active
+**Sprint:** sprint-8 | **Date:** 2026-06-14 | **Status:** closed
 
 ## Goal
 
@@ -61,3 +61,47 @@ one, escalate to an ADR-0008 amendment at that phase's `/brainstorm`.
   Mitigation: refine existing labels with the finer signal; defer any new label to an ADR.
 - **Tight budget** — phase 3 (Phoenix) is the cut line; phases 1–2 must be self-contained
   so the sprint delivers the eval→diagnosis signal even if 3 is dropped.
+
+## Retrospective
+
+**Closed:** 2026-06-18. All three planned phases shipped — none cut.
+
+| SC  | Outcome                                                                                                            | Status |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ------ |
+| 1   | `FactVerdict.supporting_doc_id` additive + closed schema + non-breaking — phase 1 (PR #39)                         | ✅     |
+| 2   | Report distinguishes retrieval-gap vs generation-gap (dedicated Root-Cause Attribution section) — phase 2 (PR #40) | ✅     |
+| 3   | Taxonomy attributes root cause via additive `attribute_root_cause(record)` (no label redefined) — phase 2          | ✅     |
+| 4   | Failed trace shows per fact the doc it was judged against (judge-span `output.value`) — phase 3 (PR #41)           | ✅     |
+| 5   | `make lint test` green throughout; mirrored tests; offline pure-mapper tests (no mocked LLM)                       | ✅     |
+
+**What worked**
+
+- **The pre-designed schema paid off.** `supporting_doc_id` was non-breaking exactly as the
+  Sprint-2 design anticipated — phase 1 was a clean additive field, no migration.
+- **The shared-leaf seam (`root_cause.py`).** A single pure predicate consumed by three
+  surfaces (report, taxonomy, trace) kept the gap logic defined once; phase 3 reused
+  `classify_fact_gap` verbatim with zero reimplementation.
+- **Scope discipline held under the "additive vs redefine" tension.** Phase 2 resisted
+  redefining the coarse taxonomy label (Option 2c), shipped the orthogonal
+  `attribute_root_cause` instead, and harvested 2c as backlog B-11 with a written trigger —
+  no cascade ripple, no baseline break, no ADR churn.
+- **KB landed in lockstep per phase.** Every phase's `/review` applied its own KB sync on
+  branch (phase-1 `rag-eval`; phase-2 `observability/failure-taxonomy`; phase-3
+  `span-attribute-mapping`). Sprint-close found nothing deferred — the backstop loop was a no-op.
+
+**What slipped / changed**
+
+- **Nothing cut.** The budget risk (phase 3 as the cut line) did not bite — phase 3 was an
+  XS one-file enrichment, smaller than feared.
+- **Phase-2 BRAINSTORM's "tautology" insight reframed the work.** The realization that
+  `supporting_doc_id` is provably `None`-or-member-of-`retrieval_ranked_ids` (FR-5 guard)
+  turned a naive set-intersection into a clean None-vs-non-None predicate — captured in the
+  `root_cause.py` docstring and the failure-taxonomy KB.
+
+## Sprint Close
+
+- **Phases shipped:** 3 / 3 — phase-1 (PR #39), phase-2 (PR #40), phase-3 (PR #41), all merged to `main`.
+- **Knowledge loop:** fully applied per-phase; sprint-close backstop found no deferred KB/ADR work.
+- **ADRs:** none — the sprint was additive within ADR-0004 / ADR-0008; no decision redefined.
+- **Backlog harvest:** B-03 closed (→ Recently shipped); B-11 created (deferred Option 2c, P3 idea).
+- **Archived:** `.claude/sdd/features/sprint-8/` → `.claude/sdd/archive/sprint-8/`.
