@@ -41,20 +41,20 @@ from phoenix.otel import register
 
 \# Initialize Phoenix Tracer Provider mapping to custom project  
 tracer_provider \= register(  
- protocol="http/protobuf",  
- project_name="lancedb-custom-rag",  
- endpoint="http://localhost:6006/v1/traces"  
+protocol="http/protobuf",  
+project_name="lancedb-custom-rag",  
+endpoint="http://localhost:6006/v1/traces"  
 )  
 tracer \= tracer_provider.get_tracer(\_\_name\_\_)
 
 def execute_rag_pipeline(user_query: str) \-\> Dict\[str, Any\]:  
- \# Root chain trace representing the end-to-end RAG request  
- with tracer.start_as_current_span(  
- "rag-pipeline",  
- openinference_span_kind="chain"  
- ) as root_span:  
- root_span.set_attribute("input.value", user_query)  
- root_span.set_attribute("session.id", "session_abc123")
+\# Root chain trace representing the end-to-end RAG request  
+with tracer.start_as_current_span(  
+"rag-pipeline",  
+openinference_span_kind="chain"  
+) as root_span:  
+root_span.set_attribute("input.value", user_query)  
+root_span.set_attribute("session.id", "session_abc123")
 
         \# 1\. Manually instrument custom LanceDB retrieval
         with tracer.start\_as\_current\_span(
@@ -109,12 +109,12 @@ from langfuse import get_client
 langfuse \= get_client()
 
 def execute_rag_pipeline_langfuse(user_query: str) \-\> Dict\[str, Any\]:  
- \# Initialize the trace object  
- trace \= langfuse.trace(  
- name="rag-pipeline",  
- session_id="session_abc123",  
- input\=user_query  
- )
+\# Initialize the trace object  
+trace \= langfuse.trace(  
+name="rag-pipeline",  
+session_id="session_abc123",  
+input\=user_query  
+)
 
     \# 1\. Trace LanceDB custom hybrid retrieval step
     retrieval\_span \= trace.span(
@@ -177,12 +177,12 @@ trace.set_tracer_provider(provider)
 tracer \= trace.get_tracer("custom-rag-service")
 
 def execute_rag_pipeline_pure_otel(user_query: str) \-\> Dict\[str, Any\]:  
- with tracer.start_as_current_span(  
- "rag-pipeline",  
- kind=trace.SpanKind.SERVER  
- ) as root_span:  
- \# Standard OTel root metrics  
- root_span.set_attribute("session.id", "session_abc123")
+with tracer.start_as_current_span(  
+"rag-pipeline",  
+kind=trace.SpanKind.SERVER  
+) as root_span:  
+\# Standard OTel root metrics  
+root_span.set_attribute("session.id", "session_abc123")
 
         \# 1\. Custom database client span for LanceDB
         with tracer.start\_as\_current\_span(
@@ -238,17 +238,17 @@ Representing retrieved documents as single serialized JSON strings inside a span
 The retrieval span should be executed as a CLIENT span.37 It must explicitly capture the input query, the search parameters (such as the number of requested neighbors ![][image1]), and the details of the retrieved document chunks.39
 
 Trace Span: "LanceDB.search" (Kind: CLIENT, openinference.span.kind: RETRIEVER)  
- ├── db.system.name: "lancedb"  
- ├── db.collection.name: "wiki_embeddings"  
- ├── db.operation.name: "hybrid_search"  
- ├── gen_ai.data_source.id: "knowledge_base_alpha" \[39, 42\]  
- ├── input.value: "What is the hybrid search threshold?"  
- ├── retrieval.documents.0.document.id: "chunk_994" \[36, 41\]  
- ├── retrieval.documents.0.document.content: "LanceDB hybrid search combines BM25..." \[36, 41\]  
- ├── retrieval.documents.0.document.score: 0.9142 \[36, 41\]  
- ├── retrieval.documents.0.document.metadata: '{"source": "docs", "author": "dev"}' \[36, 41\]  
- ├── retrieval.documents.1.document.id: "chunk_204" \[36, 41\]  
- └── retrieval.documents.1.document.content: "Dense vector indexing utilizes IvfPq..." \[36, 41\]
+├── db.system.name: "lancedb"  
+├── db.collection.name: "wiki_embeddings"  
+├── db.operation.name: "hybrid_search"  
+├── gen_ai.data_source.id: "knowledge_base_alpha" \[39, 42\]  
+├── input.value: "What is the hybrid search threshold?"  
+├── retrieval.documents.0.document.id: "chunk_994" \[36, 41\]  
+├── retrieval.documents.0.document.content: "LanceDB hybrid search combines BM25..." \[36, 41\]  
+├── retrieval.documents.0.document.score: 0.9142 \[36, 41\]  
+├── retrieval.documents.0.document.metadata: '{"source": "docs", "author": "dev"}' \[36, 41\]  
+├── retrieval.documents.1.document.id: "chunk_204" \[36, 41\]  
+└── retrieval.documents.1.document.content: "Dense vector indexing utilizes IvfPq..." \[36, 41\]
 
 This structural mapping enables deep trace analysis. By decomposing retrieved documents into distinct, indexed keys, downstream analytical engines (such as ClickHouse or Elasticsearch) can execute high-speed queries to identify retrieval anomalies.2 For example, developers can query for all traces where retrieval.documents.0.document.score fell below ![][image2] yet the generation span returned a highly confident response, indicating potential hallucination risks.2
 
@@ -280,38 +280,38 @@ Python
 from typing import Dict, Any
 
 MODEL_PRICING \= {  
- "gpt-5-nano-2025-08-07": {  
- "input": 0.05 / 1e6,  
- "output": 0.40 / 1e6,  
- "cache_read": 0.05 / 1e6  
- },  
- "gpt-4o-mini": {  
- "input": 0.15 / 1e6,  
- "output": 0.60 / 1e6,  
- "cache_read": 0.075 / 1e6  
- },  
- "claude-3-5-haiku-20241022": {  
- "input": 0.80 / 1e6,  
- "output": 4.00 / 1e6,  
- "cache_read": 0.08 / 1e6  
- },  
- "claude-3-5-sonnet-20241022": {  
- "input": 3.00 / 1e6,  
- "output": 15.00 / 1e6,  
- "cache_read": 0.30 / 1e6  
- }  
+"gpt-5-nano-2025-08-07": {  
+"input": 0.05 / 1e6,  
+"output": 0.40 / 1e6,  
+"cache_read": 0.05 / 1e6  
+},  
+"gpt-4o-mini": {  
+"input": 0.15 / 1e6,  
+"output": 0.60 / 1e6,  
+"cache_read": 0.075 / 1e6  
+},  
+"claude-3-5-haiku-20241022": {  
+"input": 0.80 / 1e6,  
+"output": 4.00 / 1e6,  
+"cache_read": 0.08 / 1e6  
+},  
+"claude-3-5-sonnet-20241022": {  
+"input": 3.00 / 1e6,  
+"output": 15.00 / 1e6,  
+"cache_read": 0.30 / 1e6  
+}  
 }
 
 def calculate_span_cost(  
- model_name: str,  
- input_tokens: int,  
- output_tokens: int,  
- cached_input_tokens: int \= 0,  
- reasoning_tokens: int \= 0  
+model_name: str,  
+input_tokens: int,  
+output_tokens: int,  
+cached_input_tokens: int \= 0,  
+reasoning_tokens: int \= 0  
 ) \-\> float:  
- pricing \= MODEL_PRICING.get(model_name)  
- if not pricing:  
- return 0.0
+pricing \= MODEL_PRICING.get(model_name)  
+if not pricing:  
+return 0.0
 
     base\_input \= max(0, input\_tokens \- cached\_input\_tokens)
     input\_cost \= (base\_input \* pricing\["input"\]) \+ (cached\_input\_tokens \* pricing\["cache\_read"\])
@@ -355,9 +355,9 @@ from phoenix.evals.utils import to_annotation_dataframe
 import pandas as pd
 
 class OfflineEvaluationWriter:  
- def \_\_init\_\_(self, langfuse_client: Optional\[Langfuse\] \= None, phoenix_client: Optional\[AsyncClient\] \= None):  
- self.langfuse \= langfuse_client  
- self.phoenix \= phoenix_client
+def \_\_init\_\_(self, langfuse_client: Optional\[Langfuse\] \= None, phoenix_client: Optional\[AsyncClient\] \= None):  
+self.langfuse \= langfuse_client  
+self.phoenix \= phoenix_client
 
     def write\_score\_to\_langfuse(
         self,

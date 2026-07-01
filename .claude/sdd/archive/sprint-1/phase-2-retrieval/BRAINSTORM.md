@@ -217,35 +217,35 @@ Phase 1 applied when it collapsed 9 adapters to 1.
 
 ## Scope (MoSCoW)
 
-| Priority | Item                                                                                                                                           |
+| Priority | Item |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Must     | `Chunk` dataclass with `chunk_id`, `doc_id`, `text` fields; `doc_id = Document.id`                                                             |
-| Must     | Chunker: uniform fixed-size (256 tokens, 32-token overlap) over `corpus.jsonl`                                                                 |
-| Must     | BM25 index built via `bm25s`, persisted to `data/processed/bm25_index/`                                                                        |
-| Must     | Dense embeddings via BGE-M3, corpus matrix saved to `data/processed/embeddings.npy`                                                            |
-| Must     | LanceDB embedded index at `data/processed/lancedb/`; schema includes `chunk_id`, `doc_id`, `source_type`, `text`                               |
-| Must     | Hybrid retriever: BM25 + dense → RRF (k=60) → doc-level deduplication → top-k `(doc_id, score)`                                                |
-| Must     | `source_type` indexed as a pre-filterable LanceDB column                                                                                       |
-| Must     | `make build-index` target that runs chunking + BM25 index + embedding + LanceDB indexing (idempotent)                                          |
-| Must     | Smoke test asserting `Recall@10 > 0` on 3–5 fixed questions with verified `expected_doc_ids`                                                   |
-| Must     | Smoke test asserting no duplicate `doc_id` in retriever output (deduplication contract)                                                        |
-| Must     | ADR-002 written: retrieval architecture, vector store choice, chunking, fusion algorithm                                                       |
-| Should   | `make retrieval-smoke` target wrapping the smoke test (distinct from `make check-data`)                                                        |
-| Should   | Abstention threshold: if top-1 cosine similarity < 0.45, return empty list (from `concepts/retrieval-eval-metrics.md`)                         |
-| Should   | `reranker=None` parameter placeholder in `HybridRetriever` for Sprint 2 composability                                                          |
-| Should   | `source_type_filter: str                                                                                                                       | None = None`parameter on the retriever's`retrieve()` method |
-| Should   | `make verify` passes (ruff format + lint + unit tests); new modules under `src/enterprise_rag_ops/retrieval/` with mirrored `tests/retrieval/` |
-| Could    | ADR-001 stub in `docs/adr/` noting deferral to Sprint 2 (satisfies the sprint plan's requirement without a premature decision)                 |
-| Could    | Logging per-source chunk count distribution at index build time (mirrors Phase 1's per-source document logging)                                |
-| Could    | `docs/adr/README.md` updated to note that first ADR lands in Phase 2 (not Sprint 2 as it currently states)                                     |
-| Won't    | Cross-encoder reranker — out of scope per `concepts/reranking.md`; Phase 2 smoke gate only requires Recall@k > 0                               |
-| Won't    | ADR-001 (eval framework) — not a live decision in Phase 2; deferred to Sprint 2                                                                |
-| Won't    | Per-source-type chunking (Slack temporal windowing, GitHub AST splitting, etc.) — complexity not justified at the subset scale                 |
-| Won't    | Parent-child chunking — Phase 3's generation layer can be built on fixed-size chunks; parent context retrieval is a Sprint 2+ optimization     |
-| Won't    | Loading all 500 `questions` from the dataset `questions` config — deferred to Sprint 2 eval harness                                            |
-| Won't    | SPLADE, ColBERT, instruction-following embeddings — explicitly out of scope per `concepts/frontier-2026.md`                                    |
-| Won't    | Qdrant, pgvector, or any server-backed vector store in Phase 2                                                                                 |
-| Won't    | Convex combination or DBSF fusion — no calibration data available; RRF is the correct default                                                  |
+| Must | `Chunk` dataclass with `chunk_id`, `doc_id`, `text` fields; `doc_id = Document.id` |
+| Must | Chunker: uniform fixed-size (256 tokens, 32-token overlap) over `corpus.jsonl` |
+| Must | BM25 index built via `bm25s`, persisted to `data/processed/bm25_index/` |
+| Must | Dense embeddings via BGE-M3, corpus matrix saved to `data/processed/embeddings.npy` |
+| Must | LanceDB embedded index at `data/processed/lancedb/`; schema includes `chunk_id`, `doc_id`, `source_type`, `text` |
+| Must | Hybrid retriever: BM25 + dense → RRF (k=60) → doc-level deduplication → top-k `(doc_id, score)` |
+| Must | `source_type` indexed as a pre-filterable LanceDB column |
+| Must | `make build-index` target that runs chunking + BM25 index + embedding + LanceDB indexing (idempotent) |
+| Must | Smoke test asserting `Recall@10 > 0` on 3–5 fixed questions with verified `expected_doc_ids` |
+| Must | Smoke test asserting no duplicate `doc_id` in retriever output (deduplication contract) |
+| Must | ADR-002 written: retrieval architecture, vector store choice, chunking, fusion algorithm |
+| Should | `make retrieval-smoke` target wrapping the smoke test (distinct from `make check-data`) |
+| Should | Abstention threshold: if top-1 cosine similarity < 0.45, return empty list (from `concepts/retrieval-eval-metrics.md`) |
+| Should | `reranker=None` parameter placeholder in `HybridRetriever` for Sprint 2 composability |
+| Should | `source_type_filter: str                                                                                                                       | None = None`parameter on the retriever's`retrieve()` method |
+| Should | `make verify` passes (ruff format + lint + unit tests); new modules under `src/enterprise_rag_ops/retrieval/` with mirrored `tests/retrieval/` |
+| Could | ADR-001 stub in `docs/adr/` noting deferral to Sprint 2 (satisfies the sprint plan's requirement without a premature decision) |
+| Could | Logging per-source chunk count distribution at index build time (mirrors Phase 1's per-source document logging) |
+| Could | `docs/adr/README.md` updated to note that first ADR lands in Phase 2 (not Sprint 2 as it currently states) |
+| Won't | Cross-encoder reranker — out of scope per `concepts/reranking.md`; Phase 2 smoke gate only requires Recall@k > 0 |
+| Won't | ADR-001 (eval framework) — not a live decision in Phase 2; deferred to Sprint 2 |
+| Won't | Per-source-type chunking (Slack temporal windowing, GitHub AST splitting, etc.) — complexity not justified at the subset scale |
+| Won't | Parent-child chunking — Phase 3's generation layer can be built on fixed-size chunks; parent context retrieval is a Sprint 2+ optimization |
+| Won't | Loading all 500 `questions` from the dataset `questions` config — deferred to Sprint 2 eval harness |
+| Won't | SPLADE, ColBERT, instruction-following embeddings — explicitly out of scope per `concepts/frontier-2026.md` |
+| Won't | Qdrant, pgvector, or any server-backed vector store in Phase 2 |
+| Won't | Convex combination or DBSF fusion — no calibration data available; RRF is the correct default |
 
 ---
 

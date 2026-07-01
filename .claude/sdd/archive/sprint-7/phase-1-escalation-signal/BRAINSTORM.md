@@ -116,23 +116,23 @@ correct_label)` table where `correct = (failure_mode == "correct")`.
 
 ## Scope (MoSCoW)
 
-| Priority   | Item                                                                                                                                                           |
+| Priority | Item |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Must**   | Confirm Gemini Flash Lite exposes token-level logprobs via `response_logprobs` in `GenerateContentConfig` (API probe).                                         |
-| **Must**   | Wire logprob extraction in `GeminiGenerator.generate_with_stats` — add `confidence_score: float                                                                | None`to`CallStats` or as a return side-channel. |
-| **Must**   | Run validation: re-run Gemini (dev subset, no judge) with logprobs; produce per-question `(logprob_margin, correct_label)` table from existing baseline JSONL. |
-| **Must**   | Compute and report AUROC for logprob margin, abstention sentinel, and hybrid (OR) against `failure_mode == "correct"` ground truth.                            |
-| **Must**   | Apply calibration/test split discipline — no threshold tuning on the test set.                                                                                 |
-| **Must**   | Draft ADR recording the chosen signal, the validation evidence, and the seam-widening decision (where the confidence number lives).                            |
-| **Should** | Report the escalation rate the chosen threshold implies (to bound phase-2 cost estimate).                                                                      |
-| **Should** | Include a separation plot (logprob distribution: correct vs. incorrect) in the ADR supporting material.                                                        |
-| **Could**  | Evaluate `avg_logprobs` (response-level average) as a fallback if token-level `response_logprobs` is unavailable or returns empty with structured output.      |
-| **Won't**  | Implement `RouterGenerator` (phase-2 work — this phase produces the signal contract only).                                                                     |
-| **Won't**  | Threshold sweep / Pareto frontier (phase-3 work — phase-1 picks one operating point for the ADR, not a full sweep).                                            |
-| **Won't**  | Wire logprobs for Anthropic or OpenAI generators — Anthropic exposes no token logprobs; OpenAI is not the cheap model. Phase-1 is Gemini-only.                 |
-| **Won't**  | Self-consistency / semantic agreement signal (cost math fails at our price ratio).                                                                             |
-| **Won't**  | Retrieval-score gating as a standalone signal (raw RRF is not query-comparable per Q4; not worth pursuing when logprob is available).                          |
-| **Won't**  | Any change to the public `Generator` Protocol seam contract.                                                                                                   |
+| **Must** | Confirm Gemini Flash Lite exposes token-level logprobs via `response_logprobs` in `GenerateContentConfig` (API probe). |
+| **Must** | Wire logprob extraction in `GeminiGenerator.generate_with_stats` — add `confidence_score: float                                                                | None`to`CallStats` or as a return side-channel. |
+| **Must** | Run validation: re-run Gemini (dev subset, no judge) with logprobs; produce per-question `(logprob_margin, correct_label)` table from existing baseline JSONL. |
+| **Must** | Compute and report AUROC for logprob margin, abstention sentinel, and hybrid (OR) against `failure_mode == "correct"` ground truth. |
+| **Must** | Apply calibration/test split discipline — no threshold tuning on the test set. |
+| **Must** | Draft ADR recording the chosen signal, the validation evidence, and the seam-widening decision (where the confidence number lives). |
+| **Should** | Report the escalation rate the chosen threshold implies (to bound phase-2 cost estimate). |
+| **Should** | Include a separation plot (logprob distribution: correct vs. incorrect) in the ADR supporting material. |
+| **Could** | Evaluate `avg_logprobs` (response-level average) as a fallback if token-level `response_logprobs` is unavailable or returns empty with structured output. |
+| **Won't** | Implement `RouterGenerator` (phase-2 work — this phase produces the signal contract only). |
+| **Won't** | Threshold sweep / Pareto frontier (phase-3 work — phase-1 picks one operating point for the ADR, not a full sweep). |
+| **Won't** | Wire logprobs for Anthropic or OpenAI generators — Anthropic exposes no token logprobs; OpenAI is not the cheap model. Phase-1 is Gemini-only. |
+| **Won't** | Self-consistency / semantic agreement signal (cost math fails at our price ratio). |
+| **Won't** | Retrieval-score gating as a standalone signal (raw RRF is not query-comparable per Q4; not worth pursuing when logprob is available). |
+| **Won't** | Any change to the public `Generator` Protocol seam contract. |
 
 ---
 

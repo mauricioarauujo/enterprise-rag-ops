@@ -238,18 +238,18 @@ No new blocking ambiguity surfaced; nothing requires orchestrator confirmation b
 
 ## Infrastructure Readiness
 
-| Dependency                                              | KB domain                     | Specialist           | Status                                                                                                  |
+| Dependency | KB domain | Specialist | Status |
 | ------------------------------------------------------- | ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `RouterConfig` / `RunConfig.router` (config.py)         | rag-eval                      | (multi-model-runner) | Ready — `RunConfig` shape + `load_from_yaml` exist; additive optional field, no churn.                  |
-| Cheap sub-generator (`GeminiGenerator`)                 | rag-generation                | —                    | Ready — verbalized confidence on `CallStats.confidence_score` shipped phase-1 (ADR-0011).               |
-| Strong sub-generator (`AnthropicGenerator`)             | rag-generation                | —                    | Ready — `generate_with_stats` returns the 3-tuple; default `claude-haiku-4-5-20251001`.                 |
-| `CallStats` / `compute_cost_usd` / `Price`              | rag-eval (cost-accounting)    | —                    | Ready — `compute_cost_usd(stats, price)` + `cost_usd: float                                             | None` precedent confirmed in source. |
-| `ABSTAIN_ANSWER` sentinel (schema.py)                   | rag-generation                | —                    | Ready — single SSoT sentinel; imported by the router for the OR-trigger.                                |
-| `EvalRecord.gen_ai` identity (records.py)               | rag-eval (eval-record-schema) | —                    | Ready — `system` and `request.model` are both `str` (not `Literal`); `"router"` needs no schema change. |
-| Cassette/replay testing (ADR-0006)                      | rag-eval (cassette-replay)    | —                    | Ready — pattern established; router needs two sub-generator doubles (new shape, same discipline).       |
-| `confidence_score` field (phase-1)                      | rag-eval / rag-generation     | —                    | Ready — live on `CallStats`, populated by the Gemini path only.                                         |
-| Runner wiring + cost guard (runner.py:200-201)          | rag-eval (multi-model-runner) | (multi-model-runner) | Ready — guard is a 2-line surgical change; abstain branch already pre-sets `cost_usd`.                  |
-| Router/cascade KB pattern (`/update-kb rag-generation`) | rag-generation                | kb-architect         | **Deferred — not a gap.** SPRINT.md Knowledge Plan defers this to **after** the phase-2 ADR.            |
+| `RouterConfig` / `RunConfig.router` (config.py) | rag-eval | (multi-model-runner) | Ready — `RunConfig` shape + `load_from_yaml` exist; additive optional field, no churn. |
+| Cheap sub-generator (`GeminiGenerator`) | rag-generation | — | Ready — verbalized confidence on `CallStats.confidence_score` shipped phase-1 (ADR-0011). |
+| Strong sub-generator (`AnthropicGenerator`) | rag-generation | — | Ready — `generate_with_stats` returns the 3-tuple; default `claude-haiku-4-5-20251001`. |
+| `CallStats` / `compute_cost_usd` / `Price` | rag-eval (cost-accounting) | — | Ready — `compute_cost_usd(stats, price)` + `cost_usd: float                                             | None` precedent confirmed in source. |
+| `ABSTAIN_ANSWER` sentinel (schema.py) | rag-generation | — | Ready — single SSoT sentinel; imported by the router for the OR-trigger. |
+| `EvalRecord.gen_ai` identity (records.py) | rag-eval (eval-record-schema) | — | Ready — `system` and `request.model` are both `str` (not `Literal`); `"router"` needs no schema change. |
+| Cassette/replay testing (ADR-0006) | rag-eval (cassette-replay) | — | Ready — pattern established; router needs two sub-generator doubles (new shape, same discipline). |
+| `confidence_score` field (phase-1) | rag-eval / rag-generation | — | Ready — live on `CallStats`, populated by the Gemini path only. |
+| Runner wiring + cost guard (runner.py:200-201) | rag-eval (multi-model-runner) | (multi-model-runner) | Ready — guard is a 2-line surgical change; abstain branch already pre-sets `cost_usd`. |
+| Router/cascade KB pattern (`/update-kb rag-generation`) | rag-generation | kb-architect | **Deferred — not a gap.** SPRINT.md Knowledge Plan defers this to **after** the phase-2 ADR. |
 
 **No new KB or agent blocks this phase.** The router/cascade `Generator`-composite pattern is
 intentionally scheduled for `/update-kb rag-generation` _after_ the phase-2 ADR lands (sprint-wide

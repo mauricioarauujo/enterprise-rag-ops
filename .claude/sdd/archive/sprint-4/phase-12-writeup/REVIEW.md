@@ -31,9 +31,10 @@ The `agy` draft rendered the three ADR citations as absolute
 `file:///Users/mauricioaraujo/.../docs/adr/*.md` links — a stranger-test leak (local path
 
 - username) and links that would not resolve on GitHub. Rewritten to relative
-`../adr/0001-eval-framework.md` / `0003-generation.md` / `0008-failure-taxonomy.md`,
-verified to resolve from `docs/analysis/`. No `/Users` / `file:///` strings remain
-(grep: 0).
+  `../adr/0001-eval-framework.md` / `0003-generation.md` / `0008-failure-taxonomy.md`,
+  verified to resolve from `docs/analysis/`. No `/Users` / `file:///` strings remain
+  (grep: 0).
+
 </details>
 
 <details>

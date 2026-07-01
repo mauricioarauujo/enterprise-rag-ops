@@ -233,10 +233,10 @@ test`). Reverse: every manifest entry traces to a confirmed component
     (SPRINT.md criterion 4). The DESIGN does not engineer toward a win.
 
 - **The full sweep runs once (budget).** ≈$4.79 gen + judge overhead across four systems; the
-  `$10.0` ceiling (FR-7) is a ≈2× safety halt, not a budget target. The dev-first discipline
-  (7a) de-risks a wasted full run. If the ceiling halts mid-run, the boundary record is still
-  written (runner cost-guard) but the overlap assert (FR-5) will then **correctly raise** —
-  systems would have different `question_id` sets. That is the assert doing its job: re-run
+  `$10.0`ceiling (FR-7) is a ≈2× safety halt, not a budget target. The dev-first discipline
+(7a) de-risks a wasted full run. If the ceiling halts mid-run, the boundary record is still
+written (runner cost-guard) but the overlap assert (FR-5) will then **correctly raise** —
+systems would have different`question_id` sets. That is the assert doing its job: re-run
   rather than publish an unfair comparison. Note this in the recipe.
 
 - **`EvalRecord.model_validate` in the script vs. raw dict reads.** The helper takes

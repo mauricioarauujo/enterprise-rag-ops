@@ -115,12 +115,11 @@ total_gen_cost | n_correct`**. It loads from the JSONL only — **no live API ca
 - **FR-7 — Cost ceiling raised to `$10.0` for the full 4-way sweep.** `routing-eval.yaml`
   sets `cost_ceiling_usd: 10.0`. The BRAINSTORM estimate for the full 500-question 4-way
   sweep is ≈$4.79 generation (Gemini $0.64 + GPT-5 Nano $0.89 + Haiku $1.70 + router
-  ≈$1.56) **plus judge overhead** across all four systems; the existing `$5.0` ceiling
-  (sized for 3 baselines) is tight once judge cost and the router's fourth system are added.
-  `$10.0` gives ≈2× headroom over the gen estimate while still **halting a runaway** (the
-  ceiling guard is the safety mechanism, not a budget target). `$15.0` was considered and
-  rejected as looser than needed for a single run on a budget-conscious owner. (BRAINSTORM
-  Q1 resolved → `$10.0`.)
+  ≈$1.56) **plus judge overhead** across all four systems; the existing `$5.0`ceiling
+(sized for 3 baselines) is tight once judge cost and the router's fourth system are added.`$10.0` gives ≈2× headroom over the gen estimate while still **halting a runaway** (the
+  ceiling guard is the safety mechanism, not a budget target). `$15.0`was considered and
+rejected as looser than needed for a single run on a budget-conscious owner. (BRAINSTORM
+Q1 resolved →`$10.0`.)
 
 - **FR-8 — Mirrored unit tests for `eval/metrics.py`.** `tests/eval/test_metrics.py` (mirrors
   `src/`; `tests/eval/` + `__init__.py` already exist). **Cassette-free** — the helper is
@@ -251,8 +250,8 @@ before `/design`; OQ-1 (the ceiling number) is the only judgment call flagged as
 **unconfirmed assumption** for a quick skim, since it is a spend figure.
 
 - **OQ-1 (BRAINSTORM Q1) Cost ceiling for the full 4-way sweep → `$10.0`.** The BRAINSTORM
-  estimate is ≈$4.79 generation + judge overhead across four systems; `$5.0` (sized for 3
-  baselines) is tight. `$10.0` gives ≈2× headroom over the gen estimate while still halting
+  estimate is ≈$4.79 generation + judge overhead across four systems; `$5.0`(sized for 3
+baselines) is tight.`$10.0` gives ≈2× headroom over the gen estimate while still halting
   a runaway; `$15.0` is looser than a single budget-conscious run needs. Encoded as FR-7 /
   AC-1. _Unconfirmed assumption — low risk (a ceiling is a safety halt, not a budget; the
   expected actual spend is well under it); flagged for an orchestrator skim because it is a
