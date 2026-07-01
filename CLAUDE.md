@@ -26,6 +26,8 @@ not auto-loaded, so editing it is cache-safe.
 | Command / agent / KB registries | `.claude/STRUCTURE_GUIDE.md` § Registries       |
 | KB registry (machine-readable)  | `.claude/kb/_index.yaml`                        |
 | SDD layer (specs)               | `.claude/sdd/README.md`                         |
+| Kbind contract + layout map     | `.claude/kbind.yaml` (conventions v1)           |
+| Charter (L0 intent, risk tiers) | `.claude/sdd/CHARTER.md`                        |
 
 ---
 

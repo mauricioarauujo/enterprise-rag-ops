@@ -72,3 +72,7 @@ results/*
 
 # Antigravity CLI (agy) runtime project cache
 cache/
+
+# --- Kbind harness (adopted 2026-07-01) ---
+# CLAUDE.local.md + .claude/settings.local.json already ignored above.
+.claude/scripts/__pycache__/

@@ -1,5 +1,6 @@
 ---
 name: design-agent
+status: legacy # pre-kbind simple frontmatter — see .claude/agents/_MIGRATION_STATUS.md
 description: |
   Architecture specialist for SDD Stage 2 — turns requirements into a technical design,
   a file manifest, and a deep infrastructure-gap report.

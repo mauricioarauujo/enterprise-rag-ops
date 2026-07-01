@@ -1,5 +1,6 @@
 ---
 name: brainstorm-agent
+status: legacy # pre-kbind simple frontmatter — see .claude/agents/_MIGRATION_STATUS.md
 description: |
   Collaborative exploration specialist for SDD Stage 0 — clarifying intent and
   comparing approaches before requirements are firm.

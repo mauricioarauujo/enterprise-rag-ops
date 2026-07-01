@@ -106,6 +106,24 @@ Auto-triggered workflows/tool procedures. Format + when-to-add: § Self-Improvem
 | `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Adapted from mattpocock (MIT) |
 | `agy`      | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                      |
 
+### Kbind Layer Registry
+
+Added by `/kbind:harness-adopt` (2026-07-01). Contract manifest: `.claude/kbind.yaml`
+(conventions v1 + the `layout:` overrides for this repo's non-default paths). Overlap
+between local commands/skills and `/kbind:*` equivalents is tracked in
+`docs/kbind-adoption.md` § 3 until those proposals are decided.
+
+| Artifact                                                                  | What                                                                                                                                                       |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/kbind.yaml`                                                      | Conventions contract + layout/ci/autonomy state                                                                                                            |
+| `.claude/sdd/CHARTER.md`                                                  | L0 charter (north-star, KPI lens, R1–R3 risk tiers) — ratify via `/kbind:charter`                                                                          |
+| `.claude/scripts/*.py`                                                    | Deterministic cores: kb_health, adr_trace_check, ac_test_check + validity chain (ac_green_check, diff_gate, red_baseline, validity_artifact, validity_lib) |
+| `.claude/sdd/check_spec_status.py` (+ `_template.md`, `EXEMPLAR-SPEC.md`) | Spec-ladder seeds — dormant until SDD→Spec convergence                                                                                                     |
+| `.claude/workflows/deep-research-tiered.js`                               | Tiered gather workflow for the research loop                                                                                                               |
+| `.claude/hooks/{commit-gate,gate-track,spec-gate}.sh` + `README.md`       | Kbind gates — **inert** (wire via settings.json when wanted)                                                                                               |
+| `.claude/agents/_MIGRATION_STATUS.md`                                     | Legacy-agent ledger (5 pre-kbind agents, `status: legacy`)                                                                                                 |
+| `docs/adr/_template.md`                                                   | ADR template at the `layout.adrs` path                                                                                                                     |
+
 ---
 
 ## SDD — Spec-Driven Development

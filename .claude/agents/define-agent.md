@@ -1,5 +1,6 @@
 ---
 name: define-agent
+status: legacy # pre-kbind simple frontmatter — see .claude/agents/_MIGRATION_STATUS.md
 description: |
   Requirements specialist for SDD Stage 1 — extracts requirements and enforces the
   single Clarity gate (≥12/15) before design begins.

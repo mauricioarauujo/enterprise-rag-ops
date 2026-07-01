@@ -1,0 +1,45 @@
+# .claude/kbind.yaml — Kbind conventions-contract manifest
+#
+# Scaffolded by /kbind:harness-adopt (2026-07-01) onto a pre-existing homegrown harness.
+# This is the single dotfile of contract state in this repo. `audit-harness` reads it to
+# verify the installed plugin's contract is compatible with the conventions this repo
+# targets. Compatibility is MAJOR-VERSION ONLY. Do not hand-edit `conventions:` to dodge
+# an update — run /kbind:harness-adopt --migrate.
+
+conventions: v1
+
+# Brownfield path overrides — this repo predates kbind and keeps several areas in
+# non-default locations (no-split-brain rule: the override IS the area; no parallel
+# default tree exists). See docs/kbind-adoption.md § convergence roadmap for the
+# optional path to canonical names.
+layout:
+  adrs: docs/adr # canonical: docs/adrs
+  docs_index: docs/README.md # canonical: docs/CONTEXT.md
+  roadmap: docs/planning/roadmap.md # canonical: docs/roadmap.md — DELIBERATELY gitignored
+  #   (private planning layer, see CLAUDE.local.md "stranger test"); the public
+  #   present-state summary lives in README.md + docs/architecture/.
+  specs_index: .claude/sdd/README.md # canonical: docs/specs/CONTEXT.md — the SDD layer
+  #   (.claude/sdd/) is this repo's spec area; artifacts are BRAINSTORM/DEFINE/DESIGN
+  #   per sprint-N/<phase>, not kbind Spec-ladder files.
+  research_index: .claude/kb/_research/README.md # canonical: docs/research/CONTEXT.md
+
+# Single-language repo (English artifacts, stated in AGENTS.md § Conventions) — no
+# `language:` content-type split. Conversation language is per-user (CLAUDE.local.md).
+
+# CI wiring — pre-existing workflow; adopt appended the kbind `discipline` job to it
+# (append-only) rather than creating a rival file.
+ci:
+  provider: github
+  workflow: .github/workflows/ci.yml
+  test_command: make test-cov
+
+# Autonomy posture (ADR-0013 ladder). Conservative defaults — explicit and auditable,
+# changes NO behavior. target_level is intent-only; raise it once the owner picks a rung.
+autonomy:
+  target_level: L3 # raise to your intent (e.g. L5) — informs onboarding only
+  current_level: L3
+  unlocked_through: L3
+  risk_tier_gates:
+    R1: auto # read-only / reversible
+    R2: ask # normal mutating
+    R3: human # irreversible / destructive / PII — never auto without per-action opt-in

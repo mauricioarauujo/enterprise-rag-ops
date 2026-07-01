@@ -1,5 +1,6 @@
 ---
 name: code-reviewer
+status: legacy # pre-kbind simple frontmatter — see .claude/agents/_MIGRATION_STATUS.md
 description: |
   Code-review specialist for the enterprise-rag-ops harness. Reviews a branch diff for
   RAG-eval correctness, test coverage, and repo conventions.
