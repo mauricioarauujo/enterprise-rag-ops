@@ -1,6 +1,7 @@
 ---
 charter: enterprise-rag-ops
-last_updated: "2026-07-01"
+last_updated: "2026-07-02"
+ratified: "2026-07-02"
 ---
 
 # enterprise-rag-ops — Charter (L0 Intent)
@@ -10,7 +11,9 @@ last_updated: "2026-07-01"
 > re-invented per phase). Long-lived: a north-star change is an ADR-level decision.
 >
 > _Authored at kbind adoption (2026-07-01) from repo signals (`AGENTS.md` § Project
-> Purpose, `README.md`, ADRs 0001–0012). Ratify or revise via `/kbind:charter`._
+> Purpose, `README.md`, ADRs 0001–0012). **Ratified by the founder 2026-07-02** — all
+> four sections confirmed as written. Revise via `/kbind:charter` (a north-star change
+> is an ADR-level decision)._
 
 ## 1. North-star / mission
 

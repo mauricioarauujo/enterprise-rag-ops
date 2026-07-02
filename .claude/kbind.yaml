@@ -39,7 +39,7 @@ ci:
 # Autonomy posture (ADR-0013 ladder). Conservative defaults — explicit and auditable,
 # changes NO behavior. target_level is intent-only; raise it once the owner picks a rung.
 autonomy:
-  target_level: L3 # raise to your intent (e.g. L5) — informs onboarding only
+  target_level: L4 # raise to your intent (e.g. L5) — informs onboarding only
   current_level: L3
   unlocked_through: L3
   risk_tier_gates:
