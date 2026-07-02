@@ -15,9 +15,12 @@ conventions: v1
 layout:
   adrs: docs/adr # canonical: docs/adrs
   docs_index: docs/README.md # canonical: docs/CONTEXT.md
-  roadmap: docs/planning/roadmap.md # canonical: docs/roadmap.md — DELIBERATELY gitignored
-  #   (private planning layer, see CLAUDE.local.md "stranger test"); the public
-  #   present-state summary lives in README.md + docs/architecture/.
+  roadmap: # canonical: docs/roadmap.md — declared-private area (contract v1 § Declared-private
+    #   areas): DELIBERATELY gitignored (private planning layer, see CLAUDE.local.md
+    #   "stranger test"); audit treats "exists locally" as conforming, not drift. The
+    #   public present-state summary lives in README.md + docs/architecture/.
+    path: docs/planning/roadmap.md
+    private: true
   specs_index: .claude/sdd/README.md # canonical: docs/specs/CONTEXT.md — the SDD layer
   #   (.claude/sdd/) is this repo's spec area; artifacts are BRAINSTORM/DEFINE/DESIGN
   #   per sprint-N/<phase>, not kbind Spec-ladder files.

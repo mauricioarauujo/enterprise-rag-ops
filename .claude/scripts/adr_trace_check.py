@@ -21,6 +21,14 @@ Fails (exit 1) when an Accepted ADR has a bare "—", an empty/{{placeholder}} v
 unresolvable paths, or no `**Research:**` line at all. Skips `_template.md`, `README.md`, any
 `_*`-prefixed file, and `_archive/` trees; only `NNNN-*.md` files are ADRs.
 
+**Vacuous-pass guard (brownfield honesty).** An ADR with no parseable `**Status:**` header at
+all (legacy shapes: `## Status` sections, MADR bullets — every brownfield predates the template
+by construction) is invisible to this gate: it can neither be gated nor skipped-on-purpose. Those
+files are counted as **unparsed-status** in the summary and a stderr warning names them, so a CI
+gate that is green because it parsed nothing reads as VACUOUS instead of healthy. Exit stays 0 —
+advisory-honest, not newly blocking (converge by authoring from `_template.md` or adding a
+`**Status:**` line to legacy ADRs).
+
 Usage:
     python3 adr_trace_check.py [<adr-dir>]        # default: docs/adrs; exit 0/1/2
 """
@@ -83,15 +91,19 @@ def _resolves(token: str, adr_dir: Path) -> bool:
 
 
 def check_adr(path: Path, adr_dir: Path) -> tuple[list[str], str]:
-    """Errors for one ADR file + its verdict: "skipped" (not Accepted — not gated),
-    "traced" (a Research path resolves), or "waived" (explicit waiver)."""
+    """Errors for one ADR file + its verdict: "unparsed" (no `**Status:**` header — the gate
+    can't see it), "skipped" (not Accepted — not gated), "traced" (a Research path resolves),
+    or "waived" (explicit waiver)."""
     header = parse_header(path.read_text(encoding="utf-8"))
     try:
         rel = path.relative_to(adr_dir)
     except ValueError:
         rel = path
 
-    if "Accepted" not in header.get("Status", ""):
+    status = header.get("Status")
+    if status is None:
+        return [], "unparsed"  # legacy Status shape — feeds the vacuous-pass warning, not gated
+    if "Accepted" not in status:
         return [], "skipped"  # gate only Accepted; Proposed/Rejected/Superseded pass untouched
 
     research = header.get("Research")
@@ -130,23 +142,43 @@ def main() -> int:
 
     adrs = iter_adr_files(adr_dir)
     errors: list[str] = []
+    unparsed: list[str] = []
     accepted = waived = 0
     for adr in adrs:
         errs, verdict = check_adr(adr, adr_dir)
         errors.extend(errs)
-        if verdict != "skipped":
+        if verdict in ("traced", "waived"):
             accepted += 1
         if verdict == "waived":
             waived += 1
+        if verdict == "unparsed":
+            unparsed.append(adr.name)
 
     if errors:
         print(f"✗ adr-trace check failed ({len(errors)} issue(s)):", file=sys.stderr)
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 1
-    print(
-        f"✓ adr-trace check passed ({len(adrs)} ADR(s): {accepted} accepted, {waived} waived)"
-    )
+    summary = f"{len(adrs)} ADR(s): {accepted} accepted, {waived} waived"
+    if unparsed:
+        summary += f", {len(unparsed)} unparsed-status"
+    print(f"✓ adr-trace check passed ({summary})")
+    if unparsed:
+        scope = (
+            "VACUOUS PASS — ALL"
+            if len(unparsed) == len(adrs)
+            else f"{len(unparsed)} of {len(adrs)}"
+        )
+        print(
+            f"⚠ adr-trace: {scope} ADR(s) carry no parseable **Status:** header — the trace "
+            f"gate cannot see them. Author new ADRs from _template.md, or add a "
+            f"`**Status:**` line to gate legacy ADRs:",
+            file=sys.stderr,
+        )
+        for name in unparsed[:10]:
+            print(f"  - {name}", file=sys.stderr)
+        if len(unparsed) > 10:
+            print(f"  … and {len(unparsed) - 10} more", file=sys.stderr)
     return 0
 
 

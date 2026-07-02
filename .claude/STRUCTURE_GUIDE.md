@@ -100,18 +100,20 @@ Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 Auto-triggered workflows/tool procedures. Format + when-to-add: § Self-Improvement →
 "When to add a skill". Each lives at `.claude/skills/<name>/SKILL.md`.
 
-| Skill      | Triggers on                                                                | Origin                        |
-| ---------- | -------------------------------------------------------------------------- | ----------------------------- |
-| `diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                    | Adapted from mattpocock (MIT) |
-| `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Adapted from mattpocock (MIT) |
-| `agy`      | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                      |
+| Skill            | Triggers on                                                                | Origin                                                     |
+| ---------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `kbind:diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                    | Plugin (retired local `diagnose` 2026-07-02 — same origin) |
+| `kbind:handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Plugin (retired local `handoff` 2026-07-02 — same origin)  |
+| `agy`            | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                                                   |
 
 ### Kbind Layer Registry
 
 Added by `/kbind:harness-adopt` (2026-07-01). Contract manifest: `.claude/kbind.yaml`
-(conventions v1 + the `layout:` overrides for this repo's non-default paths). Overlap
-between local commands/skills and `/kbind:*` equivalents is tracked in
-`docs/kbind-adoption.md` § 3 until those proposals are decided.
+(conventions v1 + the `layout:` overrides for this repo's non-default paths). Seed base
+synced to plugin **v0.12.0** via `/kbind:harness-update` (2026-07-02; no customized
+seeds kept — all scaffold). Command-family overlap with `/kbind:*` twins: **deferred by
+decision** (2026-07-02) — migrate family-by-family in a separate pass; skills `diagnose`/
+`handoff` already retired to the kbind twins.
 
 | Artifact                                                                  | What                                                                                                                                                       |
 | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |

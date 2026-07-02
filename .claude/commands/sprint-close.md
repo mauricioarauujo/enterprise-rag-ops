@@ -54,7 +54,7 @@ After the last phase of a sprint has passed `/review`.
    - Run any **Deferred** `/new-kb` / `/update-kb` / ADR work before the next sprint
      (per-phase items already landed on their branches).
 
-9. **Hand off** — invoke the **`handoff`** skill to capture the sprint outcome and the
+9. **Hand off** — invoke the **`kbind:handoff`** skill to capture the sprint outcome and the
    entry point for the next sprint (the recommended KB/ADR work + the next sprint to open).
 
 ## Output
