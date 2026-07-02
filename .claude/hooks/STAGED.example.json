@@ -6,7 +6,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-commit-gate.sh"
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/commit-gate.sh"
         }
       ]
     }
@@ -17,7 +17,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-bash-track.sh"
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate-track.sh"
         }
       ]
     }

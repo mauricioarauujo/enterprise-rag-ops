@@ -100,11 +100,31 @@ Empty — domains are added on demand (see § Knowledge Base). Machine SSoT:
 Auto-triggered workflows/tool procedures. Format + when-to-add: § Self-Improvement →
 "When to add a skill". Each lives at `.claude/skills/<name>/SKILL.md`.
 
-| Skill      | Triggers on                                                                | Origin                        |
-| ---------- | -------------------------------------------------------------------------- | ----------------------------- |
-| `diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                    | Adapted from mattpocock (MIT) |
-| `handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Adapted from mattpocock (MIT) |
-| `agy`      | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                      |
+| Skill            | Triggers on                                                                | Origin                                                     |
+| ---------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `kbind:diagnose` | Failing test, flaky eval, or wrong retrieval/gen output                    | Plugin (retired local `diagnose` 2026-07-02 — same origin) |
+| `kbind:handoff`  | End of session / before `/clear`; auto at `/review` + `/sprint-close` end  | Plugin (retired local `handoff` 2026-07-02 — same origin)  |
+| `agy`            | "use agy", "delegate to agy", "implement with agy"; backs `/implement-agy` | Internal                                                   |
+
+### Kbind Layer Registry
+
+Added by `/kbind:harness-adopt` (2026-07-01). Contract manifest: `.claude/kbind.yaml`
+(conventions v1 + the `layout:` overrides for this repo's non-default paths). Seed base
+synced to plugin **v0.12.0** via `/kbind:harness-update` (2026-07-02; no customized
+seeds kept — all scaffold). Command-family overlap with `/kbind:*` twins: **deferred by
+decision** (2026-07-02) — migrate family-by-family in a separate pass; skills `diagnose`/
+`handoff` already retired to the kbind twins.
+
+| Artifact                                                                  | What                                                                                                                                                       |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/kbind.yaml`                                                      | Conventions contract + layout/ci/autonomy state                                                                                                            |
+| `.claude/sdd/CHARTER.md`                                                  | L0 charter (north-star, KPI lens, R1–R3 risk tiers) — **ratified 2026-07-02**; revise via `/kbind:charter`                                                 |
+| `.claude/scripts/*.py`                                                    | Deterministic cores: kb_health, adr_trace_check, ac_test_check + validity chain (ac_green_check, diff_gate, red_baseline, validity_artifact, validity_lib) |
+| `.claude/sdd/check_spec_status.py` (+ `_template.md`, `EXEMPLAR-SPEC.md`) | Spec-ladder seeds — dormant until SDD→Spec convergence                                                                                                     |
+| `.claude/workflows/deep-research-tiered.js`                               | Tiered gather workflow for the research loop                                                                                                               |
+| `.claude/hooks/{commit-gate,gate-track,spec-gate}.sh` + `README.md`       | Kbind gates — **inert** (wire via settings.json when wanted)                                                                                               |
+| `.claude/agents/_MIGRATION_STATUS.md`                                     | Legacy-agent ledger (5 pre-kbind agents, `status: legacy`)                                                                                                 |
+| `docs/adr/_template.md`                                                   | ADR template at the `layout.adrs` path                                                                                                                     |
 
 ---
 

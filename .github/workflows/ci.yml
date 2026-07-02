@@ -32,3 +32,19 @@ jobs:
 
       - name: Test
         run: make test-cov
+
+  # ── Kbind discipline gates (appended by /kbind:harness-adopt, 2026-07-01) ──
+  # spec-status is intentionally NOT wired: this repo's spec area (.claude/sdd/) uses the
+  # SDD dialect (BRAINSTORM/DEFINE/DESIGN), not the kbind Spec status ladder — the check
+  # is shape-N/A until/unless the repo converges (docs/kbind-adoption.md § 4).
+  discipline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - name: adr-trace (blocking — note, currently vacuous; repo ADRs use Status sections, not frontmatter)
+        run: python3 .claude/scripts/adr_trace_check.py docs/adr
+      - name: kb-health (advisory — KB budgets / research-loop debt)
+        run: python3 .claude/scripts/kb_health.py
+        continue-on-error: true

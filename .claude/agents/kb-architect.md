@@ -1,5 +1,6 @@
 ---
 name: kb-architect
+status: legacy # pre-kbind simple frontmatter — see .claude/agents/_MIGRATION_STATUS.md
 description: |
   Knowledge-base architect for creating, updating, and auditing KB domains.
   Builds every domain on 3 pillars — codebase, MCP docs (Context7 + Exa), and
