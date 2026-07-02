@@ -10,8 +10,8 @@ conventions: v1
 
 # Brownfield path overrides — this repo predates kbind and keeps several areas in
 # non-default locations (no-split-brain rule: the override IS the area; no parallel
-# default tree exists). See docs/kbind-adoption.md § convergence roadmap for the
-# optional path to canonical names.
+# default tree exists). The optional path to canonical names is tracked in the private
+# backlog (B-13, kbind canonical convergence).
 layout:
   adrs: docs/adr # canonical: docs/adrs
   docs_index: docs/README.md # canonical: docs/CONTEXT.md
