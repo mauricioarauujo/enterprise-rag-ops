@@ -188,8 +188,8 @@ To calculate correct metrics, the retrieved chunk list must undergo deduplicatio
 The resulting deduplicated list is evaluated against the ground-truth expected_doc_ids.10
 
 Retrieved Chunks: \[Chunk 101a\] \-\> \[Chunk 101b\] \-\> \[Chunk 102a\] \-\> \[Chunk 103a\]  
- Mapped Doc IDs: \-\> \-\> \-\>  
- Deduplicated: \-\> \-\>
+Mapped Doc IDs: \-\> \-\> \-\>  
+Deduplicated: \-\> \-\>
 
 ### **Mathematical Formulations of Retrieval Metrics**
 

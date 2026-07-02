@@ -104,23 +104,23 @@ and delivers the exact sprint success criteria 3 and 4.
 
 ## Scope (MoSCoW)
 
-| Priority   | Item                                                                                                                                                                             |
+| Priority | Item |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------- | -------------- | --------- |
-| **Must**   | `configs/routing-eval.yaml` + `.dev.yaml` (combined sweep config: 3 baselines + router in one run)                                                                               |
-| **Must**   | Classify step on the resulting JSONL (`rag-classify` CLI or equivalent) to produce `failure_mode` labels                                                                         |
-| **Must**   | `eval/metrics.py` — `compute_cost_per_correct(records) -> float                                                                                                                  | None` helper, with unit tests |
-| **Must**   | `scripts/routing_evaluation.py` — head-to-head table: system                                                                                                                     | cost_per_correct              | fact_recall | total_gen_cost | n_correct |
-| **Must**   | `docs/analysis/routing-verdict.md` — the honest verdict write-up (null result is a valid and expected outcome per ADR-0011/0012)                                                 |
-| **Should** | Quality-at-cost scatter plot (fact_recall vs cost_per_correct per system) saved as a `.png` in `docs/analysis/` — visual equivalent of the phase-1 separation plot               |
-| **Should** | Dev-iteration discipline: run `routing-eval.dev.yaml` (20 q) to validate the pipeline end-to-end before the full 500-question sweep                                              |
-| **Could**  | Extend `report.py` to render cost-per-correct-answer in the standard HTML/MD report (requires classify pre-step; defer unless the sprint has room)                               |
-| **Could**  | `/update-kb rag-eval` — add cost-per-correct-answer concept (scheduled post-phase once the metric stabilizes)                                                                    |
-| **Could**  | `/update-kb rag-generation` — add router-cascade composite pattern (scheduled post-ADR-0012-merge)                                                                               |
-| **Won't**  | Threshold sweep over escalation thresholds (SPRINT.md explicit Won't — one operating point, measure, stop)                                                                       |
-| **Won't**  | A new ADR for the routing evaluation itself — the measurement methodology needs no new ADR (ADR-0011 §6 and ADR-0012 cover the design; the verdict is a finding, not a decision) |
-| **Won't**  | Multi-threshold Pareto frontier analysis (deferred to backlog if ever needed)                                                                                                    |
-| **Won't**  | Leaderboard submission as part of this phase (already deferred to backlog B-09)                                                                                                  |
-| **Won't**  | Re-run any prior baseline JSONL separately and join by question_id — the combined-config single-run approach is the only fair path                                               |
+| **Must** | `configs/routing-eval.yaml` + `.dev.yaml` (combined sweep config: 3 baselines + router in one run) |
+| **Must** | Classify step on the resulting JSONL (`rag-classify` CLI or equivalent) to produce `failure_mode` labels |
+| **Must** | `eval/metrics.py` — `compute_cost_per_correct(records) -> float                                                                                                                  | None` helper, with unit tests |
+| **Must** | `scripts/routing_evaluation.py` — head-to-head table: system | cost_per_correct | fact_recall | total_gen_cost | n_correct |
+| **Must** | `docs/analysis/routing-verdict.md` — the honest verdict write-up (null result is a valid and expected outcome per ADR-0011/0012) |
+| **Should** | Quality-at-cost scatter plot (fact_recall vs cost_per_correct per system) saved as a `.png` in `docs/analysis/` — visual equivalent of the phase-1 separation plot |
+| **Should** | Dev-iteration discipline: run `routing-eval.dev.yaml` (20 q) to validate the pipeline end-to-end before the full 500-question sweep |
+| **Could** | Extend `report.py` to render cost-per-correct-answer in the standard HTML/MD report (requires classify pre-step; defer unless the sprint has room) |
+| **Could** | `/update-kb rag-eval` — add cost-per-correct-answer concept (scheduled post-phase once the metric stabilizes) |
+| **Could** | `/update-kb rag-generation` — add router-cascade composite pattern (scheduled post-ADR-0012-merge) |
+| **Won't** | Threshold sweep over escalation thresholds (SPRINT.md explicit Won't — one operating point, measure, stop) |
+| **Won't** | A new ADR for the routing evaluation itself — the measurement methodology needs no new ADR (ADR-0011 §6 and ADR-0012 cover the design; the verdict is a finding, not a decision) |
+| **Won't** | Multi-threshold Pareto frontier analysis (deferred to backlog if ever needed) |
+| **Won't** | Leaderboard submission as part of this phase (already deferred to backlog B-09) |
+| **Won't** | Re-run any prior baseline JSONL separately and join by question_id — the combined-config single-run approach is the only fair path |
 
 ---
 
