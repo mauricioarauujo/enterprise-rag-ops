@@ -2,6 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-05-23
+**Research:** .claude/kb/_research/archive/rag-eval-2026-05-26.md
 
 ## Context
 

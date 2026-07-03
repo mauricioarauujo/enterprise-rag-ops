@@ -2,6 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-05-18
+**Research:** .claude/kb/_research/archive/rag-retrieval-2026-05-17.md
 
 ## Context
 

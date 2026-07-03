@@ -78,7 +78,9 @@ def path_tokens(value: str) -> list[str]:
     bare = _PAREN_RE.sub(" ", value)
     tokens = []
     for raw in re.split(r"[\s,]+", bare):
-        tok = raw.strip("`\"'.,;:()[]<>")
+        # Strip wrapping punctuation, but only TRAILING dots: a leading dot is a dot-directory
+        # path (`.claude/kb/_research/…` — a real brownfield research zone), not punctuation.
+        tok = raw.strip("`\"',;:()[]<>").rstrip(".")
         if tok and ("/" in tok or tok.endswith(".md")):
             tokens.append(tok)
     return tokens
@@ -103,8 +105,11 @@ def check_adr(path: Path, adr_dir: Path) -> tuple[list[str], str]:
     status = header.get("Status")
     if status is None:
         return [], "unparsed"  # legacy Status shape — feeds the vacuous-pass warning, not gated
-    if "Accepted" not in status:
-        return [], "skipped"  # gate only Accepted; Proposed/Rejected/Superseded pass untouched
+    if "accepted" not in status.lower():
+        # Case-insensitive: `**Status:** accepted` (legacy lowercase) is a real acceptance and
+        # MUST be gated — silently skipping it was a correctness hole (a live decision escaped
+        # the trace gate). Proposed/Rejected/Superseded still pass untouched.
+        return [], "skipped"
 
     research = header.get("Research")
     if research is None:

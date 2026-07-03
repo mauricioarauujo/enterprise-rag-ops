@@ -2,6 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-05-20
+**Research:** waiver: founder-call — Sprint 1 substrate decision; OpenAI structured outputs was the conventional deliberate-default (ADR-0005 later formalized the provider matrix), no dossier was run.
 
 ## Context
 
