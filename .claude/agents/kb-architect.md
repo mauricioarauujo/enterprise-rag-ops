@@ -27,6 +27,7 @@ tools:
     mcp__context7__resolve-library-id,
     mcp__context7__query-docs,
     mcp__exa__*,
+    mcp__base-aulas-aide__buscar_aulas,
   ]
 kb_domains: []
 model: sonnet
@@ -66,6 +67,13 @@ applies** (not every domain needs all three):
 | 2 — MCP docs      | official docs + production patterns         | Context7 (docs) + Exa (patterns) |
 | 3 — Deep Research | synthesis of complex external topics        | Gemini Deep Research (see below) |
 
+**Secondary source (supports pillar 2):** `mcp__base-aulas-aide__buscar_aulas` —
+semantic search over the AI Data Engineer (AIDE) course transcripts (pt-BR). Good for
+pedagogical framing, terminology, and cross-checking concept-level claims; **never
+authoritative** for API/version facts or architectural tie-breaks. Skip silently if the
+MCP is unavailable (it lives in local config, not `.mcp.json`). When it informs a claim,
+keep the returned provenance label (`[Fonte: módulo — aula N]`).
+
 ### Agreement analysis
 
 Cross-check the pillars and tag each KB claim with confidence:
@@ -78,7 +86,8 @@ KB SILENT       │ ADD → write    │ ASK the user     │ skip          │
 ```
 
 On conflict: prefer Context7 for API/version facts, Exa or Deep Research for
-architectural patterns. Never silently pick a side — surface the conflict.
+architectural patterns. The base-aulas-aide secondary source never breaks a tie — it
+only corroborates. Never silently pick a side — surface the conflict.
 
 ---
 
@@ -89,7 +98,8 @@ architectural patterns. Never silently pick a side — surface the conflict.
 1. If `--deep-research`: run the Deep Research sub-flow (below) first.
 2. Scaffold from templates: `cp -r .claude/kb/_templates/* .claude/kb/<domain>/`.
 3. Pillar 1 — grep `src/`/`eval/`/`tests/` for real usage of the technology.
-4. Pillar 2 — Context7 for official docs; Exa for production patterns/gotchas.
+4. Pillar 2 — Context7 for official docs; Exa for production patterns/gotchas;
+   base-aulas-aide (if available) as a secondary cross-check on concept framing.
 5. Pillar 3 — if a research file exists, fold it in.
 6. Curate into `concepts/` + `patterns/` within line budgets; tag confidence.
 7. Register in `_index.yaml`; add the row to the STRUCTURE_GUIDE KB registry.

@@ -2,7 +2,8 @@
 
 Pillar 3 of the KB build model (see `.claude/STRUCTURE_GUIDE.md` § Knowledge Base).
 Used for **complex** topics where the codebase (pillar 1) and MCP docs/patterns
-(pillar 2, Context7 + Exa) are not enough on their own.
+(pillar 2, Context7 + Exa, plus the base-aulas-aide course MCP as a secondary
+source) are not enough on their own.
 
 ## Directories
 

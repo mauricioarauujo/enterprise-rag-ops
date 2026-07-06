@@ -153,7 +153,8 @@ Every KB domain holds, well-separated:
 - **`patterns/`** — codebase-grounded recipes from our `src/`/`eval/`.
 
 Both are built and validated against **3 pillars** — codebase, MCP docs (Context7 +
-Exa), and Gemini Deep Research. The pillar table and the agreement-analysis matrix are
+Exa, plus the base-aulas-aide course MCP as a non-authoritative secondary source), and
+Gemini Deep Research. The pillar table and the agreement-analysis matrix are
 the SSoT of `.claude/agents/kb-architect.md`; the numeric line budgets are the SSoT of
 `.claude/kb/_index.yaml` (`limits`). Pillar 3 (Deep Research) is reserved for genuinely
 complex topics — see `.claude/kb/_research/README.md`.
