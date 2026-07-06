@@ -45,6 +45,8 @@ jobs:
         with: { python-version: "3.x" }
       - name: adr-trace (blocking — note, currently vacuous; repo ADRs use Status sections, not frontmatter)
         run: python3 .claude/scripts/adr_trace_check.py docs/adr
+      - name: kb-cite (blocking — KB citations must quote real spans; runs vacuous-green until agents cite)
+        run: python3 .claude/scripts/kb_cite_check.py .claude/kb
       - name: kb-health (advisory — KB budgets / research-loop debt)
         run: python3 .claude/scripts/kb_health.py
         continue-on-error: true
