@@ -1,0 +1,16 @@
+# .claude/kb/_index.yaml — the flat KB domain registry (D10: stays flat).
+# THE SINGLE SSoT for which KB domains exist. `routing.md` (question → domain) is a human
+# navigation MIRROR, not a rival list; `STRUCTURE_GUIDE.md` points here and must NOT re-list
+# slugs. audit-harness enforces this: registry_parity.py checks every active domain here is
+# routed in routing.md (an unrouted live domain is drift); a STRUCTURE_GUIDE slug list is a finding.
+# Seeded by harness-init; kb-architect registers each domain here. audit-harness
+# checks registry ↔ files (every domain dir has a row and vice-versa). Per-domain
+# detail (pillars, per-file confidence, gaps) lives in each domain's _meta.yaml —
+# NOT here. Domain-level `confidence` is the DERIVED roll-up (D10), not hand-kept.
+version: "1.0"
+domains: []
+# - slug: <domain>
+#   description: "one-liner"
+#   status: active # active | draft | deprecated
+#   confidence: HIGH # derived roll-up (source of truth = inline notes per D10)
+#   last_updated: "YYYY-MM-DD"

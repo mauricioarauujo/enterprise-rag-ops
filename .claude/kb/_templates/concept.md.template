@@ -1,40 +1,30 @@
-# {{CONCEPT_NAME}}
+# Concept — {{CONCEPT_NAME}}
 
-> **Purpose**: {{ONE_LINE_DESCRIPTION}}
-> **Confidence**: {{CONFIDENCE_LEVEL}}
-> **MCP Validated**: {{VALIDATION_DATE}}
+> **Confidence:** {{HIGH | MEDIUM-HIGH | MEDIUM | LOW}} — {{reason: corroboration across sources}}
+> **Sources:** {{docs/research/<slug>/findings.md + official URL(s)}}
+> **Last verified:** {{YYYY-MM-DD}}
 
-## Overview
+## What it is
 
-{{OVERVIEW_2_3_SENTENCES}}
+{{2–3 sentences: what this concept is and why it matters for this domain.}}
 
-## The Pattern
+## {{SECTION_1}}
 
-```{{LANGUAGE}}
-{{CODE_EXAMPLE_10_30_LINES}}
-```
+- **{{Point}}.** {{detail}} [{{source-ref}}]
 
-## Quick Reference
+## What's current vs historical
 
-| Input | Output | Notes |
-|-------|--------|-------|
-| `{{EXAMPLE_INPUT}}` | `{{EXAMPLE_OUTPUT}}` | {{NOTES}} |
+{{Recent changes, version-sensitive behavior, deprecations. Mark superseded facts.}}
 
-## Common Mistakes
+## Common mistakes
 
-### Wrong
-
-```{{LANGUAGE}}
-{{ANTI_PATTERN}}
-```
-
-### Correct
-
-```{{LANGUAGE}}
-{{CORRECT_PATTERN}}
-```
+- {{mistake and its consequence}}
 
 ## Related
 
-- [{{RELATED_CONCEPT}}](../concepts/{{RELATED_CONCEPT_FILE}}.md)
-- [{{RELATED_PATTERN}}](../patterns/{{RELATED_PATTERN_FILE}}.md)
+- [{{RELATED_CONCEPT}}](./{{FILE}}.md)
+- [{{RELATED_PATTERN}}](../patterns/{{FILE}}.md)
+
+<!-- Budget: ≤150 lines. Over → split into two concepts.
+     Inline `> confidence:` notes per load-bearing claim are the CANONICAL confidence
+     source (D10); the rolled-up health score is derived from them at audit time. -->
