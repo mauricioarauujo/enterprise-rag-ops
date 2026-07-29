@@ -1,38 +1,38 @@
-# {{DOMAIN_NAME}} Quick Reference
+# {{DOMAIN_NAME}} — quick reference
 
-> Fast lookup tables. For code examples, see linked files.
+> Fast lookup only — tables and one-liners. Detail lives in concepts/ and patterns/.
 
-## {{SECTION_1_NAME}}
+## {{TABLE_1_TITLE}}
 
-| {{COL1_HEADER}} | {{COL2_HEADER}} | {{COL3_HEADER}} |
-|-----------------|-----------------|-----------------|
-| {{ROW1_COL1}} | {{ROW1_COL2}} | {{ROW1_COL3}} |
-| {{ROW2_COL1}} | {{ROW2_COL2}} | {{ROW2_COL3}} |
+| {{key}} | {{value}} |
+| ------- | --------- |
 
-## {{SECTION_2_NAME}}
+## {{TABLE_2_TITLE}}
 
-| {{COL1_HEADER}} | {{COL2_HEADER}} |
-|-----------------|-----------------|
-| {{ROW1_COL1}} | {{ROW1_COL2}} |
-| {{ROW2_COL1}} | {{ROW2_COL2}} |
+| {{key}} | {{value}} |
+| ------- | --------- |
 
-## Decision Matrix
+## Decision matrix
 
-| Use Case | Choose |
-|----------|--------|
-| {{USE_CASE_1}} | {{CHOICE_1}} |
-| {{USE_CASE_2}} | {{CHOICE_2}} |
+| Situation      | Choose       |
+| -------------- | ------------ |
+| {{situation}}  | {{choice}}   |
 
-## Common Pitfalls
+## Common pitfalls
 
-| Don't | Do |
-|-------|-----|
-| {{DONT_1}} | {{DO_1}} |
-| {{DONT_2}} | {{DO_2}} |
+| Don't       | Do instead |
+| ----------- | ---------- |
+| {{mistake}} | {{fix}}    |
 
-## Related Documentation
+## Related documentation
 
-| Topic | Path |
-|-------|------|
-| Getting Started | `concepts/{{GETTING_STARTED}}.md` |
-| Full Index | `index.md` |
+| Topic       | Path                        |
+| ----------- | --------------------------- |
+| Start here  | `index.md`                  |
+| {{topic}}   | `concepts/{{file}}.md`      |
+
+<!-- Budget: ≤100 lines. No prose paragraphs.
+     The last three tables are HARVESTED from consumer forks (D71): 2 of 3 repos had
+     independently grown them, and authors actually fill them — Common pitfalls in 5 files,
+     Decision matrix in 4, Related documentation in 4. Delete any table a domain doesn't
+     need; an empty scaffold heading is worse than no heading. -->

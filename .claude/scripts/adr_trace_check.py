@@ -12,14 +12,29 @@ An Accepted ADR passes when its `**Research:**` line either:
   - names >=1 path token that EXISTS on disk (tokens containing "/" or ending in .md, resolved
     against the CWD and against the adr-dir's parent-of-parent — the repo root for docs/adrs);
     trailing `(...)` annotations are stripped; OR
-  - carries an EXPLICIT waiver — the line contains `waiver:` (e.g.
-    `**Research:** — (waiver: founder-call — ratified in-session 2026-06-11)`). Waived ADRs are
-    counted in the success summary ("N waived") so waivers stay visible — explicit beats silent,
-    mirroring how check_spec_status treats `infra: true`.
+  - carries a GUARDRAILED waiver — a `waiver:` annotation that names a REASON and is DATED
+    (in the annotation, or by the ADR's own `**Date:**` header), AND for which no research path
+    resolves on disk. E.g. `**Research:** — (waiver: founder-call — ratified in-session
+    2026-06-11)`. Waived ADRs are counted in the success summary ("N waived") so waivers stay
+    visible — explicit beats silent, mirroring how check_spec_status treats `infra: true`.
+
+    The guardrails exist because a waiver is the escape hatch on the gate that enforces the
+    harness's leading claim, and an unguarded hatch is the whole gate. Until 2026-07-11 this was
+    a bare substring test (`if "waiver:" in research`), evaluated BEFORE path resolution — so a
+    reasonless, dateless `**Research:** waiver:` passed, and a waiver stamped over a real dossier
+    was never checked against it. Ported from delivery-graph's `waiveNode` (evidence-engine.mjs),
+    whose load-bearing rule is the second one: a waiver is only for what cannot be proven, so it
+    is refused outright where the evidence exists.
+
+    Deliberately NOT required: a separate machine-parsed `owner` field. Reason + date are the
+    auditable minimum; a third positional field would be brittle phrase-matching against a live
+    convention (the reason IS the owner today — "founder-call"), and phrase-pinning prose is the
+    failure mode this check exists to replace.
 
 Fails (exit 1) when an Accepted ADR has a bare "—", an empty/{{placeholder}} value, only
-unresolvable paths, or no `**Research:**` line at all. Skips `_template.md`, `README.md`, any
-`_*`-prefixed file, and `_archive/` trees; only `NNNN-*.md` files are ADRs.
+unresolvable paths, no `**Research:**` line at all, or a waiver that breaks either guardrail.
+Skips `_template.md`, `README.md`, any `_*`-prefixed file, and `_archive/` trees; only
+`NNNN-*.md` files are ADRs.
 
 **Vacuous-pass guard (brownfield honesty).** An ADR with no parseable `**Status:**` header at
 all (legacy shapes: `## Status` sections, MADR bullets — every brownfield predates the template
@@ -40,13 +55,20 @@ import sys
 from pathlib import Path
 
 DEFAULT_ADR_DIR = "docs/adrs"
-FIX_HINT = "add Research: <dossier path> or an explicit waiver (waiver: ...)"
+FIX_HINT = "add Research: <dossier path> or a reasoned, dated waiver (waiver: <reason> — <YYYY-MM-DD>)"
 
 _ADR_NAME_RE = re.compile(r"^\d{4}-.*\.md$")
-_HEADER_RE = re.compile(r"^\*\*(?P<key>Status|Research):\*\*\s*(?P<val>.*)$")
+_HEADER_RE = re.compile(r"^\*\*(?P<key>Status|Research|Date):\*\*\s*(?P<val>.*)$")
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _PAREN_RE = re.compile(r"\([^)]*\)")
 _BARE_DASH = {"", "—", "-", "–"}
+
+# The waiver annotation and its two required parts. `waiver:` may sit inside the conventional
+# trailing `(...)` or stand bare; either way the body runs to the closing paren or end of line.
+_WAIVER_RE = re.compile(r"waiver:\s*(?P<body>[^)]*)", re.I)
+_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+_LETTERS_RE = re.compile(r"[A-Za-z]{3}")
+WAIVER_SHAPE = "waiver: <reason> — <YYYY-MM-DD>"
 
 
 def iter_adr_files(adr_dir: Path) -> list[Path]:
@@ -92,6 +114,53 @@ def _resolves(token: str, adr_dir: Path) -> bool:
     return Path(token).exists() or (adr_dir.parent.parent / token).exists()
 
 
+def split_waiver(value: str) -> tuple[str | None, str]:
+    """Split a Research value into (waiver_body, value_outside_the_waiver).
+
+    The waiver body must be excluded from path scanning: the live convention cites supporting
+    material INSIDE the reason (`waiver: founder-call — 2026-06-11; spike confirmed:
+    research/plugin-spike-results.md`), and a path in the reason is not the ADR's research
+    trail — it is prose about why there isn't one. Scanning it would refuse every honest waiver.
+    """
+    m = _WAIVER_RE.search(value)
+    if not m:
+        return None, value
+    outside = (value[: m.start()] + value[m.end() :]).strip()
+    return m.group("body").strip().rstrip(";,"), outside
+
+
+def check_waiver(body: str, outside: str, adr_dir: Path, adr_date: str = "") -> str | None:
+    """The waiver's own gate — returns an error string, or None when the waiver stands.
+
+    Two guardrails (ported from delivery-graph's `waiveNode`, 2026-07-11 triage):
+      1. A waiver carries a REASON and is DATED. A bare `waiver:` is a one-word bypass of the
+         gate that backs the harness's leading claim — it must not pass. The date may live in
+         the waiver body OR in the ADR's own `**Date:**` header: the point is that the waiver is
+         auditable and can age out, not that a human retypes a date the ADR already carries.
+         (delivery-graph stamps `waived_at` in the engine; kbind has no engine at this layer, so
+         it reads the date the template already collects rather than inventing authoring friction.)
+      2. A waiver is REFUSED when the research it waives actually resolves on disk. You have
+         the dossier: cite it, don't waive it. (Paths inside the reason are exempt — see
+         `split_waiver`.) This is what stops the waiver becoming a silent bypass of the trace,
+         and it is the load-bearing rule — guardrail 1 catches sloppiness, this one catches
+         laundering.
+    """
+    if not body or not _LETTERS_RE.search(body):
+        return f"waiver has no reason — write `{WAIVER_SHAPE}`, not a bare `waiver:`"
+    if not (_DATE_RE.search(body) or _DATE_RE.search(adr_date)):
+        return (
+            f"waiver is undated — write `{WAIVER_SHAPE}`, or give the ADR a `**Date:**` header"
+            " (an undated waiver can never age out)"
+        )
+    resolved = [t for t in path_tokens(outside) if _resolves(t, adr_dir)]
+    if resolved:
+        return (
+            f"waived, but the research resolves on disk ({', '.join(repr(t) for t in resolved)})"
+            " — cite it as the Research trail instead of waiving it"
+        )
+    return None
+
+
 def check_adr(path: Path, adr_dir: Path) -> tuple[list[str], str]:
     """Errors for one ADR file + its verdict: "unparsed" (no `**Status:**` header — the gate
     can't see it), "skipped" (not Accepted — not gated), "traced" (a Research path resolves),
@@ -115,8 +184,12 @@ def check_adr(path: Path, adr_dir: Path) -> tuple[list[str], str]:
     if research is None:
         return [f"{rel}: Accepted but no **Research:** line — {FIX_HINT}"], "traced"
 
-    if "waiver:" in research.lower():
-        return [], "waived"  # explicit waiver — passes, reported in the summary
+    waiver_body, outside = split_waiver(research)
+    if waiver_body is not None:
+        err = check_waiver(waiver_body, outside, adr_dir, header.get("Date", ""))
+        if err:
+            return [f"{rel}: {err}"], "traced"
+        return [], "waived"  # a REASONED, DATED, evidence-free waiver — visible in the summary
 
     value = research.strip()
     if value in _BARE_DASH:

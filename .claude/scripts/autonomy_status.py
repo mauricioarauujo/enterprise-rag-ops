@@ -16,7 +16,11 @@ import re
 import sys
 from pathlib import Path
 
-POINTER = "Unlock criteria: see ADR-0013 § ladder table."
+# Printed TO THE USER, so it must resolve for them. It used to read "see ADR-0013 § ladder
+# table" — a pointer into a document the product does not ship, i.e. the harness telling a user
+# to go read something they cannot reach. State the rule; cite the register that resolves.
+POINTER = ("Unlock criteria: a higher rung opens only when a calibrated evaluator earns it — "
+           "never by editing this file (decision register: docs/adrs/README.md, ADR-0013).")
 FIELDS = ("current_level", "unlocked_through", "target_level")
 _AUTONOMY_RE = re.compile(r"^autonomy:\s*(#.*)?$")
 _FIELD_RE = re.compile(r"^\s+(\w+):\s*[Ll]([1-6])\b")

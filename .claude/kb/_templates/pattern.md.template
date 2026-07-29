@@ -1,33 +1,41 @@
-# {{PATTERN_NAME}}
+# Pattern — {{PATTERN_NAME}}
 
-> **Purpose**: {{WHAT_PROBLEM_THIS_SOLVES}}
-> **MCP Validated**: {{VALIDATION_DATE}}
+> **Purpose:** {{what problem this recipe solves}}
+> **Sources:** {{docs/research/<slug>/findings.md + official link(s)}}
+> **Last verified:** {{YYYY-MM-DD}}
 
-## When to Use
+## When to use
 
-- {{USE_CASE_1}}
-- {{USE_CASE_2}}
-- {{USE_CASE_3}}
+- {{situation}}
 
-## Implementation
+## The recipe
 
-```{{LANGUAGE}}
-{{PRODUCTION_READY_CODE_30_100_LINES}}
-```
+1. {{step — concrete, reusable}}
+2. {{step}}
 
 ## Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `{{SETTING_NAME}}` | `{{DEFAULT_VALUE}}` | {{DESCRIPTION}} |
+<!-- The knobs this recipe exposes. Drop the section if it has none. -->
 
-## Example Usage
+| Setting         | Default     | What it changes |
+| --------------- | ----------- | --------------- |
+| `{{setting}}`   | `{{value}}` | {{effect}}      |
 
-```{{LANGUAGE}}
-{{USAGE_EXAMPLE}}
-```
+## Worked example
 
-## See Also
+{{short, anonymized/hypothetical illustration — code or file tree if applicable}}
 
-- [{{RELATED_PATTERN}}](../patterns/{{RELATED_PATTERN_FILE}}.md)
-- [{{RELATED_CONCEPT}}](../concepts/{{RELATED_CONCEPT_FILE}}.md)
+## Failure modes
+
+- {{how this pattern goes wrong + the signal}}
+
+## See also
+
+- [{{RELATED_PATTERN}}](./{{FILE}}.md)
+- [{{RELATED_CONCEPT}}](../concepts/{{FILE}}.md)
+
+<!-- Budget: ≤200 lines. Over → extract shared parts into a concept.
+     `## Configuration` is HARVESTED from consumer forks (D71): 2 of 3 repos grew it
+     independently and it is filled in 9 pattern files across 5 domains — the single
+     strongest recurrence signal in the sweep. It appears in patterns/ only, never concepts/,
+     which is why it lands here and not in concept.md.template. -->

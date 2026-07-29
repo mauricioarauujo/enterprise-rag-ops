@@ -1,12 +1,19 @@
 {
-  "_comment": "Staged hooks — not yet wired. Enable once Makefile targets (make format, make test) are exercised and the gate workflow is confirmed. To enable: copy the relevant block(s) below into the `hooks` object in .claude/settings.json.",
+  "_comment": "STAGED, DORMANT hooks — kbind ships these wired-but-inert (ready-but-inert, ADR-0007/D19). Installing the plugin activates NONE of them. To enable a gate, copy the block(s) you want into the `hooks` object of YOUR repo's .claude/settings.json (NOT the plugin — keep the plugin updatable). ${CLAUDE_PLUGIN_ROOT} resolves to the installed plugin. ⚠️ #52218: after a plugin update that changes a hook, run /plugin update.",
+
   "PreToolUse": [
     {
       "matcher": "Bash",
       "hooks": [
         {
+          "_what": "context hygiene — strip ANSI color from Bash output",
           "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/commit-gate.sh"
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash-filter.sh"
+        },
+        {
+          "_what": "maker≠checker — block git commit unless a quality gate ran <30min ago",
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/commit-gate.sh"
         }
       ]
     }
@@ -16,19 +23,31 @@
       "matcher": "Bash",
       "hooks": [
         {
+          "_what": "records a passing quality gate (feeds commit-gate.sh)",
           "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate-track.sh"
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/gate-track.sh"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "_what": "maker≠checker — block on a violated Spec status ladder",
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/spec-gate.sh"
         }
       ]
     }
   ],
   "PostCompact": [
     {
-      "matcher": "",
       "hooks": [
         {
+          "_what": "measurement — log compaction events to .claude/storage/compaction.log",
           "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-compact-log.sh"
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-compact-log.sh"
         }
       ]
     }
