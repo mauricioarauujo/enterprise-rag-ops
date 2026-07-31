@@ -14,6 +14,8 @@ import json
 import sys
 from pathlib import Path
 
+import validity_lib as v  # the AC id model — same SSoT ac_test_check/ac_green_check order by
+
 SCOPE_LABEL = ("tests + scope/immutability only — NOT output-quality / eval verdicts "
                "(output-quality is Phase-2 /eval, ADR-0014)")
 
@@ -38,7 +40,12 @@ def render_md(artifact: dict) -> str:
              "",
              "| AC | status | evidence |",
              "| --- | --- | --- |"]
-    for ac, r in sorted(artifact["acs"].items(), key=lambda kv: int(kv[0].split('-')[1])):
+    # `ac_sort_key` is the shared helper every other AC-ordering call site already uses
+    # (ac_test_check, ac_green_check). This was the last raw `int(ac.split('-')[1])` in the
+    # product and it raised ValueError on any id with a letter suffix — `AC-3a` — which is
+    # precisely the shape ac_sort_key exists to order. Found by a consumer that had already
+    # fixed it locally.
+    for ac, r in sorted(artifact["acs"].items(), key=lambda kv: v.ac_sort_key(kv[0])):
         lines.append(f"| {ac} | {r.get('status')} | {r.get('evidence', '')} |")
     d = artifact["diff"]
     lines += ["",

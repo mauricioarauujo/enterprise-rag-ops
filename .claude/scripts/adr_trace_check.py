@@ -54,11 +54,18 @@ import re
 import sys
 from pathlib import Path
 
-DEFAULT_ADR_DIR = "docs/adrs"
+DEFAULT_ADR_DIR = "docs/adrs"  # layout-ok: the documented default, used only when no <adr-dir> arg
 FIX_HINT = "add Research: <dossier path> or a reasoned, dated waiver (waiver: <reason> — <YYYY-MM-DD>)"
 
 _ADR_NAME_RE = re.compile(r"^\d{4}-.*\.md$")
-_HEADER_RE = re.compile(r"^\*\*(?P<key>Status|Research|Date):\*\*\s*(?P<val>.*)$")
+_HEADER_KEYS = ("Status", "Research", "Date")
+# Any `**Key:**` marker, recognized or not. Used only to find where one header field ENDS —
+# `**Status:** Accepted · **Date:** 2026-06-26` must yield Status="Accepted", not a Status that
+# swallows the date. Deliberately broader than _HEADER_KEYS so an unrecognized neighbour
+# (`**Related:**`) still terminates the previous value instead of polluting it.
+_KEY_MARK_RE = re.compile(r"\*\*(?P<key>[A-Za-z][A-Za-z0-9 /_-]*):\*\*")
+# Separator punctuation left dangling when a value is cut at the next marker (`Accepted · `).
+_TRAILING_SEP = " \t·|,;•–—-"
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _PAREN_RE = re.compile(r"\([^)]*\)")
 _BARE_DASH = {"", "—", "-", "–"}
@@ -84,13 +91,42 @@ def iter_adr_files(adr_dir: Path) -> list[Path]:
 
 
 def parse_header(text: str) -> dict[str, str]:
-    """Return {'Status': ..., 'Research': ...} from the template's `**Key:**` header lines
-    (first occurrence wins; inline HTML comments stripped). Missing keys are absent."""
+    """Return {'Status': ..., 'Research': ...} from the template's `**Key:**` header fields
+    (first occurrence wins; inline HTML comments stripped). Missing keys are absent.
+
+    BOTH layouts are accepted, permanently and identically:
+
+        **Status:** Accepted            |   **Status:** Accepted · **Date:** 2026-06-26
+        **Date:** 2026-06-26            |
+
+    The template emits the left one and most repos follow it, but a real consumer writes the
+    right one, and the line-anchored single-match parser this replaced silently produced only
+    `Status` there — with the date glued onto its value. Nothing errored: `"accepted" in
+    status.lower()` still matched by substring, so the ADR was classified correctly while
+    `Date` was simply absent, which made every dated waiver read as undated. A gate that cannot
+    see a field it is told to read is the failure this project keeps naming, so the parser is
+    fixed rather than the ratified records reformatted.
+
+    Anti-false-positive rule preserved from the original: a line only counts as a header line
+    if it BEGINS with a `**Key:**` marker, so prose that merely mentions `**Status:**` mid
+    sentence is still ignored. Additional markers on such a line are then read as further
+    fields, and each value stops at the next marker.
+    """
     out: dict[str, str] = {}
-    for line in _COMMENT_RE.sub("", text).splitlines():
-        m = _HEADER_RE.match(line.strip())
-        if m and m.group("key") not in out:
-            out[m.group("key")] = m.group("val").strip()
+    for raw in _COMMENT_RE.sub("", text).splitlines():
+        line = raw.strip()
+        marks = list(_KEY_MARK_RE.finditer(line))
+        if not marks or marks[0].start() != 0:
+            continue  # not a header line (prose mentioning a **Key:** never qualifies)
+        for i, m in enumerate(marks):
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(line)
+            key = m.group("key")
+            if key not in _HEADER_KEYS or key in out:
+                continue
+            value = line[m.end():end].strip()
+            if i + 1 < len(marks):  # cut mid-line: drop the separator left dangling
+                value = value.rstrip(_TRAILING_SEP)
+            out[key] = value
     return out
 
 
@@ -240,7 +276,31 @@ def main() -> int:
     summary = f"{len(adrs)} ADR(s): {accepted} accepted, {waived} waived"
     if unparsed:
         summary += f", {len(unparsed)} unparsed-status"
-    print(f"✓ adr-trace check passed ({summary})")
+
+    # A GREEN THAT EXAMINED NOTHING REPORTS ○, NEVER ✓ (this project's own rule, applied to its
+    # own gate). `accepted` is the count actually gated; when it is zero the check ran and
+    # proved nothing, which a ✓ misrepresents in exactly the way a CI log gets skimmed. Measured
+    # live: a consumer printed "✓ adr-trace check passed (11 ADR(s): 0 accepted, 0 waived,
+    # 11 unparsed-status)" and exited 0 — green because its ADRs were invisible, not clean.
+    #
+    # DELIBERATELY NOT AN ERROR. Brownfield repos legitimately carry legacy un-statused ADRs and
+    # D64 forbids reding a repo on update, so the exit code is unchanged (0) and only the REPORT
+    # becomes honest. Escalation belongs behind an opt-in `--strict`, not here.
+    # Scoped deliberately to BLINDNESS, not merely to "nothing was gated". A directory of
+    # Proposed ADRs parsed perfectly and correctly found nothing to gate — that is honestly
+    # ungated, not vacuous, and it keeps its ✓ (a distinction the suite already pins). The ○ is
+    # for the case where the gate could not SEE: no `**Status:**` parsed anywhere, or no ADRs
+    # at all.
+    if not adrs:
+        print("○ adr-trace examined nothing — no ADR files found")
+    elif unparsed and len(unparsed) == len(adrs):
+        print(
+            f"○ adr-trace examined nothing — no **Status:** header parsed on any of "
+            f"{len(adrs)} ADR(s), so 0 were gated ({summary})"
+        )
+    else:
+        print(f"✓ adr-trace check passed ({summary})")
+
     if unparsed:
         scope = (
             "VACUOUS PASS — ALL"
