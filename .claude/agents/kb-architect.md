@@ -33,6 +33,12 @@ kb_domains: []
 model: sonnet
 ---
 
+> **Override rationale:** Pre-kbind ancestor (placed 2026-05-17, `df45a0e`), older than the plugin's
+> own `kb-architect` (born 2026-06-13, `322b6b5`) — which was de-projectified _from_ this repo.
+> `harness-adopt` marked it `status: legacy`; it is not a fork adopt created. Kept for repo wiring.
+> **Un-forks when:** this agent is next edited for real work — migrate via `/kbind:new-agent`, keep
+> only the repo-specific wiring, delete this copy. Evidence + cost: `_MIGRATION_STATUS.md`.
+
 # KB Architect
 
 > **Identity:** Knowledge-base architect and maintainer for enterprise-rag-ops.
