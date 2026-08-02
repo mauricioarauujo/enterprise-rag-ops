@@ -50,15 +50,163 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 DEFAULT_ADR_DIR = "docs/adrs"  # layout-ok: the documented default, used only when no <adr-dir> arg
 FIX_HINT = "add Research: <dossier path> or a reasoned, dated waiver (waiver: <reason> — <YYYY-MM-DD>)"
 
 _ADR_NAME_RE = re.compile(r"^\d{4}-.*\.md$")
-_HEADER_KEYS = ("Status", "Research", "Date")
+_HEADER_KEYS = ("Status", "Research", "Date", "Critique")
+
+# ---------------------------------------------------------------------------------------------
+# THE OBJECTION LEDGER (sprint E3a) — the adversarial-review half of the Accepted-ADR gate.
+#
+# `adr-critic` runs 6 checks and emits ✅/⚠️/❌ verdicts that were persisted NOWHERE, so an ADR
+# could be Accepted, cite its research, pass this gate and pass CI with every ❌ silently dropped.
+# "Resolve every ❌ (or own it explicitly)" was vocabulary without mechanism, at the rung the
+# harness's leading claim is named after. The ledger is that mechanism: the critic's report is
+# persisted at a DERIVED path, the ADR names it on a `**Critique:**` line, and every ❌ carries a
+# disposition or the build fails.
+#
+# NOT HERE, BY RATIFIED DECISION (D84): there is no tamper-evidence digest. The same actor holds
+# the ledger and the stamping tool and nothing forbids re-stamping, so a digest fires on
+# formatters and on honest authors who forgot to re-run it, and never on an evader — inverted
+# precision, to detect a one-character flip that `git diff` already shows through a mechanism the
+# author cannot re-stamp. Do not add one back; it was the sole source of the byte-contract,
+# VS16 and formatter-coupling surface.
+# ---------------------------------------------------------------------------------------------
+
+LEDGER_DIRNAME = "adr-critiques"  # layout-ok: a relative NAME, never a path; see ledger_path()
+MIN_DISTINCT_OBJECTIONS = 6  # = adr-critic's check count, pinned by test_ac2_… reading the agent
+
+VACUOUS_STATUS = "VACUOUS PASS"          # the shipped label: the gate could not SEE the ADRs
+VACUOUS_CRITIQUE = "VACUOUS (critique)"  # it saw them, and not one carries a closed critique
+
+# One `OBJ-N` heading per check. The tail is OPTIONAL (`.*`, not `.+`): a bare `### OBJ-7 ❌`
+# must be SEEN and reported open, not fall out of the pattern and vanish — an unmatched heading
+# is an undispositioned ❌ that escapes the gate entirely.
+HEAD_RE = re.compile(
+    r"^#{1,6}\s+OBJ-(?P<n>\d+)\s+(?P<verdict>❌|⚠|✅)️?\s*(?P<tail>.*)$"
+)
+# THE B2 FIX. v5 pinned `\((?P<body>.*)\)`, whose greedy `.*` runs to the LAST `)` on the line:
+# `— ✅ FIXED (TBD) ()` yielded body='TBD) (' and read CLOSED, so two characters closed any ❌.
+# `[^)]*` stops at the first `)` — and is the shape `_WAIVER_RE` above already uses, so the two
+# escape hatches on this gate now read their bodies the same way.
+# The `$` anchor stays OFF (v4's B1): an anchored form cannot absorb the trailing text in
+# `— ✅ FIXED (§4) per review`, which is an honest disposition and false-RED'd for four revisions.
+DISP_RE = re.compile(
+    r"[—–-]\s*(?:✅️?\s*(?P<fixed>FIXED)|\U0001f513️?\s*(?P<accepted>ACCEPTED))"
+    r"\s*\((?P<body>[^)]*)\)"
+)
+# A body that says nothing. `.strip()`-ed and matched whole, case-insensitively.
+_DISP_BLOCKLIST_RE = re.compile(r"^(\{\{.*\}\}|TBD|TODO|N/?A|—|–|-|\?+)$", re.I)
+# A fence ANYWHERE makes the ledger malformed — see the module docstring of the test file. One
+# predicate, no divergence; tracking fences was the rule two honest readers exited differently on.
+_FENCE_RE = re.compile(r"^\s{0,3}(?:```|~~~)")
+
+
+class Objection(NamedTuple):
+    id: int
+    verdict: str  # "x" | "warn" | "ok"
+    tail: str
+    state: str  # "fixed" | "accepted" | "open"
+
+
+def disposition_state(tail: str) -> str:
+    """"fixed" / "accepted" / "open" for one objection heading's tail.
+
+    FIRST match on the line wins, so an empty disposition cannot be laundered by appending a
+    well-formed second one. `🔓 ACCEPTED` needs its reason AND its date IN THE BODY — there is
+    deliberately no `**Date:**` header fallback, because all 16 workshop ADRs carry a `**Date:**`
+    and an `or` would short-circuit every undated ownership into a pass. (The waiver keeps the
+    header fallback: that is shipped `check_waiver` doctrine, not ours to relitigate.)
+    """
+    m = DISP_RE.search(tail)
+    if not m:
+        return "open"
+    body = m.group("body").strip()
+    if not body or _DISP_BLOCKLIST_RE.match(body):
+        return "open"
+    if m.group("accepted"):
+        if not _LETTERS_RE.search(body) or not _DATE_RE.search(body):
+            return "open"  # owning a defect needs a reason and a date it can age out from
+        return "accepted"
+    return "fixed"
+
+
+def parse_objections(text: str) -> tuple[list[Objection], bool]:
+    """(objections, contains_a_fence) for one ledger's text."""
+    objections: list[Objection] = []
+    fenced = False
+    for raw in text.splitlines():
+        if _FENCE_RE.match(raw):
+            fenced = True
+            continue
+        m = HEAD_RE.match(raw.strip())
+        if not m:
+            continue
+        verdict = {"❌": "x", "⚠": "warn", "✅": "ok"}[m.group("verdict")]
+        tail = m.group("tail")
+        objections.append(Objection(int(m.group("n")), verdict, tail, disposition_state(tail)))
+    return objections, fenced
+
+
+def ledger_path(adr_path: Path, adr_dir: Path) -> Path:
+    """`<parent of the RESOLVED adrs dir>/adr-critiques/<the ADR file's full stem>.md`.
+
+    DERIVED, never chosen: parent, stem and extension are all pinned. All three consumers remap
+    `adrs` (measured 2026-08-02: `docs/adr`, `docs/architecture/adrs`, `docs/adr`), so a literal
+    would be layout-blind — v4's B2 blocker. The checker is already GIVEN its ADR directory, so
+    the ledger inherits the repo's layout for free and needs no new `layout:` area key
+    (`KNOWN_KEYS["layout"]` is a closed 7-key set and would reject one).
+
+    NOT `adr_dir.parent.parent` — that is the base `_resolves` uses, which for
+    `docs/architecture/adrs` probes `docs/`. The ledger is a SIBLING of the ADR directory:
+    invisible to `iter_adr_files` (which rglobs inside `adr_dir` only) and to all 12
+    `DOC_BUDGETS` globs (`budget_for` → None, re-derived 2026-08-02).
+    """
+    return Path(adr_dir).parent / LEDGER_DIRNAME / (Path(adr_path).stem + ".md")
+
+
+def laundering_signals(totals: dict) -> list[str]:
+    """The statistical half of the gate — a critic that runs 6 honest checks and rubber-stamps
+    them all ✅ cannot be caught mechanically (assumption A2), so it is caught in aggregate.
+
+    Every threshold is ARITHMETIC HERE, never prose for an LLM to apply, and both
+    zero-denominator cases are pinned rather than left to divide by zero:
+      - `fixed == 0 and accepted > 0` FLAGS (the worst possible ratio must not pass as 0/0);
+      - `Accepted == 0` SUPPRESSES the waived share (nothing to take a share of).
+    """
+    sig: list[str] = []
+    fixed = totals.get("fixed", 0)
+    accepted = totals.get("accepted_disp", 0)
+    adrs_accepted = totals.get("adrs_accepted", 0)
+    critiqued = totals.get("critiqued", 0)
+    if accepted > 0 and (fixed == 0 or accepted / fixed > 0.5):
+        sig.append("laundering:accepted-over-fixed")
+    if adrs_accepted > 0 and totals.get("waived", 0) / adrs_accepted > 0.20:
+        sig.append("laundering:waived-share")
+    if critiqued >= 5 and totals.get("x_raised", 0) == 0 and totals.get("warn", 0) == 0:
+        sig.append("laundering:all-clean")
+    return sig
+
+
+# The `--json` contract, pinned as VALUES so a schema cannot be "added" by writing the word
+# (panel 5, 3/3 scorers: v3→v4 recorded the pinned schema as FIXED — the word landed, the schema
+# did not). `test_ac16_json_schema_is_pinned_not_merely_asserted` compares emitted keys to these.
+JSON_SCHEMA_ID = "adr-critique/1"
+JSON_TOP_KEYS = ("schema", "adr_dir", "adrs", "totals", "signals", "vacuous")
+JSON_ADR_KEYS = ("file", "status", "verdict", "ledger", "objections", "errors")
+JSON_OBJECTION_KEYS = ("total", "distinct", "x_raised", "open_x", "fixed", "accepted", "warn")
+JSON_TOTAL_KEYS = (
+    "adrs", "adrs_accepted", "critiqued", "critique_closed", "critique_waived",
+    "malformed", "misplaced", "missing", "uncritiqued", "unparsed_status",
+    "x_raised", "open_x", "fixed", "accepted_disp", "warn",
+)
 # Any `**Key:**` marker, recognized or not. Used only to find where one header field ENDS —
 # `**Status:** Accepted · **Date:** 2026-06-26` must yield Status="Accepted", not a Status that
 # swallows the date. Deliberately broader than _HEADER_KEYS so an unrecognized neighbour
@@ -244,12 +392,131 @@ def check_adr(path: Path, adr_dir: Path) -> tuple[list[str], str]:
     return [], "traced"
 
 
-def main() -> int:
-    argv = sys.argv[1:]
-    if len(argv) > 1:
-        print("usage: adr_trace_check.py [<adr-dir>]", file=sys.stderr)
+def _zero_objections() -> dict:
+    return dict.fromkeys(JSON_OBJECTION_KEYS, 0)
+
+
+def check_critique(
+    adr_path: Path, adr_dir: Path, header: dict[str, str]
+) -> tuple[list[str], str, dict]:
+    """(errors, verdict, objection-counts) for one **Accepted** ADR's objection ledger.
+
+    LADDER PRECEDENCE, pinned: misplaced → missing → malformed → open-❌. Exactly ONE verdict per
+    ADR, so colliding rows cannot double-count (a v3 finding). Each earlier rung short-circuits:
+    a ledger at the wrong path is not then read and judged malformed as well.
+
+    D64 — A BROWNFIELD REPO MUST NOT GO RED ON UPDATE. An Accepted ADR with no `**Critique:**`
+    line at all is `uncritiqued`: counted, warned, exit 0. Re-measured 2026-08-02, 0 of 46 real
+    ADRs across five trees carry the line, so on `harness-update` every one of them lands here
+    and every consumer stays green — including the two that invoke this gate BLOCKING in CI.
+    """
+    counts = _zero_objections()
+    rel_led = ledger_path(adr_path, adr_dir)
+    value = (header.get("Critique") or "").strip()
+    name = adr_path.name
+
+    if not value:
+        return [], "uncritiqued", counts
+
+    waiver_body, outside = split_waiver(value)
+    if waiver_body is not None:
+        # Guardrails 1-2 come from the SHIPPED check_waiver, unmodified ("extend, don't fork").
+        # Guardrail 2 provably cannot fire here — the ledger path is derived, never written on
+        # the header line, so `outside` holds no path to resolve — which is exactly why 3 exists.
+        err = check_waiver(waiver_body, outside, adr_dir, header.get("Date", ""))
+        if err:
+            return [f"{name}: **Critique:** {err}"], "critique-waiver-invalid", counts
+        # GUARDRAIL 3 (new). Refuse the waiver when the ledger EXISTS (you have it — cite it),
+        # or when the ADR's own **Research:** resolves. The second clause closes "waive and
+        # simply never create the file", whose precondition the waiving author controls.
+        research = header.get("Research", "")
+        r_body, r_outside = split_waiver(research)
+        research_resolves = any(
+            _resolves(t, adr_dir) for t in path_tokens(r_outside if r_body is not None else research)
+        )
+        if rel_led.exists() or research_resolves:
+            why = "the ledger exists on disk" if rel_led.exists() else "the ADR's **Research:** resolves"
+            return (
+                [f"{name}: **Critique:** waived, but {why} — critique it, don't waive it"],
+                "critique-waiver-invalid",
+                counts,
+            )
+        return [], "critique-waived", counts
+
+    if value in _BARE_DASH:
+        return [f"{name}: Accepted but **Critique:** is a bare dash/empty"], "critique-unfilled", counts
+    if "{{" in value:
+        return [f"{name}: Accepted but **Critique:** is an unfilled placeholder"], "critique-unfilled", counts
+
+    tokens = path_tokens(value)
+    if not tokens:
+        return [f"{name}: **Critique:** names no ledger path"], "critique-unfilled", counts
+    if not any(_same_ledger(t, rel_led, adr_dir) for t in tokens):
+        return (
+            [f"{name}: critique-misplaced — **Critique:** must be exactly {rel_led}, not "
+             f"{', '.join(repr(t) for t in tokens)}"],
+            "critique-misplaced",
+            counts,
+        )
+    if not rel_led.exists():
+        return [f"{name}: **Critique:** names {rel_led}, which does not exist"], "critique-missing", counts
+
+    objections, fenced = parse_objections(rel_led.read_text(encoding="utf-8"))
+    distinct = {o.id for o in objections}
+    counts.update(
+        total=len(objections),
+        distinct=len(distinct),
+        x_raised=sum(1 for o in objections if o.verdict == "x"),
+        open_x=sum(1 for o in objections if o.verdict == "x" and o.state == "open"),
+        fixed=sum(1 for o in objections if o.state == "fixed"),
+        accepted=sum(1 for o in objections if o.state == "accepted"),
+        warn=sum(1 for o in objections if o.verdict == "warn"),
+    )
+    if fenced:
+        return (
+            [f"{name}: critique-malformed — {rel_led} contains a fenced code block; an OBJ-N "
+             f"heading inside a fence would be counted, so the ledger is rejected outright"],
+            "critique-malformed",
+            counts,
+        )
+    if len(distinct) < MIN_DISTINCT_OBJECTIONS:
+        return (
+            [f"{name}: critique-malformed — {rel_led} parses {len(distinct)} distinct OBJ-N "
+             f"id(s), need >= {MIN_DISTINCT_OBJECTIONS} (one per adr-critic check)"],
+            "critique-malformed",
+            counts,
+        )
+    open_x = [o for o in objections if o.verdict == "x" and o.state == "open"]
+    if open_x:
+        ids = ", ".join(f"OBJ-{o.id}" for o in open_x)
+        return (
+            [f"{name}: {len(open_x)} objection(s) raised ❌ with no disposition — {ids}. Append "
+             f"`— ✅ FIXED (<where>)` or `— 🔓 ACCEPTED (<reason> — <YYYY-MM-DD>)` to each."],
+            "critique-open",
+            counts,
+        )
+    return [], "critique-closed", counts
+
+
+def _same_ledger(token: str, derived: Path, adr_dir: Path) -> bool:
+    """Is `token` the derived ledger path? Resolved the same two ways `_resolves` resolves a
+    research token, so an absolute `<adr-dir>` argument and a repo-relative header line agree."""
+    target = derived.resolve()
+    return any(c.resolve() == target for c in (Path(token), adr_dir.parent.parent / token))
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # House style: manual argv, exit 2 on anything unrecognized. ZERO of the 30 shipped scripts
+    # import argparse (measured 2026-08-02); a lone dependency style in one seeded script is drift.
+    strict = "--strict" in argv
+    as_json = "--json" in argv
+    flags = [x for x in argv if x.startswith("--")]
+    pos = [x for x in argv if not x.startswith("--")]
+    if len(pos) > 1 or any(f not in ("--strict", "--json") for f in flags):
+        print("usage: adr_trace_check.py [<adr-dir>] [--strict] [--json]", file=sys.stderr)
         return 2
-    adr_dir = Path(argv[0] if argv else DEFAULT_ADR_DIR)
+    adr_dir = Path(pos[0] if pos else DEFAULT_ADR_DIR)
     if not adr_dir.is_dir():
         print(f"not a directory: {adr_dir}", file=sys.stderr)
         return 2
@@ -258,6 +525,16 @@ def main() -> int:
     errors: list[str] = []
     unparsed: list[str] = []
     accepted = waived = 0
+    totals = dict.fromkeys(JSON_TOTAL_KEYS, 0)
+    records: list[dict] = []
+    uncritiqued: list[str] = []
+    # Which critique verdicts are failures. `uncritiqued` and `critique-waived` are exit 0 by
+    # default and errors only under --strict: the first is D64 (no brownfield goes red on
+    # update), the second keeps an explicit escape hatch explicit rather than free.
+    HARD = {"critique-misplaced", "critique-missing", "critique-malformed", "critique-open",
+            "critique-unfilled", "critique-waiver-invalid"}
+    SOFT = {"uncritiqued", "critique-waived"}
+
     for adr in adrs:
         errs, verdict = check_adr(adr, adr_dir)
         errors.extend(errs)
@@ -267,6 +544,68 @@ def main() -> int:
             waived += 1
         if verdict == "unparsed":
             unparsed.append(adr.name)
+
+        header = parse_header(adr.read_text(encoding="utf-8"))
+        c_errs, c_verdict, counts = ([], "not-gated", _zero_objections())
+        if verdict in ("traced", "waived"):
+            c_errs, c_verdict, counts = check_critique(adr, adr_dir, header)
+            if c_verdict in HARD or (strict and c_verdict in SOFT):
+                errors.extend(c_errs or [f"{adr.name}: {c_verdict}"])
+            if c_verdict == "uncritiqued":
+                uncritiqued.append(adr.name)
+            totals["critique_closed"] += c_verdict == "critique-closed"
+            totals["critique_waived"] += c_verdict == "critique-waived"
+            totals["malformed"] += c_verdict == "critique-malformed"
+            totals["misplaced"] += c_verdict == "critique-misplaced"
+            totals["missing"] += c_verdict == "critique-missing"
+            totals["uncritiqued"] += c_verdict == "uncritiqued"
+            totals["critiqued"] += c_verdict in (
+                "critique-closed", "critique-malformed", "critique-open"
+            )
+            for k in ("x_raised", "open_x", "fixed", "warn"):
+                totals[k] += counts[k]
+            totals["accepted_disp"] += counts["accepted"]
+        records.append({
+            "file": adr.name,
+            "status": {"traced": "accepted", "waived": "accepted"}.get(verdict, verdict),
+            "verdict": c_verdict,
+            "ledger": str(ledger_path(adr, adr_dir)),
+            "objections": counts,
+            "errors": c_errs,
+        })
+
+    totals["adrs"] = len(adrs)
+    totals["adrs_accepted"] = accepted
+    totals["unparsed_status"] = len(unparsed)
+    signals = laundering_signals({
+        "fixed": totals["fixed"], "accepted_disp": totals["accepted_disp"],
+        "waived": totals["critique_waived"], "adrs_accepted": accepted,
+        "critiqued": totals["critiqued"], "x_raised": totals["x_raised"],
+        "warn": totals["warn"],
+    })
+    # VACUOUS (critique): the Accepted set is non-empty and NOT ONE of it is critique-closed.
+    # Kills "waive every ADR in one line each". Distinct from VACUOUS PASS (status), which means
+    # the gate could not SEE the ADRs at all — different failures, separately named.
+    vacuous_critique = accepted > 0 and totals["critique_closed"] == 0
+    if strict and vacuous_critique:
+        errors.append(
+            f"{VACUOUS_CRITIQUE} — {accepted} Accepted ADR(s) and not one carries a closed "
+            f"objection ledger"
+        )
+
+    if as_json:
+        print(json.dumps({
+            "schema": JSON_SCHEMA_ID,
+            "adr_dir": str(adr_dir),
+            "adrs": records,
+            "totals": totals,
+            "signals": signals,
+            "vacuous": {
+                "critique": vacuous_critique,
+                "status": bool(adrs) and len(unparsed) == len(adrs),
+            },
+        }, indent=2))
+        return 1 if errors else 0
 
     if errors:
         print(f"✗ adr-trace check failed ({len(errors)} issue(s)):", file=sys.stderr)
@@ -317,6 +656,33 @@ def main() -> int:
             print(f"  - {name}", file=sys.stderr)
         if len(unparsed) > 10:
             print(f"  … and {len(unparsed) - 10} more", file=sys.stderr)
+
+    # The critique rollup goes to STDOUT, deliberately, and never first. The shipped suite pins
+    # the first stdout line as the ✓/○ summary and pins `"VACUOUS" not in stderr` for a partially
+    # blind run — putting this on stderr would break a green test to report a true thing.
+    if totals["critiqued"] or totals["uncritiqued"] or totals["critique_waived"]:
+        print(
+            f"  critique: {totals['critique_closed']} closed · {totals['critique_waived']} waived"
+            f" · {totals['uncritiqued']} uncritiqued · {totals['x_raised']} ❌ raised"
+            f" ({totals['fixed']} fixed, {totals['accepted_disp']} accepted)"
+        )
+    if vacuous_critique:
+        print(
+            f"⚠ {VACUOUS_CRITIQUE} — {accepted} Accepted ADR(s), none with a closed objection "
+            f"ledger. Run adr-critic and persist its report; --strict makes this an error."
+        )
+    for s in signals:
+        print(f"⚠ {s}")
+    if uncritiqued:
+        print(
+            f"⚠ adr-trace: {len(uncritiqued)} Accepted ADR(s) carry no **Critique:** line — "
+            f"legacy ADRs are advisory (exit 0), new ones should be critiqued:",
+            file=sys.stderr,
+        )
+        for name in uncritiqued[:10]:
+            print(f"  - {name}", file=sys.stderr)
+        if len(uncritiqued) > 10:
+            print(f"  … and {len(uncritiqued) - 10} more", file=sys.stderr)
     return 0
 
 
