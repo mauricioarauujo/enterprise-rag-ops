@@ -40,9 +40,11 @@ Skips `_template.md`, `README.md`, any `_*`-prefixed file, and `_archive/` trees
 all (legacy shapes: `## Status` sections, MADR bullets — every brownfield predates the template
 by construction) is invisible to this gate: it can neither be gated nor skipped-on-purpose. Those
 files are counted as **unparsed-status** in the summary and a stderr warning names them, so a CI
-gate that is green because it parsed nothing reads as VACUOUS instead of healthy. Exit stays 0 —
-advisory-honest, not newly blocking (converge by authoring from `_template.md` or adding a
-`**Status:**` line to legacy ADRs).
+gate that is green because it parsed nothing reads as VACUOUS instead of healthy. Exit stays 0 by
+default — advisory-honest, not newly blocking (converge by authoring from `_template.md` or adding
+a `**Status:**` line to legacy ADRs). **Under `--strict`, TOTAL blindness is an error**: a gate
+that could not see one single ADR must not report success to the flag whose whole purpose is to
+remove the escape hatch. Partial blindness keeps its N-of-M warning and is not this error.
 
 Usage:
     python3 adr_trace_check.py [<adr-dir>]        # default: docs/adrs; exit 0/1/2
@@ -592,6 +594,23 @@ def main(argv: list[str] | None = None) -> int:
             f"{VACUOUS_CRITIQUE} — {accepted} Accepted ADR(s) and not one carries a closed "
             f"objection ledger"
         )
+    # VACUOUS PASS (status): the gate could not SEE a single ADR. One predicate, used by BOTH the
+    # JSON payload and the exit code — they used to be computed in different places and disagreed:
+    # `vacuous.status` published `true` while the process exited 0, `--strict` included.
+    #
+    # The ○ branch below has always promised this escalation ("Escalation belongs behind an opt-in
+    # `--strict`, not here") and never built it. The critique axis got one; the status axis did
+    # not, so the emptier the gate's view, the greener it stayed — measured live in the one
+    # dogfood consumer where this gate is actually wired into CI, which is the worst place for it.
+    #
+    # Scoped to TOTAL blindness only. Partial blindness (ERO: 9 of 12) keeps its N-of-M warning and
+    # is NOT this error — a lesser state that must stay distinguishable. Default stays exit 0 (D64).
+    vacuous_status = bool(adrs) and len(unparsed) == len(adrs)
+    if strict and vacuous_status:
+        errors.append(
+            f"{VACUOUS_STATUS} — no **Status:** header parsed on any of {len(adrs)} ADR(s), so "
+            f"0 were gated: the gate reports success having examined nothing"
+        )
 
     if as_json:
         print(json.dumps({
@@ -602,7 +621,7 @@ def main(argv: list[str] | None = None) -> int:
             "signals": signals,
             "vacuous": {
                 "critique": vacuous_critique,
-                "status": bool(adrs) and len(unparsed) == len(adrs),
+                "status": vacuous_status,
             },
         }, indent=2))
         return 1 if errors else 0
@@ -622,9 +641,12 @@ def main(argv: list[str] | None = None) -> int:
     # live: a consumer printed "✓ adr-trace check passed (11 ADR(s): 0 accepted, 0 waived,
     # 11 unparsed-status)" and exited 0 — green because its ADRs were invisible, not clean.
     #
-    # DELIBERATELY NOT AN ERROR. Brownfield repos legitimately carry legacy un-statused ADRs and
-    # D64 forbids reding a repo on update, so the exit code is unchanged (0) and only the REPORT
-    # becomes honest. Escalation belongs behind an opt-in `--strict`, not here.
+    # NOT AN ERROR BY DEFAULT. Brownfield repos legitimately carry legacy un-statused ADRs and
+    # D64 forbids reding a repo on update, so the default exit code is unchanged (0) and only the
+    # REPORT becomes honest. The escalation this comment used to merely PROMISE is now BUILT, and
+    # lives above with `vacuous_status` — `--strict` makes total blindness an error. It went
+    # unbuilt for three releases while the comment claimed it, which is how the one consumer that
+    # wires this gate ran it in CI, saw nothing, and was told it passed.
     # Scoped deliberately to BLINDNESS, not merely to "nothing was gated". A directory of
     # Proposed ADRs parsed perfectly and correctly found nothing to gate — that is honestly
     # ungated, not vacuous, and it keeps its ✓ (a distinction the suite already pins). The ○ is
